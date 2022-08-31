@@ -24,7 +24,9 @@ public class SearchEvent implements Event {
         this.event = event;
         isAnyArgs();
         String link = isUrl(event.getArgs()[1]);
-        isInAudioChannel();
+        if (!isInAudioChannel()) {
+            return;
+        }
         initAudioChannel();
         PlayerManager.getINSTANCE().loadAndPlay(event.getTextChannel(), link);
     }
@@ -48,11 +50,12 @@ public class SearchEvent implements Event {
         }
     }
 
-    private void isInAudioChannel() {
+    private boolean isInAudioChannel() {
         if (!event.getMemberVoiceState().inAudioChannel()) {
             event.getTextChannel().sendMessage("Для начало нужно войти в голосовой чат").queue();
-            return;
+            return false;
         }
+        return true;
     }
 
     private void initAudioChannel() {
