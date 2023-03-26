@@ -23,7 +23,7 @@ public class EventJoin extends ListenerAdapter {
             sec -= (sec/60) * 60;
         }
         time += sec + " секунд";
-        event.getGuild().getDefaultChannel().sendMessage("Таймаут афк канала был изменен и теперь составляет: " + time + ".").queue();
+        event.getGuild().getDefaultChannel().asTextChannel().sendMessage("Таймаут афк канала был изменен и теперь составляет: " + time + ".").queue();
     }
 
 

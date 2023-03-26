@@ -56,7 +56,7 @@ public class BotConfig {
                     .addEventListeners(eventJoin)
                     .addEventListeners(botEvents)
                     .build();
-        } catch (LoginException e) {
+        } catch (Exception e) {
             throw new RuntimeException("Упс! Вы использовали неверный токен. Попробуйте другой!");
         }
         return jda;

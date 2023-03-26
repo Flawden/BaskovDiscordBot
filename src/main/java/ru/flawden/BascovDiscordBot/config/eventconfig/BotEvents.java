@@ -43,7 +43,7 @@ public class BotEvents extends ListenerAdapter {
                 break;
             }
             else if(command >= events.size() - 1) {
-                event.getTextChannel().sendMessage("Я не знаю данную команду.").queue();
+                event.getChannel().asTextChannel().sendMessage("Я не знаю данную команду.").queue();
             }
         }
     }

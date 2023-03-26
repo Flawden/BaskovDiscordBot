@@ -8,8 +8,7 @@ import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import net.dv8tion.jda.api.entities.Guild;
-import net.dv8tion.jda.api.entities.Invite;
-import net.dv8tion.jda.api.entities.TextChannel;
+import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 
 import java.util.HashMap;
 import java.util.List;
@@ -44,12 +43,11 @@ public class PlayerManager {
             public void trackLoaded(AudioTrack audioTrack) {
                 musicManager.scheduler.queue(audioTrack);
 
-                textChannel.sendMessage("Добавлено в очередь: ")
-                        .append(audioTrack.getInfo().title)
-                        .append("'** by **'")
-                        .append(audioTrack.getInfo().author)
-                        .append("'**'")
-                        .queue();
+                textChannel.sendMessage("Добавлено в очередь: "
+                                + audioTrack.getInfo().title
+                                + "'** by **'"
+                                + audioTrack.getInfo().author
+                                + "'**'").queue();
             }
 
             @Override
@@ -58,12 +56,11 @@ public class PlayerManager {
 
                 if(!tracks.isEmpty()) {
                     musicManager.scheduler.queue(tracks.get(0));
-                    textChannel.sendMessage("Добавлено в очередь: ")
-                            .append(tracks.get(0).getInfo().title)
-                            .append("'** by **'")
-                            .append(tracks.get(0).getInfo().author)
-                            .append("'**'")
-                            .queue();
+                    textChannel.sendMessage("Добавлено в очередь: "
+                            + tracks.get(0).getInfo().title
+                            + "'** by **'"
+                            + tracks.get(0).getInfo().author
+                            + "'**'").queue();
                 }
             }
 

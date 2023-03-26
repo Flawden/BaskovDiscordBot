@@ -5,7 +5,8 @@ import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.GuildVoiceState;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
-import net.dv8tion.jda.api.entities.TextChannel;
+
+import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 
 public class EventArgs {
@@ -20,7 +21,7 @@ public class EventArgs {
     private final GuildVoiceState memberVoiceState;
 
     protected EventArgs(MessageReceivedEvent event) {
-        this.textChannel = event.getTextChannel();
+        this.textChannel = event.getChannel().asTextChannel();
         this.member = event.getMember();
         this.guild = event.getGuild();
         this.jda = event.getJDA();
