@@ -13,15 +13,25 @@ public class TrackListEvent implements Event {
     @Override
     public void execute(EventArgs event) {
         Queue<AudioTrack> tracks = PlayerManager.getINSTANCE().getMusicManager(event.getTextChannel().getGuild()).scheduler.queue;
+        AudioTrack playingTrack = PlayerManager.getINSTANCE().getMusicManager(event.getTextChannel().getGuild()).scheduler.audioPlayer.getPlayingTrack();
         if(tracks.isEmpty()) {
-            event.getTextChannel().sendMessage("Список следующих песен пуст.").queue();
+            StringBuilder message = new StringBuilder();
+            if(playingTrack != null) {
+                message.append("Текущая песня: " + playingTrack.getInfo().title);
+            }
+            message.append("\nСписок следующих песен пуст.\n");
+            event.getTextChannel().sendMessage(message).queue();
             return;
         }
         StringBuilder info = new StringBuilder();
+        if (playingTrack != null) {
+            info.append("Текущая песня: " + playingTrack.getInfo().title + "\n\n");
+        }
+        info.append("Следующие песни: \n");
         for(AudioTrack track: tracks) {
             info.append(track.getInfo().title).append("\n");
         }
-        event.getTextChannel().sendMessage("Следующие песни: \n" + info).queue();
+        event.getTextChannel().sendMessage(info).queue();
     }
 
     @Override

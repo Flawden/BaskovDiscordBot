@@ -17,6 +17,7 @@ public class HelpEvent implements Event {
         for (Event command: events) {
             message.append(command.getName()).append(" ====> ").append(command.helpMessage()).append(".\n");
         }
+        message.append("\n(Команды не чувствительны к регистру)");
         event.getTextChannel().sendMessage(message.toString()).queue();
     }
 
