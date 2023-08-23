@@ -20,7 +20,7 @@ public class PauseEvent implements Event {
 
     @Override
     public String helpMessage() {
-        return "Приостанавливает воспроизведение песни.";
+        return "Приостанавливает воспроизведение песни";
     }
 
     @Override

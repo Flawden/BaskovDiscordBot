@@ -21,11 +21,11 @@ public class SpamEvent implements Event {
 
     @Override
     public String helpMessage() {
-        return "Команда призвана последовательностью из 10 сообщений с упоминанием позвать участника сервера. Пример: spam @Nick.";
+        return "Команда призвана последовательностью из 10 сообщений с упоминанием позвать участника сервера. Пример: spam @Nick";
     }
 
     @Override
     public boolean needOwner() {
-        return true;
+        return false;
     }
 }

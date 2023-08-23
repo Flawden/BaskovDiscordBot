@@ -1,91 +1,91 @@
 # Baskov Discord Bot
 ## Made by Flawden
 
-A music discord bot with a comic name that takes advantage of Spring Boot in development.
+Музыкальный бот discord с шуточным названием, который использует преимущества Spring Boot при разработке.
 
 ## Features
 
-- Implemented music playback, pause, track skip, tracklist creation.
-- Easy to add new commands thanks to the competent interaction of the Spring Framework and JDA.
+- Реализовано воспроизведение музыки, пауза, пропуск трека.
+- Легко добавлять новые команды благодаря системе событий, реализованной с помощью Spring.
+- 
+Бот прост в использовании и модификации. Нет необходимости полностью понимать, как он работает, чтобы обучать его новым командам.
 
-The bot is easy to use and modify. It is not necessary to fully understand how it works in order to teach it new commands.
+# Перед началом работы
 
-# Preparation for use
-
-Before using, you need to get the project on your device. To do this, use the "Code" button at the top of the page with the repository and choose a convenient method for obtaining it, or use the terminal command
+Перед использованием вам необходимо загрузить проект на свое устройство. Для этого воспользуйтесь кнопкой "Code" вверху страницы с репозиторием и выберите удобный способ его получения или воспользуйтесь командой терминала
 
 > git clone https://github.com/Flawden/BaskovDiscordBot.git
 
-Next, you need to enter the token of your discord bot. To do this, you need to follow the path:
+Далее вам нужно ввести токен вашего бота discord. Чтобы сделать это, проследуйте по следующему пути в приложении:
 
 > src/main/resources
 
-Make a copy of the application.properties.origin file, removing the ".origin" extension from the name of the resulting copy (You should get "application.properties")
+Сделайте копию файла application.properties.origin, удалив расширение ".origin" из имени (у вас должно получиться "application.properties").
 
-Open the resulting file and add your token. It should look something like this:
+Откройте полученный файл и добавьте свой токен. Это должно выглядеть примерно так:
 
 > discordBot.token = (YOUR_TOKEN)
 
-Interaction with the bot is carried out through commands in the chat. The bot considers as commands any messages that start with a special prefix that you can configure by following the path
+Взаимодействие с ботом осуществляется посредством команд в чате. Бот рассматривает в качестве команд любые сообщения, начинающиеся со специального префикса, который вы можете настроить, пройдя по пути:
 
 > src/main/java/en/flawden/BascovDiscordBot/config/BotConfig.java
 
-And replacing "!" with any prefix convenient for you in the string:
+И замените "!" любым удобным для вас префиксом в строке:
 
 > BotEvents botEvents = new BotEvents("!");
 
-# How the bot works
+# Как бот работает
 
-The bot's job is to exchange messages between the discord servers and your bot. The bot listens to the discord server or its private messages, and in the event of an event, it performs one or another action.
+Задача бота заключается в обмене сообщениями между серверами discord и вашим ботом. Бот прослушивает сервер discord и в случае возникновения какого-либо события выполняет то или иное действие.
 
-Messages starting with a special prefix (which is set in the way described above) are considered by the bot as a command. New commands are created as follows.
+Сообщения, начинающиеся со специального префикса (который задается описанным выше способом), рассматриваются ботом как команда. Новые команды создаются следующим образом.
 
-In the "commands" folder or its subfolders, a class with any name is created (it is preferable that the name ends with "Event"). This class must be inherited from the Event interface
+В папке "commands" или ее поддиректориях создается класс с любым именем (предпочтительно, чтобы имя заканчивалось на "Event"). Этот класс должен быть унаследован от интерфейса Event
 
-> Full interface path for import: ru.flawden.BascovDiscordBot.config.eventconfig.Event;
+> Полный путь к интерфейсу для импорта: ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 
-Interface obliges to override 4 methods
+Интерфейс обязывает переопределять 4 метода
 
-1) execute - this method is executed as soon as the bot recognizes your command in the chat.
-2) getName - the name of the command that must be entered to activate it in the chat. (Specify without prefix)
-3) helpMessage - a hint that will appear for the command when it is displayed in the list of commands.
-4) needOwner - is the command available only to the creator of the server
+1) execute - этот метод выполняется, как только бот распознает вашу команду в чате.
+2) getName - название команды, которую необходимо ввести для ее активации в чате. (Указать без префикса)
+3) helpMessage - подсказка, которая появится для команды, когда она отобразится в списке команд.
+4) needOwner - доступна ли команда только создателю сервера
 
-By creating a class and inheriting it from the interface, you have created a command and it will automatically be added to the command stack for the bot.
+Создав класс и унаследовав его от интерфейса, вы создали команду, и она автоматически будет добавлена в стек команд для бота.
 
-# Application assembly
+# Сборка приложения
 
-You can build the application with Maven
+Вы можете создать приложение с помощью Maven
 
-1) Through the IDE (I'll show you with Intellij Idea as an example)
-2) Using the command line
+1) Через IDE (Приведу Intellij Idea в качестве примера)
+2) С помощью Maven в консоли
 
-## Building with the IDE
+## Сборка в IDE
 
-To assemble, follow these steps:
+Для сборки выполните следующие действия:
 
-1) Run the project in IntelliJ IDEA IDE
-2) Open the Maven menu
-3) Go to Lifecycle tab
-4) Click clean
-5) Click package
+1) Запустите проект в IntelliJ IDEA IDE
+2) Откройте меню Maven
+3) Перейдите на вкладку Lifecycle
+4) Нажмите кнопку clean
+5) Нажмите кнопку package
 
-You now have a WAR ready to upload to your server.
-(If for some reason you can't find the Maven menu, the online guides will surely help you)
+Теперь у вас есть файл, готовый к загрузке на ваш сервер (в каталоге Target).
+(Если по какой-то причине вы не можете найти меню Maven, онлайн-руководства наверняка помогут вам)
 
-## Building with Maven
+## Сборка при помощи Maven
 
-To build with [Maven](https://maven.apache.org/), first make sure you have it installed on your computer.
+Для сборки с помощью [Maven](https://maven.apache.org/), сначала убедитесь, что он установлен на вашем компьютере.
 
-If maven is already installed - open a command line and navigate to the project folder using the command
+Если maven уже установлен - откройте командную строку и перейдите в папку проекта с помощью команды:
 > cd <Path_to_Project>
 
-Next, enter the following 2 commands in turn:
+Затем введите по очереди следующие 2 команды:
 > mvn clean
 > 
 > mvn install
 
-A "Target" folder will appear in the root of the project. Log into it via the console. The folder will contain a .jar file
+В корне проекта появится каталог "Target". Войдите в него через консоль. Каталог будет содержать файл .jar
 
-Run it with the command:
->  java -jar <Full_name_of_jar_file>
+Запустите его с помощью команды:
+>  java -jar <Полное_имя_Jar_Файла>

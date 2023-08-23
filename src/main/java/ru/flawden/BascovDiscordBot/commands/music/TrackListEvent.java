@@ -31,7 +31,7 @@ public class TrackListEvent implements Event {
 
     @Override
     public String helpMessage() {
-        return "Отображает список песен в очереди.";
+        return "Отображает список песен в очереди";
     }
 
     @Override

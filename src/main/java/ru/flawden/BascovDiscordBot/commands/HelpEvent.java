@@ -13,11 +13,11 @@ public class HelpEvent implements Event {
 
     @Override
     public void execute(EventArgs event) {
-        String message = "Список комманд для Баскова:\n\n";
+        StringBuilder message = new StringBuilder("Список комманд для Баскова:\n\n");
         for (Event command: events) {
-            message+= command.getName() + " ====> " + command.helpMessage() + ".\n";
+            message.append(command.getName()).append(" ====> ").append(command.helpMessage()).append(".\n");
         }
-        event.getTextChannel().sendMessage(message).queue();
+        event.getTextChannel().sendMessage(message.toString()).queue();
     }
 
     @Override
@@ -27,7 +27,7 @@ public class HelpEvent implements Event {
 
     @Override
     public String helpMessage() {
-        return "Выводит список всех доступных команд.";
+        return "Выводит список всех доступных команд";
     }
 
     @Override

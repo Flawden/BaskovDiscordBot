@@ -11,7 +11,7 @@ public class PlayEvent implements Event {
     public void execute(EventArgs event) {
         if (event.getArgs().length <= 1) {
             PlayerManager.getINSTANCE().getMusicManager(event.getTextChannel().getGuild()).audioPlayer.setPaused(false);
-            event.getTextChannel().sendMessage("Воспроизведение успешно возобновлено.").queue();
+            event.getTextChannel().sendMessage("Воспроизведение успешно возобновлено").queue();
             return;
         }
     }
