@@ -24,6 +24,9 @@ public class SetPlayingTimeEvent implements Event {
         if(!isAnyArgs()) {
             return;
         };
+        if(PlayerManager.getINSTANCE().getMusicManager(event.getTextChannel().getGuild()).scheduler.audioPlayer.getPlayingTrack() == null) {
+            event.getTextChannel().sendMessage("В данный момент нет воспроизводимых песен.").queue();
+        }
         String link = event.getArgs()[1];
         String timePattern = "^([0-1][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$";
         if(!link.matches(timePattern)) {
