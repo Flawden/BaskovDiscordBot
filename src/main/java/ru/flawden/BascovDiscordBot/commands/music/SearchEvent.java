@@ -22,7 +22,9 @@ public class SearchEvent implements Event {
     @Override
     public void execute(EventArgs event) {
         this.event = event;
-        isAnyArgs();
+        if(!isAnyArgs()) {
+            return;
+        };
         String link = isUrl(event.getArgs()[1]);
         if (!isInAudioChannel()) {
             return;
@@ -43,11 +45,13 @@ public class SearchEvent implements Event {
         }
     }
 
-    private void isAnyArgs() {
+    private boolean isAnyArgs() {
+        boolean isAnyARGS = true;
         if (event.getArgs().length <= 1) {
+            isAnyARGS = false;
             event.getTextChannel().sendMessage("Введите название песни через пробел - \"!search Название песни\"").queue();
-            return;
         }
+        return isAnyARGS;
     }
 
     private boolean isInAudioChannel() {
