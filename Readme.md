@@ -12,5 +12,5 @@
 
 ## Wiki
 
-1) [О боте]([https://github.com/Flawden/Divinity-Squad-Bank/wiki](https://github.com/Flawden/BaskovDiscordBot/wiki))
-2) [Развертывание приложения]([https://github.com/Flawden/Divinity-Squad-Bank/wiki/Deploying-the-application](https://github.com/Flawden/BaskovDiscordBot/wiki/Развертывание-приложения))
+1) [О боте]([https://github.com/Flawden/Divinity-Squad-Bank/wiki](https://github.com/Flawden/BaskovDiscordBot/wiki)
+2) [Развертывание приложения]([https://github.com/Flawden/Divinity-Squad-Bank/wiki/Deploying-the-application](https://github.com/Flawden/BaskovDiscordBot/wiki/Развертывание-приложения)
