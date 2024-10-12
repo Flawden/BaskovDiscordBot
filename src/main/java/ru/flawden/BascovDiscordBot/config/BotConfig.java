@@ -17,6 +17,14 @@ import ru.flawden.BascovDiscordBot.events.EventJoin;
 
 import java.util.List;
 
+/**
+ * Конфигурационный класс для настройки бота Discord.
+ * Этот класс создает и настраивает необходимые компоненты бота, включая обработчики событий
+ * и экземпляр JDA, а также управляет токеном бота и его статусом.
+ *
+ * @author Flawden
+ * @version 1.0
+ */
 @Configuration
 @PropertySource("classpath:application.properties")
 public class BotConfig {
@@ -36,6 +44,11 @@ public class BotConfig {
         this.helpCommand = helpCommand;
     }
 
+    /**
+     * Создает экземпляр BotEvents и регистрирует команды.
+     *
+     * @return экземпляр BotEvents
+     */
     @Bean
     public BotEvents createCommand() {
         BotEvents botEvents = new BotEvents("!");
@@ -44,6 +57,13 @@ public class BotConfig {
         return botEvents;
     }
 
+    /**
+     * Создает экземпляр JDA и настраивает бота.
+     *
+     * @param botEvents экземпляр BotEvents для обработки событий
+     * @return экземпляр JDA
+     * @throws RuntimeException если токен недействителен
+     */
     @Bean
     public JDA createBot(BotEvents botEvents) {
         JDA jda;

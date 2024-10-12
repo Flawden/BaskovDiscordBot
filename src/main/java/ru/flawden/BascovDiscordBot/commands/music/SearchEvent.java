@@ -35,9 +35,10 @@ public class SearchEvent implements Event {
         try {
             new URL(link).openStream().close();
         } catch (IOException e) {
-            link = Arrays.toString(event.getArgs());
-            link = link.substring(link.indexOf(" "));
-            link = "scsearch:" + link + " audio";
+            link = String.join(" ", event.getArgs());
+            int firstSpaceIndex = link.indexOf(" ");
+            link = link.substring(firstSpaceIndex + 1);
+            link = "scsearch:" + link;
         } finally {
             return link;
         }
@@ -76,7 +77,7 @@ public class SearchEvent implements Event {
 
     @Override
     public String helpMessage() {
-        return "Воспроизводит песню по её названию (Например: \"!Search Sabaton hearth of iron)\"";
+        return "Воспроизводит песню по её названию (Например: \"!search Sabaton hearth of iron)\"";
     }
 
     @Override

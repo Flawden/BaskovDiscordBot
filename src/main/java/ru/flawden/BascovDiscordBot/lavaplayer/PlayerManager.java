@@ -14,6 +14,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Менеджер плеера, отвечающий за создание и управление
+ * {@link GuildMusicManager} для каждой гильдии.
+ * Этот класс также предоставляет методы для загрузки и воспроизведения
+ * аудиотреков с использованием {@link AudioPlayerManager}.
+ *
+ * @author Flawden
+ * @version 1.0
+ */
 public class PlayerManager {
 
     private static PlayerManager INSTANCE;
@@ -28,6 +37,12 @@ public class PlayerManager {
         AudioSourceManagers.registerLocalSource(this.audioPlayerManager);
     }
 
+    /**
+     * Получает экземпляр {@link GuildMusicManager} для заданной гильдии.
+     *
+     * @param guild гильдия, для которой требуется менеджер музыки
+     * @return экземпляр {@link GuildMusicManager} для указанной гильдии
+     */
     public GuildMusicManager getMusicManager(Guild guild) {
         return this.musicManagers.computeIfAbsent(guild.getIdLong(), (guildId) -> {
             final GuildMusicManager guildMusicManager = new GuildMusicManager(this.audioPlayerManager);
@@ -36,6 +51,12 @@ public class PlayerManager {
         });
     }
 
+    /**
+     * Загружает трек по указанному URL и добавляет его в очередь воспроизведения.
+     *
+     * @param textChannel текстовый канал, в который будет отправлено сообщение о результате загрузки
+     * @param trackURL URL трека для загрузки
+     */
     public void loadAndPlay(TextChannel textChannel, String trackURL) {
         final GuildMusicManager musicManager = this.getMusicManager(textChannel.getGuild());
         this.audioPlayerManager.loadItemOrdered(musicManager, trackURL, new AudioLoadResultHandler() {
@@ -61,21 +82,28 @@ public class PlayerManager {
                             + "'** by **'"
                             + tracks.get(0).getInfo().author
                             + "'**'").queue();
+                } else {
+                    textChannel.sendMessage("Песня не была найдена. Убедитесь, что вы ввели название без ошибок.").queue();
                 }
             }
 
             @Override
             public void noMatches() {
-
+                textChannel.sendMessage("Песня не была найдена. Убедитесь, что вы ввели название без ошибок.").queue();
             }
 
             @Override
             public void loadFailed(FriendlyException e) {
-
+                textChannel.sendMessage("Неизвестная ошибка.").queue();
             }
         });
     }
 
+    /**
+     * Получает экземпляр {@link PlayerManager}.
+     *
+     * @return экземпляр {@link PlayerManager}
+     */
     public static PlayerManager getINSTANCE() {
 
         if (INSTANCE == null) {
