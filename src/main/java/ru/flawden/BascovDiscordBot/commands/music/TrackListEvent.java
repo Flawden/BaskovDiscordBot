@@ -14,9 +14,9 @@ public class TrackListEvent implements Event {
     public void execute(EventArgs event) {
         Queue<AudioTrack> tracks = PlayerManager.getINSTANCE().getMusicManager(event.getTextChannel().getGuild()).scheduler.queue;
         AudioTrack playingTrack = PlayerManager.getINSTANCE().getMusicManager(event.getTextChannel().getGuild()).scheduler.audioPlayer.getPlayingTrack();
-        if(tracks.isEmpty()) {
+        if (tracks.isEmpty()) {
             StringBuilder message = new StringBuilder();
-            if(playingTrack != null) {
+            if (playingTrack != null) {
                 message.append("Текущая песня: " + playingTrack.getInfo().title);
             }
             message.append("\nСписок следующих песен пуст.\n");
@@ -28,7 +28,7 @@ public class TrackListEvent implements Event {
             info.append("Текущая песня: " + playingTrack.getInfo().title + "\n\n");
         }
         info.append("Следующие песни: \n");
-        for(AudioTrack track: tracks) {
+        for (AudioTrack track : tracks) {
             info.append(track.getInfo().title).append("\n");
         }
         event.getTextChannel().sendMessage(info).queue();

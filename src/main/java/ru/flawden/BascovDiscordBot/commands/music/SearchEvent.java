@@ -8,9 +8,6 @@ import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Arrays;
 
@@ -22,9 +19,10 @@ public class SearchEvent implements Event {
     @Override
     public void execute(EventArgs event) {
         this.event = event;
-        if(!isAnyArgs()) {
+        if (!isAnyArgs()) {
             return;
-        };
+        }
+        ;
         String link = isUrl(event.getArgs()[1]);
         if (!isInAudioChannel()) {
             return;
@@ -39,7 +37,7 @@ public class SearchEvent implements Event {
         } catch (IOException e) {
             link = Arrays.toString(event.getArgs());
             link = link.substring(link.indexOf(" "));
-            link = "ytsearch:" + link + " audio";
+            link = "scsearch:" + link + " audio";
         } finally {
             return link;
         }

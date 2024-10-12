@@ -44,17 +44,17 @@ public class PlayerManager {
                 musicManager.scheduler.queue(audioTrack);
 
                 textChannel.sendMessage("Добавлено в очередь: "
-                                + audioTrack.getInfo().title
-                                + "'** by **'"
-                                + audioTrack.getInfo().author
-                                + "'**'").queue();
+                        + audioTrack.getInfo().title
+                        + "'** by **'"
+                        + audioTrack.getInfo().author
+                        + "'**'").queue();
             }
 
             @Override
             public void playlistLoaded(AudioPlaylist audioPlaylist) {
                 final List<AudioTrack> tracks = audioPlaylist.getTracks();
 
-                if(!tracks.isEmpty()) {
+                if (!tracks.isEmpty()) {
                     musicManager.scheduler.queue(tracks.get(0));
                     textChannel.sendMessage("Добавлено в очередь: "
                             + tracks.get(0).getInfo().title
@@ -78,7 +78,7 @@ public class PlayerManager {
 
     public static PlayerManager getINSTANCE() {
 
-        if(INSTANCE == null) {
+        if (INSTANCE == null) {
             INSTANCE = new PlayerManager();
         }
 

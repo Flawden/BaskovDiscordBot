@@ -1,17 +1,9 @@
 package ru.flawden.BascovDiscordBot.commands.music;
 
-import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
-
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Date;
-
-import static org.springframework.core.io.support.ResourcePatternUtils.isUrl;
 
 @Component
 public class SetPlayingTimeEvent implements Event {
@@ -21,15 +13,16 @@ public class SetPlayingTimeEvent implements Event {
     @Override
     public void execute(EventArgs event) {
         this.event = event;
-        if(!isAnyArgs()) {
+        if (!isAnyArgs()) {
             return;
-        };
-        if(PlayerManager.getINSTANCE().getMusicManager(event.getTextChannel().getGuild()).scheduler.audioPlayer.getPlayingTrack() == null) {
+        }
+        ;
+        if (PlayerManager.getINSTANCE().getMusicManager(event.getTextChannel().getGuild()).scheduler.audioPlayer.getPlayingTrack() == null) {
             event.getTextChannel().sendMessage("В данный момент нет воспроизводимых песен.").queue();
         }
         String link = event.getArgs()[1];
         String timePattern = "^([0-1][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$";
-        if(!link.matches(timePattern)) {
+        if (!link.matches(timePattern)) {
             event.getTextChannel().sendMessage("Ошибка! Для работы команды введите время в формате: ЧЧ:ММ:СС").queue();
             return;
         }

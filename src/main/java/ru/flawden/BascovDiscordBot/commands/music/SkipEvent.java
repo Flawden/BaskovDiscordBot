@@ -1,8 +1,8 @@
 package ru.flawden.BascovDiscordBot.commands.music;
 
 import org.springframework.stereotype.Component;
-import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
+import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 
 @Component

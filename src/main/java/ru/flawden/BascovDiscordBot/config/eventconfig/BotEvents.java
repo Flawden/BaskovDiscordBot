@@ -1,10 +1,10 @@
 package ru.flawden.BascovDiscordBot.config.eventconfig;
 
-import java.util.List;
-
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import org.jetbrains.annotations.NotNull;
+
+import java.util.List;
 
 public class BotEvents extends ListenerAdapter {
 
@@ -37,19 +37,18 @@ public class BotEvents extends ListenerAdapter {
     }
 
     private void init() {
-        for(int command = 0; command <= events.size() - 1; command++) {
-            if(isEnterCommandEqualToExisting(events.get(command))) {
+        for (int command = 0; command <= events.size() - 1; command++) {
+            if (isEnterCommandEqualToExisting(events.get(command))) {
                 executeIfCommandAvailable(events.get(command));
                 break;
-            }
-            else if(command >= events.size() - 1) {
+            } else if (command >= events.size() - 1) {
                 event.getChannel().asTextChannel().sendMessage("Я не знаю данную команду.").queue();
             }
         }
     }
 
     private void executeIfCommandAvailable(Event event) {
-        if(checkPermissionToExecute(event)) {
+        if (checkPermissionToExecute(event)) {
             execute(event);
         } else {
             this.event.getChannel().sendMessage("Данная команда доступна только создателю сервера.").queue();

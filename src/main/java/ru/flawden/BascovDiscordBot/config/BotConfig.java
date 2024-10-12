@@ -11,11 +11,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.env.Environment;
 import ru.flawden.BascovDiscordBot.commands.HelpEvent;
+import ru.flawden.BascovDiscordBot.config.eventconfig.BotEvents;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.events.EventJoin;
-import ru.flawden.BascovDiscordBot.config.eventconfig.BotEvents;
 
-import javax.security.auth.login.LoginException;
 import java.util.List;
 
 @Configuration

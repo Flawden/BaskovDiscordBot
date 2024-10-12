@@ -14,7 +14,7 @@ public class HelpEvent implements Event {
     @Override
     public void execute(EventArgs event) {
         StringBuilder message = new StringBuilder("Список комманд для Баскова:\n\n");
-        for (Event command: events) {
+        for (Event command : events) {
             message.append(command.getName()).append(" ====> ").append(command.helpMessage()).append(".\n");
         }
         message.append("\n(Команды не чувствительны к регистру)");
