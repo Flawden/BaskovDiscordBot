@@ -15,6 +15,7 @@ import ru.flawden.BascovDiscordBot.config.eventconfig.BotEvents;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.events.EventJoin;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -52,6 +53,7 @@ public class BotConfig {
     @Bean
     public BotEvents createCommand() {
         BotEvents botEvents = new BotEvents("!");
+        events.sort((event1, event2) -> event1.getName().compareToIgnoreCase(event2.getName()));
         botEvents.registerCommand(events);
         helpCommand.events = botEvents.getCommands();
         return botEvents;

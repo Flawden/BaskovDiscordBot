@@ -17,6 +17,8 @@ public interface Event {
      */
     void execute(EventArgs event);
 
+    String getGroup();
+
     /**
      * Возвращает имя команды, связанной с событием.
      *

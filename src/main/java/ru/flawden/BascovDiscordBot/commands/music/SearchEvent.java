@@ -1,73 +1,79 @@
 package ru.flawden.BascovDiscordBot.commands.music;
 
+import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.channel.concrete.VoiceChannel;
 import net.dv8tion.jda.api.managers.AudioManager;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
+import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 
+import java.awt.*;
 import java.io.IOException;
 import java.net.URL;
-import java.util.Arrays;
 
 @Component
 public class SearchEvent implements Event {
 
-    private EventArgs event;
-
     @Override
     public void execute(EventArgs event) {
-        this.event = event;
-        if (!isAnyArgs()) {
-            return;
-        }
-        ;
-        String link = isUrl(event.getArgs()[1]);
-        if (!isInAudioChannel()) {
-            return;
-        }
-        initAudioChannel();
-        PlayerManager.getINSTANCE().loadAndPlay(event.getTextChannel(), link);
-    }
+        EmbedBuilder embed = new EmbedBuilder();
+        embed.setColor(Color.CYAN);
 
-    private String isUrl(String link) {
-        try {
-            new URL(link).openStream().close();
-        } catch (IOException e) {
-            link = String.join(" ", event.getArgs());
-            int firstSpaceIndex = link.indexOf(" ");
-            link = link.substring(firstSpaceIndex + 1);
-            link = "scsearch:" + link;
-        } finally {
-            return link;
-        }
-    }
-
-    private boolean isAnyArgs() {
-        boolean isAnyARGS = true;
         if (event.getArgs().length <= 1) {
-            isAnyARGS = false;
-            event.getTextChannel().sendMessage("Введите название песни через пробел - \"!search Название песни\"").queue();
+            embed.setTitle("🔍 Ошибка поиска");
+            embed.setDescription("Введите название песни через пробел, например: `!search Sabaton Heart of Iron`");
+            event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
+            return;
         }
-        return isAnyARGS;
-    }
 
-    private boolean isInAudioChannel() {
+        String query = String.join(" ", event.getArgs()).substring(event.getArgs()[0].length() + 1);
+        if (!isUrl(query)) {
+            query = "scsearch:" + query;
+        }
+
         if (!event.getMemberVoiceState().inAudioChannel()) {
-            event.getTextChannel().sendMessage("Для начало нужно войти в голосовой чат").queue();
-            return false;
+            embed.setTitle("🔍 Ошибка подключения");
+            embed.setDescription("Для начала нужно войти в голосовой чат!");
+            event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
+            return;
         }
-        return true;
-    }
 
-    private void initAudioChannel() {
+        if (event.getSelfVoiceState().inAudioChannel() &&
+                !event.getSelfVoiceState().getChannel().equals(event.getMemberVoiceState().getChannel())) {
+            embed.setTitle("🔍 Ошибка подключения");
+            embed.setDescription("Я уже подключён к другому голосовому каналу: `" +
+                    event.getSelfVoiceState().getChannel().getName() + "`");
+            event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
+            return;
+        }
+
         if (!event.getSelfVoiceState().inAudioChannel()) {
             final AudioManager audioManager = event.getGuild().getAudioManager();
             final VoiceChannel memberChannel = (VoiceChannel) event.getMemberVoiceState().getChannel();
 
             audioManager.openAudioConnection(memberChannel);
+
+            GuildMusicManager guildMusicManager = PlayerManager.getINSTANCE().getMusicManager(event.getGuild());
+            audioManager.setSendingHandler(guildMusicManager.getSendHandler());
         }
+
+        PlayerManager.getINSTANCE().loadAndPlay(event.getTextChannel(), query);
+    }
+
+    private boolean isUrl(String link) {
+        try {
+            new URL(link).openStream().close();
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    @Override
+    public String getGroup() {
+        return "Музыка";
     }
 
     @Override
@@ -77,7 +83,7 @@ public class SearchEvent implements Event {
 
     @Override
     public String helpMessage() {
-        return "Воспроизводит песню по её названию (Например: \"!search Sabaton hearth of iron)\"";
+        return "Воспроизводит песню по её названию (Например: \"!search Sabaton Heart of Iron)\")";
     }
 
     @Override

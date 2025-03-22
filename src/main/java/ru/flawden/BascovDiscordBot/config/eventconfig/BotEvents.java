@@ -1,9 +1,11 @@
 package ru.flawden.BascovDiscordBot.config.eventconfig;
 
+import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import org.jetbrains.annotations.NotNull;
 
+import java.awt.*;
 import java.util.List;
 
 /**
@@ -73,7 +75,11 @@ public class BotEvents extends ListenerAdapter {
                 executeIfCommandAvailable(events.get(command));
                 break;
             } else if (command >= events.size() - 1) {
-                event.getChannel().asTextChannel().sendMessage("Я не знаю данную команду.").queue();
+                EmbedBuilder embed = new EmbedBuilder();
+                embed.setTitle("❌ Ошибка");
+                embed.setDescription("Я не знаю данную команду.");
+                embed.setColor(Color.RED);
+                event.getChannel().asTextChannel().sendMessageEmbeds(embed.build()).queue();
             }
         }
     }
@@ -87,7 +93,11 @@ public class BotEvents extends ListenerAdapter {
         if (checkPermissionToExecute(event)) {
             execute(event);
         } else {
-            this.event.getChannel().sendMessage("Данная команда доступна только создателю сервера.").queue();
+            EmbedBuilder embed = new EmbedBuilder();
+            embed.setTitle("⚠️ Доступ ограничен");
+            embed.setDescription("Данная команда доступна только создателю сервера.");
+            embed.setColor(Color.YELLOW);
+            this.event.getChannel().sendMessageEmbeds(embed.build()).queue();
         }
     }
 

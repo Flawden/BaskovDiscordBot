@@ -7,9 +7,11 @@ import com.sedmelluq.discord.lavaplayer.source.AudioSourceManagers;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
+import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 
+import java.awt.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,17 +47,17 @@ public class PlayerManager {
      */
     public GuildMusicManager getMusicManager(Guild guild) {
         return this.musicManagers.computeIfAbsent(guild.getIdLong(), (guildId) -> {
-            final GuildMusicManager guildMusicManager = new GuildMusicManager(this.audioPlayerManager);
+            final GuildMusicManager guildMusicManager = new GuildMusicManager(this.audioPlayerManager, guild);
             guild.getAudioManager().setSendingHandler(guildMusicManager.getSendHandler());
             return guildMusicManager;
         });
     }
 
     /**
-     * Загружает трек по указанному URL и добавляет его в очередь воспроизведения.
+     * Загружает трек по-указанному URL и добавляет его в очередь воспроизведения.
      *
      * @param textChannel текстовый канал, в который будет отправлено сообщение о результате загрузки
-     * @param trackURL URL трека для загрузки
+     * @param trackURL    URL трека для загрузки
      */
     public void loadAndPlay(TextChannel textChannel, String trackURL) {
         final GuildMusicManager musicManager = this.getMusicManager(textChannel.getGuild());
@@ -64,11 +66,13 @@ public class PlayerManager {
             public void trackLoaded(AudioTrack audioTrack) {
                 musicManager.scheduler.queue(audioTrack);
 
-                textChannel.sendMessage("Добавлено в очередь: "
-                        + audioTrack.getInfo().title
-                        + "'** by **'"
-                        + audioTrack.getInfo().author
-                        + "'**'").queue();
+                EmbedBuilder embed = new EmbedBuilder();
+                embed.setTitle("🎶 Добавлено в очередь");
+                embed.setDescription(audioTrack.getInfo().title);
+                embed.setColor(Color.GREEN);
+                embed.setThumbnail("https://i.ytimg.com/vi/" + audioTrack.getInfo().identifier + "/hqdefault.jpg");
+
+                textChannel.sendMessageEmbeds(embed.build()).queue();
             }
 
             @Override
@@ -77,26 +81,38 @@ public class PlayerManager {
 
                 if (!tracks.isEmpty()) {
                     musicManager.scheduler.queue(tracks.get(0));
-                    textChannel.sendMessage("Добавлено в очередь: "
-                            + tracks.get(0).getInfo().title
-                            + "'** by **'"
-                            + tracks.get(0).getInfo().author
-                            + "'**'").queue();
+
+                    // Создаем EmbedBuilder для красивого оформления
+                    EmbedBuilder embed = new EmbedBuilder();
+                    embed.setTitle("🎶 Добавлено в очередь");
+                    embed.setDescription("Трек **" + tracks.get(0).getInfo().title + "** от **" + tracks.get(0).getInfo().author + "**.");
+                    embed.setColor(Color.GREEN);
+                    embed.setThumbnail("https://i.ytimg.com/vi/" + tracks.get(0).getInfo().identifier + "/hqdefault.jpg");
+
+                    textChannel.sendMessageEmbeds(embed.build()).queue();
                 } else {
-                    textChannel.sendMessage("Песня не была найдена. Убедитесь, что вы ввели название без ошибок.").queue();
+                    textChannel.sendMessage("Плейлист не был найден. Убедитесь, что вы ввели название без ошибок.").queue();
                 }
             }
 
             @Override
             public void noMatches() {
-                textChannel.sendMessage("Песня не была найдена. Убедитесь, что вы ввели название без ошибок.").queue();
+                EmbedBuilder embed = new EmbedBuilder();
+                embed.setTitle("❌ Ошибка");
+                embed.setDescription("Песня не была найдена. Убедитесь, что вы ввели название без ошибок.");
+                embed.setColor(Color.RED);
+                textChannel.sendMessageEmbeds(embed.build()).queue();
             }
 
             @Override
             public void loadFailed(FriendlyException e) {
-                textChannel.sendMessage("Неизвестная ошибка.").queue();
+                EmbedBuilder embed = new EmbedBuilder();
+                embed.setTitle("❌ Неизвестная ошибка");
+                embed.setDescription("Произошла ошибка при загрузке трека. Попробуйте снова позже.");
+                embed.setColor(Color.RED);
+                textChannel.sendMessageEmbeds(embed.build()).queue();
             }
-        });
+        }); // <-- Закрывающая скобка для loadItemOrdered
     }
 
     /**
@@ -112,5 +128,4 @@ public class PlayerManager {
 
         return INSTANCE;
     }
-
 }
