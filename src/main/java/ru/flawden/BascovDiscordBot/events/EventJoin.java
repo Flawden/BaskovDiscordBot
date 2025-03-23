@@ -1,5 +1,6 @@
 package ru.flawden.BascovDiscordBot.events;
 
+import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.events.guild.update.GuildUpdateAfkTimeoutEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import org.jetbrains.annotations.NotNull;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component;
  * @author Flawden
  * @version 1.0
  */
+@Slf4j
 @Component
 public class EventJoin extends ListenerAdapter {
 
@@ -35,8 +37,11 @@ public class EventJoin extends ListenerAdapter {
         }
         time += sec + " секунд";
 
-        // Отправка сообщения о новом таймауте в канал
-        event.getGuild().getDefaultChannel().asTextChannel().sendMessage("Таймаут афк канала был изменен и теперь составляет: " + time + ".").queue();
+        log.info("AFK timeout updated in guild: {}, new timeout: {}",
+                event.getGuild().getId(), time);
+        event.getGuild().getDefaultChannel().asTextChannel()
+                .sendMessage("Таймаут афк канала был изменен и теперь составляет: " + time + ".")
+                .queue();
     }
 
 

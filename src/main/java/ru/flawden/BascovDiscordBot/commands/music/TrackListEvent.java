@@ -2,6 +2,7 @@ package ru.flawden.BascovDiscordBot.commands.music;
 
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
+import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.EmbedBuilder;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
@@ -11,11 +12,13 @@ import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 import java.awt.*;
 import java.util.Queue;
 
+@Slf4j
 @Component
 public class TrackListEvent implements Event {
 
     @Override
     public void execute(EventArgs event) {
+        log.info("TrackList command executed in guild: {}", event.getTextChannel().getGuild().getId());
         var musicManager = PlayerManager.getINSTANCE()
                 .getMusicManager(event.getTextChannel().getGuild());
         AudioPlayer audioPlayer = musicManager.scheduler.audioPlayer;
@@ -26,6 +29,7 @@ public class TrackListEvent implements Event {
         embed.setColor(Color.CYAN);
 
         if (playingTrack == null && tracks.isEmpty()) {
+            log.info("Queue is empty in guild: {}", event.getTextChannel().getGuild().getId());
             embed.setTitle("🎶 Очередь пуста");
             embed.setDescription("Сейчас ничего не играет, и очередь пуста.\n" +
                     "Добавь песню с помощью `!search <название или URL>`!");
@@ -80,6 +84,9 @@ public class TrackListEvent implements Event {
             }
         }
 
+        log.info("Displaying track list in guild: {}, current track: {}, queue size: {}",
+                event.getTextChannel().getGuild().getId(),
+                playingTrack != null ? playingTrack.getInfo().title : "none", tracks.size());
         embed.setTitle("🎶 Список треков");
         embed.setDescription(description.toString());
         event.getTextChannel().sendMessageEmbeds(embed.build()).queue();

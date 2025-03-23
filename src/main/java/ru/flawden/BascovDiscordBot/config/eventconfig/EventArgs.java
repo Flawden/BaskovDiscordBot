@@ -1,5 +1,6 @@
 package ru.flawden.BascovDiscordBot.config.eventconfig;
 
+import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.GuildVoiceState;
@@ -16,6 +17,7 @@ import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
  * @author Flawden
  * @version 1.0
  */
+@Slf4j
 public class EventArgs {
     private final TextChannel textChannel;
     private final Member selfMember;
@@ -37,6 +39,8 @@ public class EventArgs {
         this.args = this.message.getContentRaw().split(" ");
         this.selfVoiceState = this.selfMember.getVoiceState();
         this.memberVoiceState = this.member.getVoiceState();
+        log.debug("EventArgs created for guild: {}, user: {}, message: {}",
+                guild.getId(), member.getEffectiveName(), message.getContentRaw());
     }
 
     /**

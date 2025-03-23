@@ -2,8 +2,10 @@ package ru.flawden.BascovDiscordBot.lavaplayer;
 
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.player.event.AudioEventAdapter;
+import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
+import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.entities.Guild;
 
 import java.util.concurrent.BlockingQueue;
@@ -16,6 +18,7 @@ import java.util.concurrent.LinkedBlockingQueue;
  * @author Flawden
  * @version 1.0
  */
+@Slf4j
 public class TrackScheduler extends AudioEventAdapter {
 
     /** Аудиоплеер, использующийся для воспроизведения треков. */
@@ -31,6 +34,7 @@ public class TrackScheduler extends AudioEventAdapter {
         this.audioPlayer = audioPlayer;
         this.guild = guild;
         this.queue = new LinkedBlockingQueue<>();
+        log.info("TrackScheduler created for AudioPlayer: {}", audioPlayer);
     }
 
     /**
@@ -41,8 +45,12 @@ public class TrackScheduler extends AudioEventAdapter {
      * @param track Трек, который будет добавлен в очередь.
      */
     public void queue(AudioTrack track) {
+        log.debug("Queuing track: {}", track.getInfo().title);
         if (!this.audioPlayer.startTrack(track, true)) {
-            this.queue.offer(track);
+            queue.offer(track);
+            log.info("Track queued: {} (queue size: {})", track.getInfo().title, queue.size());
+        } else {
+            log.info("Track started playing: {}", track.getInfo().title);
         }
     }
 
@@ -55,12 +63,11 @@ public class TrackScheduler extends AudioEventAdapter {
      */
     @Override
     public void onTrackEnd(AudioPlayer player, AudioTrack track, AudioTrackEndReason endReason) {
+        log.info("Track ended: {} (reason: {})", track.getInfo().title, endReason);
         if (endReason.mayStartNext) {
-            if (queue.isEmpty()) {
-                guild.getAudioManager().closeAudioConnection();
-            } else {
-                player.playTrack(queue.poll());
-            }
+            nextTrack();
+        } else {
+            log.warn("Cannot start next track due to end reason: {}", endReason);
         }
     }
 
@@ -68,6 +75,25 @@ public class TrackScheduler extends AudioEventAdapter {
      * Запускает следующий трек из очереди, если таковой имеется.
      */
     public void nextTrack() {
-        this.audioPlayer.startTrack(this.queue.poll(), false);
+        AudioTrack nextTrack = queue.poll();
+        if (nextTrack == null) {
+            log.warn("No next track in queue, stopping playback");
+            audioPlayer.stopTrack();
+        } else {
+            log.info("Playing next track: {}", nextTrack.getInfo().title);
+            audioPlayer.startTrack(nextTrack, false);
+        }
+    }
+
+    @Override
+    public void onTrackException(AudioPlayer player, AudioTrack track, FriendlyException exception) {
+        log.error("Track exception for {}: {}", track.getInfo().title, exception.getMessage(), exception);
+        nextTrack();
+    }
+
+    @Override
+    public void onTrackStuck(AudioPlayer player, AudioTrack track, long thresholdMs) {
+        log.error("Track stuck: {} (threshold: {}ms)", track.getInfo().title, thresholdMs);
+        nextTrack();
     }
 }

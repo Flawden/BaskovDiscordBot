@@ -1,5 +1,6 @@
 package ru.flawden.BascovDiscordBot.commands;
 
+import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.EmbedBuilder;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
@@ -10,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Component
 public class HelpEvent implements Event {
 
@@ -17,6 +19,7 @@ public class HelpEvent implements Event {
 
     @Override
     public void execute(EventArgs event) {
+        log.info("Help command executed in guild: {}", event.getTextChannel().getGuild().getId());
         EmbedBuilder embed = new EmbedBuilder();
         embed.setTitle("📜 Список команд для Баскова");
         embed.setDescription("Команды не чувствительны к регистру");
@@ -38,6 +41,8 @@ public class HelpEvent implements Event {
             }
             embed.addField("🎯 " + group, groupField.toString(), false);
         }
+        log.debug("Displaying help with {} command groups in guild: {}",
+                groupedCommands.size(), event.getTextChannel().getGuild().getId());
         event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
     }
 

@@ -1,5 +1,6 @@
 package ru.flawden.BascovDiscordBot.commands;
 
+import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.User;
 import org.springframework.stereotype.Component;
@@ -9,15 +10,19 @@ import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
 import java.awt.*;
 import java.util.concurrent.TimeUnit;
 
+@Slf4j
 @Component
 public class SpamEvent implements Event {
 
     @Override
     public void execute(EventArgs event) {
+        log.info("Spam command executed in guild: {}, args: {}",
+                event.getTextChannel().getGuild().getId(), String.join(" ", event.getArgs()));
         EmbedBuilder embed = new EmbedBuilder();
         embed.setColor(Color.CYAN);
 
         if (event.getArgs().length <= 1) {
+            log.warn("No user provided for spam in guild: {}", event.getTextChannel().getGuild().getId());
             embed.setTitle("📩 Ошибка спама");
             embed.setDescription("Укажи пользователя для спама!\n" +
                     "Пример: `!spam @Nick`");
@@ -34,6 +39,8 @@ public class SpamEvent implements Event {
         }
 
         if (targetUser == null) {
+            log.warn("Invalid user mention for spam in guild: {}, mention: {}",
+                    event.getTextChannel().getGuild().getId(), mention);
             embed.setTitle("📩 Ошибка спама");
             embed.setDescription("Не удалось найти пользователя по упоминанию: `" + mention + "`\n" +
                     "Укажи валидное упоминание, например: `!spam @Nick`");
@@ -41,6 +48,7 @@ public class SpamEvent implements Event {
             return;
         }
 
+        log.info("Starting spam for user: {} in guild: {}", targetUser.getName(), event.getTextChannel().getGuild().getId());
         embed.setTitle("📩 Спам начат");
         embed.setDescription("Пользователь " + event.getMember().getAsMention() + " начал спам для " +
                 targetUser.getAsMention() + "!\n" +
@@ -54,6 +62,8 @@ public class SpamEvent implements Event {
             embed.setDescription(targetUser.getAsMention() + " !!! Просыпайся!!!");
             event.getTextChannel().sendMessageEmbeds(embed.build())
                     .queueAfter(i * 500, TimeUnit.MILLISECONDS);
+            log.debug("Sent spam message {} of 10 for user: {} in guild: {}",
+                    i + 1, targetUser.getName(), event.getTextChannel().getGuild().getId());
         }
     }
 

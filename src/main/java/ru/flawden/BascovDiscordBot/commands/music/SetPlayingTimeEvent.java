@@ -2,6 +2,7 @@ package ru.flawden.BascovDiscordBot.commands.music;
 
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
+import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.EmbedBuilder;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
@@ -10,15 +11,19 @@ import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 
 import java.awt.*;
 
+@Slf4j
 @Component
 public class SetPlayingTimeEvent implements Event {
 
     @Override
     public void execute(EventArgs event) {
+        log.info("SetPlayingTime command executed in guild: {}, time: {}",
+                event.getTextChannel().getGuild().getId(), event.getArgs().length > 1 ? event.getArgs()[1] : "not provided");
         EmbedBuilder embed = new EmbedBuilder();
         embed.setColor(Color.CYAN);
 
         if (event.getArgs().length <= 1) {
+            log.warn("No time provided for SetPlayingTime in guild: {}", event.getTextChannel().getGuild().getId());
             embed.setTitle("⏳ Ошибка установки времени");
             embed.setDescription("Введите желаемое время в формате: `!SetPlayingTime ЧЧ:ММ:СС`\n" +
                     "Пример: `!SetPlayingTime 00:01:30`");
@@ -32,6 +37,7 @@ public class SetPlayingTimeEvent implements Event {
         AudioTrack currentTrack = audioPlayer.getPlayingTrack();
 
         if (currentTrack == null) {
+            log.warn("No track is playing for SetPlayingTime in guild: {}", event.getTextChannel().getGuild().getId());
             embed.setTitle("⏳ Ошибка установки времени");
             embed.setDescription("В данный момент нет воспроизводимых песен!");
             event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
@@ -41,6 +47,8 @@ public class SetPlayingTimeEvent implements Event {
         String timeInput = event.getArgs()[1];
         String timePattern = "^([0-1][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$";
         if (!timeInput.matches(timePattern)) {
+            log.warn("Invalid time format for SetPlayingTime in guild: {}, input: {}",
+                    event.getTextChannel().getGuild().getId(), timeInput);
             embed.setTitle("⏳ Ошибка формата времени");
             embed.setDescription("Введите время в формате: `ЧЧ:ММ:СС`\n" +
                     "Пример: `!SetPlayingTime 00:01:30`");
@@ -56,6 +64,8 @@ public class SetPlayingTimeEvent implements Event {
 
         long trackDuration = currentTrack.getDuration();
         if (timeInMillis > trackDuration) {
+            log.warn("Requested time exceeds track duration in guild: {}, input: {}, duration: {}",
+                    event.getTextChannel().getGuild().getId(), timeInput, formatTime(trackDuration));
             embed.setTitle("⏳ Ошибка установки времени");
             embed.setDescription("Указанное время (`" + timeInput + "`) превышает длительность трека!\n" +
                     "Длительность трека: `" + formatTime(trackDuration) + "`");
@@ -64,6 +74,8 @@ public class SetPlayingTimeEvent implements Event {
         }
 
         currentTrack.setPosition(timeInMillis);
+        log.info("Set playing time to {} for track: {} in guild: {}",
+                timeInput, currentTrack.getInfo().title, event.getTextChannel().getGuild().getId());
 
         embed.setTitle("⏳ Время установлено");
         embed.setDescription("Воспроизведение трека `" + currentTrack.getInfo().title + "` " +

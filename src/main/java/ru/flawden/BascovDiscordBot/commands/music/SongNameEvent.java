@@ -2,6 +2,7 @@ package ru.flawden.BascovDiscordBot.commands.music;
 
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
+import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.EmbedBuilder;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
@@ -10,11 +11,13 @@ import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 
 import java.awt.*;
 
+@Slf4j
 @Component
 public class SongNameEvent implements Event {
 
     @Override
     public void execute(EventArgs event) {
+        log.info("SongName command executed in guild: {}", event.getTextChannel().getGuild().getId());
         AudioPlayer audioPlayer = PlayerManager.getINSTANCE()
                 .getMusicManager(event.getTextChannel().getGuild())
                 .scheduler.audioPlayer;
@@ -24,6 +27,7 @@ public class SongNameEvent implements Event {
         embed.setColor(Color.CYAN);
 
         if (currentTrack == null) {
+            log.warn("No track is playing for SongName in guild: {}", event.getTextChannel().getGuild().getId());
             embed.setTitle("🎵 Ошибка");
             embed.setDescription("В данный момент нет воспроизводимых песен!");
             event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
@@ -43,6 +47,9 @@ public class SongNameEvent implements Event {
             trackAuthor = trackAuthor.substring(0, 47) + "...";
         }
 
+        log.info("Displaying song info in guild: {}, track: {}, author: {}, position: {}/{}",
+                event.getTextChannel().getGuild().getId(), trackTitle, trackAuthor,
+                formatTime(position), formatTime(duration));
         embed.setTitle("🎵 Сейчас играет");
         embed.setDescription("**Название:** `" + trackTitle + "`\n" +
                 "**Автор:** `" + trackAuthor + "`\n" +
