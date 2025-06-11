@@ -1,0 +1,8 @@
+version: '3.8'
+services:
+  bot:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
