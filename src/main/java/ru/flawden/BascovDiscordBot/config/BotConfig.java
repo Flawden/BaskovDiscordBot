@@ -16,7 +16,6 @@ import ru.flawden.BascovDiscordBot.config.eventconfig.BotEvents;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.events.EventJoin;
 
-import java.util.Collections;
 import java.util.List;
 
 /**

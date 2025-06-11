@@ -13,7 +13,7 @@
     <name>BascovDiscordBot</name>
     <description>Bot kissing hands and loving tea from golden cups</description>
     <properties>
-        <java.version>22</java.version>
+        <java.version>17</java.version>
         <discord4j-core.version>3.2.2</discord4j-core.version>
     </properties>
 
@@ -81,6 +81,18 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                    <annotationProcessors>
+                        <annotationProcessor>lombok.launch.AnnotationProcessorHider$AnnotationProcessor</annotationProcessor>
+                    </annotationProcessors>
                 </configuration>
             </plugin>
         </plugins>
