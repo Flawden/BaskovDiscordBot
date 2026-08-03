@@ -16,7 +16,10 @@ FROM eclipse-temurin:17-jre-jammy AS runtime
 WORKDIR /app
 
 RUN groupadd --gid 10001 app \
-    && useradd --uid 10001 --gid app --create-home --shell /usr/sbin/nologin app
+    && useradd --uid 10001 --gid app --create-home --shell /usr/sbin/nologin app \
+    && mkdir -p /app/logs \
+    && chown -R app:app /app \
+    && chmod 750 /app/logs
 
 COPY --from=builder --chown=app:app \
     /workspace/target/BascovDiscordBot-0.0.1-SNAPSHOT.jar /app/app.jar
