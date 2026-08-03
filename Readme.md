@@ -1,11 +1,14 @@
 # 🎤 Baskov Discord Bot
 
-Текущая стабильная версия: **v0.3.0**.
+Текущая стабильная версия: **v0.4.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA и LavaPlayer.
 
 ## Возможности
 
+- slash-команды `/play`, `/pause`, `/resume`, `/skip`, `/stop`, `/queue`, `/now` и `/seek`;
+- autocomplete последних поисковых запросов и интерактивные кнопки управления;
+- legacy `!`-команды как compatibility layer;
 - воспроизведение музыки, пауза, остановка и пропуск треков;
 - очередь воспроизведения и поиск;
 - управление музыкой только из общего voice channel с административным override;
@@ -49,6 +52,7 @@ docker compose logs -f bot
 | `DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT` | `5m` | отключение после опустошения очереди |
 
 Live-потоки отключены. Подробные правила voice-доступа и lifecycle находятся в [`docs/MUSIC-SESSIONS.md`](docs/MUSIC-SESSIONS.md).
+Современный Discord-интерфейс описан в [`docs/MODERN-COMMANDS.md`](docs/MODERN-COMMANDS.md).
 
 ## CI/CD
 
@@ -68,6 +72,8 @@ Live-потоки отключены. Подробные правила voice-д
 - при push в `dev` — environment `development`, channel tag `dev`;
 - при push в `master` — environment `production`, channel tag `latest`;
 - вручную через `workflow_dispatch`.
+
+В текущем режиме разработки релизы отправляются напрямую в `master`; ветка `dev` остаётся технически поддерживаемой, но не используется.
 
 Каждая доставка сначала выполняет Maven verification, затем публикует в GHCR:
 

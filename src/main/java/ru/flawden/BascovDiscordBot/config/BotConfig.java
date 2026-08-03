@@ -16,6 +16,8 @@ import ru.flawden.BascovDiscordBot.config.eventconfig.BotEvents;
 import ru.flawden.BascovDiscordBot.config.eventconfig.CommandCooldowns;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.events.EventJoin;
+import ru.flawden.BascovDiscordBot.interactions.ModernCommandCatalog;
+import ru.flawden.BascovDiscordBot.interactions.ModernInteractions;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -46,13 +48,20 @@ public class BotConfig {
     private final String prefix;
     private final EventJoin eventJoin;
     private final HelpEvent helpCommand;
+    private final ModernInteractions modernInteractions;
 
-    public BotConfig(List<Event> events, Environment env, EventJoin eventJoin, HelpEvent helpCommand) {
+    public BotConfig(
+            List<Event> events,
+            Environment env,
+            EventJoin eventJoin,
+            HelpEvent helpCommand,
+            ModernInteractions modernInteractions) {
         this.events = List.copyOf(events);
         this.token = env.getProperty("discordBot.token", "");
         this.prefix = env.getProperty("discordBot.prefix", "!");
         this.eventJoin = eventJoin;
         this.helpCommand = helpCommand;
+        this.modernInteractions = modernInteractions;
         log.info("BotConfig initialized: token={}, prefix='{}', commands={}",
                 token.isBlank() ? "missing" : "present", prefix, events.size());
     }
@@ -81,12 +90,17 @@ public class BotConfig {
                     .enableCache(CacheFlag.VOICE_STATE)
                     .setActivity(Activity.watching("золотые чаши"))
                     .setStatus(OnlineStatus.ONLINE)
-                    .addEventListeners(eventJoin, botEvents)
+                    .addEventListeners(eventJoin, botEvents, modernInteractions)
                     .build()
                     .awaitReady();
 
+            int registeredCommands = jda.updateCommands()
+                    .addCommands(ModernCommandCatalog.commands())
+                    .complete()
+                    .size();
             Files.writeString(READY_FILE, jda.getSelfUser().getId());
-            log.info("JDA is ready: status={}, guilds={}", jda.getStatus(), jda.getGuilds().size());
+            log.info("JDA is ready: status={}, guilds={}, slashCommands={}",
+                    jda.getStatus(), jda.getGuilds().size(), registeredCommands);
             return jda;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();

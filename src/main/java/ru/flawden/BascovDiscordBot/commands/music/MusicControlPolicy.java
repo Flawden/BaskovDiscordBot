@@ -2,6 +2,7 @@ package ru.flawden.BascovDiscordBot.commands.music;
 
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.GuildVoiceState;
+import net.dv8tion.jda.api.entities.Member;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
 
@@ -12,19 +13,33 @@ import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
 public class MusicControlPolicy {
 
     public Decision canStartOrQueue(EventArgs event) {
-        return decide(
-                Mode.START_OR_QUEUE,
-                isPrivileged(event),
-                channelId(event.getMemberVoiceState()),
-                channelId(event.getSelfVoiceState()));
+        return canStartOrQueue(event.getMember(), event.getMemberVoiceState(), event.getSelfVoiceState());
     }
 
     public Decision canControlPlayback(EventArgs event) {
+        return canControlPlayback(event.getMember(), event.getMemberVoiceState(), event.getSelfVoiceState());
+    }
+
+    public Decision canStartOrQueue(
+            Member member,
+            GuildVoiceState memberVoiceState,
+            GuildVoiceState botVoiceState) {
+        return decide(
+                Mode.START_OR_QUEUE,
+                isPrivileged(member),
+                channelId(memberVoiceState),
+                channelId(botVoiceState));
+    }
+
+    public Decision canControlPlayback(
+            Member member,
+            GuildVoiceState memberVoiceState,
+            GuildVoiceState botVoiceState) {
         return decide(
                 Mode.CONTROL_PLAYBACK,
-                isPrivileged(event),
-                channelId(event.getMemberVoiceState()),
-                channelId(event.getSelfVoiceState()));
+                isPrivileged(member),
+                channelId(memberVoiceState),
+                channelId(botVoiceState));
     }
 
     static Decision decide(Mode mode, boolean privileged, Long memberChannelId, Long botChannelId) {
@@ -48,14 +63,15 @@ public class MusicControlPolicy {
         }
 
         if (!botChannelId.equals(memberChannelId)) {
-            return Decision.denied("Музыкой могут управлять участники моего голосового канала. Администратор сервера может управлять из любого канала.");
+            return Decision.denied("Музыкой могут управлять участники моего голосового канала. "
+                    + "Администратор сервера может управлять из любого канала.");
         }
 
         return Decision.granted();
     }
 
-    private static boolean isPrivileged(EventArgs event) {
-        return event.getMember().isOwner() || event.getMember().hasPermission(Permission.MANAGE_SERVER);
+    private static boolean isPrivileged(Member member) {
+        return member != null && (member.isOwner() || member.hasPermission(Permission.MANAGE_SERVER));
     }
 
     private static Long channelId(GuildVoiceState state) {

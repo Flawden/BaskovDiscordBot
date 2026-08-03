@@ -8,13 +8,10 @@ import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
-import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.Guild;
-import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
 
-import java.awt.Color;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
@@ -23,6 +20,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * Spring-managed lifecycle всех музыкальных сессий.
@@ -69,15 +67,18 @@ public class PlayerManager {
         return Optional.ofNullable(musicManagers.get(guild.getIdLong()));
     }
 
-    public void loadAndPlay(TextChannel textChannel, String identifier) {
-        GuildMusicManager musicManager = getMusicManager(textChannel.getGuild());
+    /**
+     * Загружает трек и возвращает транспорт-независимый результат через callback.
+     */
+    public void loadAndPlay(Guild guild, String identifier, Consumer<MusicLoadResult> resultConsumer) {
+        GuildMusicManager musicManager = getMusicManager(guild);
         musicManager.markActivity();
-        log.info("Loading media for guild {}: {}", textChannel.getGuild().getId(), identifier);
+        log.info("Loading media for guild {}: {}", guild.getId(), identifier);
 
         audioPlayerManager.loadItemOrdered(musicManager, identifier, new AudioLoadResultHandler() {
             @Override
             public void trackLoaded(AudioTrack track) {
-                announceQueueResult(textChannel, musicManager, track);
+                deliverQueueResult(guild, musicManager, track, resultConsumer);
             }
 
             @Override
@@ -88,29 +89,25 @@ public class PlayerManager {
                 }
 
                 if (selected == null) {
-                    sendError(textChannel, "❌ Ничего не найдено",
-                            "Плейлист или результаты поиска не содержат доступных треков.");
                     musicManager.getScheduler().scheduleDisconnectIfIdle();
+                    resultConsumer.accept(MusicLoadResult.withoutTrack(MusicLoadResult.Status.NO_MATCHES));
                     return;
                 }
 
-                announceQueueResult(textChannel, musicManager, selected);
+                deliverQueueResult(guild, musicManager, selected, resultConsumer);
             }
 
             @Override
             public void noMatches() {
-                sendError(textChannel, "❌ Песня не найдена",
-                        "Проверь название или ссылку и попробуй снова.");
                 musicManager.getScheduler().scheduleDisconnectIfIdle();
+                resultConsumer.accept(MusicLoadResult.withoutTrack(MusicLoadResult.Status.NO_MATCHES));
             }
 
             @Override
             public void loadFailed(FriendlyException exception) {
-                log.warn("Media load failed in guild {}: {}",
-                        textChannel.getGuild().getId(), exception.getMessage());
-                sendError(textChannel, "❌ Ошибка загрузки",
-                        "Не удалось загрузить трек. Попробуй снова чуть позже.");
+                log.warn("Media load failed in guild {}: {}", guild.getId(), exception.getMessage());
                 musicManager.getScheduler().scheduleDisconnectIfIdle();
+                resultConsumer.accept(MusicLoadResult.withoutTrack(MusicLoadResult.Status.LOAD_FAILED));
             }
         });
     }
@@ -125,50 +122,33 @@ public class PlayerManager {
         }
     }
 
-    private void announceQueueResult(TextChannel textChannel, GuildMusicManager manager, AudioTrack track) {
-        if (!manager.isActive()) {
-            log.info("Ignoring completed media load for closed guild session {}", textChannel.getGuild().getId());
+    private void deliverQueueResult(
+            Guild guild,
+            GuildMusicManager musicManager,
+            AudioTrack track,
+            Consumer<MusicLoadResult> resultConsumer) {
+        if (!musicManager.isActive()) {
+            log.info("Ignoring completed media load for closed guild session {}", guild.getId());
+            resultConsumer.accept(MusicLoadResult.withoutTrack(MusicLoadResult.Status.SESSION_CLOSED));
             return;
         }
-        TrackScheduler.QueueResult result = manager.getScheduler().queue(track);
-        EmbedBuilder embed = new EmbedBuilder().setColor(Color.GREEN);
 
-        switch (result.status()) {
-            case STARTED -> {
-                embed.setTitle("▶️ Воспроизведение началось");
-                embed.setDescription(formatTrack(track));
-            }
-            case QUEUED -> {
-                embed.setTitle("🎶 Добавлено в очередь");
-                embed.setDescription(formatTrack(track)
-                        + "\n**Позиция:** `" + result.queuePosition() + "`");
-            }
-            case QUEUE_FULL -> {
-                embed.setColor(Color.RED);
-                embed.setTitle("🚧 Очередь заполнена");
-                embed.setDescription("В очереди уже `" + properties.getMaxQueueSize()
-                        + "` треков. Дождись свободного места.");
-                manager.getScheduler().scheduleDisconnectIfIdle();
-            }
-            case TRACK_TOO_LONG -> {
-                embed.setColor(Color.RED);
-                embed.setTitle("⏱️ Трек слишком длинный");
-                embed.setDescription("Максимальная длительность трека: `"
-                        + humanDuration(properties.getMaxTrackDuration()) + "`.");
-                manager.getScheduler().scheduleDisconnectIfIdle();
-            }
-            case STREAM_NOT_ALLOWED -> {
-                embed.setColor(Color.RED);
-                embed.setTitle("📡 Поток не поддерживается");
-                embed.setDescription("Прямые трансляции отключены, чтобы музыкальная сессия не зависала навсегда.");
-                manager.getScheduler().scheduleDisconnectIfIdle();
-            }
+        TrackScheduler.QueueResult queueResult = musicManager.getScheduler().queue(track);
+        MusicLoadResult.Status status = switch (queueResult.status()) {
+            case STARTED -> MusicLoadResult.Status.STARTED;
+            case QUEUED -> MusicLoadResult.Status.QUEUED;
+            case QUEUE_FULL -> MusicLoadResult.Status.QUEUE_FULL;
+            case TRACK_TOO_LONG -> MusicLoadResult.Status.TRACK_TOO_LONG;
+            case STREAM_NOT_ALLOWED -> MusicLoadResult.Status.STREAM_NOT_ALLOWED;
+        };
+
+        if (status == MusicLoadResult.Status.QUEUE_FULL
+                || status == MusicLoadResult.Status.TRACK_TOO_LONG
+                || status == MusicLoadResult.Status.STREAM_NOT_ALLOWED) {
+            musicManager.getScheduler().scheduleDisconnectIfIdle();
         }
 
-        textChannel.sendMessageEmbeds(embed.build()).queue(
-                ignored -> { },
-                failure -> log.warn("Failed to send queue response to channel {}: {}",
-                        textChannel.getId(), failure.getMessage()));
+        resultConsumer.accept(MusicLoadResult.of(status, track, queueResult.queuePosition()));
     }
 
     private void scheduleIdleDisconnect(Guild guild) {
@@ -216,35 +196,6 @@ public class PlayerManager {
         if (future != null) {
             future.cancel(false);
         }
-    }
-
-    private void sendError(TextChannel channel, String title, String description) {
-        channel.sendMessageEmbeds(new EmbedBuilder()
-                        .setTitle(title)
-                        .setDescription(description)
-                        .setColor(Color.RED)
-                        .build())
-                .queue(
-                        ignored -> { },
-                        failure -> log.warn("Failed to send load error to channel {}: {}",
-                                channel.getId(), failure.getMessage()));
-    }
-
-    private static String formatTrack(AudioTrack track) {
-        return "**" + track.getInfo().title + "** — " + track.getInfo().author;
-    }
-
-    private static String humanDuration(Duration duration) {
-        long minutes = duration.toMinutes();
-        long hours = minutes / 60;
-        long remainingMinutes = minutes % 60;
-        if (hours == 0) {
-            return minutes + " мин";
-        }
-        if (remainingMinutes == 0) {
-            return hours + " ч";
-        }
-        return hours + " ч " + remainingMinutes + " мин";
     }
 
     int activeSessionCount() {

@@ -26,7 +26,7 @@ public class HelpEvent implements Event {
     public void execute(EventArgs event) {
         EmbedBuilder embed = new EmbedBuilder();
         embed.setTitle("📜 Список команд для Баскова");
-        embed.setDescription("Команды не чувствительны к регистру");
+        embed.setDescription("Slash-команды — основной интерфейс. Старые prefix-команды не чувствительны к регистру и пока поддерживаются.");
         embed.setColor(Color.CYAN);
 
         Map<String, List<Event>> groupedCommands = events.stream()

@@ -17,9 +17,9 @@ class VersionEventTest {
         ObjectProvider<BuildProperties> provider = mock(ObjectProvider.class);
         VersionEvent event = new VersionEvent(provider);
         Properties properties = new Properties();
-        properties.setProperty("version", "0.3.0");
+        properties.setProperty("version", "0.4.0");
 
-        assertEquals("0.3.0", event.resolveVersion(new BuildProperties(properties)));
+        assertEquals("0.4.0", event.resolveVersion(new BuildProperties(properties)));
     }
 
     @Test

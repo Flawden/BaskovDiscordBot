@@ -4,8 +4,10 @@ import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.managers.AudioManager;
 import org.springframework.stereotype.Component;
+import ru.flawden.BascovDiscordBot.config.MusicProperties;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
+import ru.flawden.BascovDiscordBot.interactions.RecentSearchHistory;
 import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 
@@ -19,14 +21,20 @@ public class SearchEvent implements Event {
     private final MediaQueryResolver queryResolver;
     private final MusicControlPolicy controlPolicy;
     private final PlayerManager playerManager;
+    private final MusicProperties musicProperties;
+    private final RecentSearchHistory searchHistory;
 
     public SearchEvent(
             MediaQueryResolver queryResolver,
             MusicControlPolicy controlPolicy,
-            PlayerManager playerManager) {
+            PlayerManager playerManager,
+            MusicProperties musicProperties,
+            RecentSearchHistory searchHistory) {
         this.queryResolver = queryResolver;
         this.controlPolicy = controlPolicy;
         this.playerManager = playerManager;
+        this.musicProperties = musicProperties;
+        this.searchHistory = searchHistory;
     }
 
     @Override
@@ -70,9 +78,14 @@ public class SearchEvent implements Event {
                     memberChannel.getId(), event.getGuild().getId());
         }
 
+        searchHistory.remember(event.getMember().getIdLong(), event.getRawArguments());
         log.info("Loading media query in guild {}: type={}",
                 event.getGuild().getId(), query.startsWith("scsearch:") ? "search" : "url");
-        playerManager.loadAndPlay(event.getTextChannel(), query);
+        playerManager.loadAndPlay(event.getGuild(), query, result ->
+                event.getTextChannel().sendMessageEmbeds(MusicEmbeds.loadResult(result, musicProperties)).queue(
+                        ignored -> { },
+                        failure -> log.warn("Failed to send music response to channel {}: {}",
+                                event.getTextChannel().getId(), failure.getMessage())));
     }
 
     @Override

@@ -1,6 +1,7 @@
 package ru.flawden.BascovDiscordBot.commands;
 
 import net.dv8tion.jda.api.EmbedBuilder;
+import net.dv8tion.jda.api.entities.MessageEmbed;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.stereotype.Component;
@@ -30,6 +31,10 @@ public class VersionEvent implements Event {
 
     @Override
     public void execute(EventArgs event) {
+        event.getTextChannel().sendMessageEmbeds(buildEmbed()).queue();
+    }
+
+    public MessageEmbed buildEmbed() {
         BuildProperties buildProperties = buildPropertiesProvider.getIfAvailable();
         String version = resolveVersion(buildProperties);
 
@@ -46,8 +51,7 @@ public class VersionEvent implements Event {
                         "Собрано",
                         "`" + BUILD_TIME_FORMAT.format(buildTime) + "`",
                         false));
-
-        event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
+        return embed.build();
     }
 
     String resolveVersion(BuildProperties buildProperties) {

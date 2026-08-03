@@ -6,6 +6,40 @@
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-08-03
+
+### Добавлено
+
+- Десять глобальных slash-команд: `/help`, `/version`, `/play`, `/pause`, `/resume`, `/skip`, `/stop`, `/queue`, `/now` и `/seek`.
+- Autocomplete параметра `/play query` на основе последних поисковых запросов пользователя.
+- Интерактивные кнопки `Пауза / играть`, `Пропустить`, `Очередь` и `Стоп` под музыкальными сообщениями.
+- Поддержка позиции `SS`, `MM:SS` и `HH:MM:SS` для `/seek`.
+- Единый каталог `ModernCommandCatalog`, регистрируемый через JDA при старте приложения.
+- Документ `docs/MODERN-COMMANDS.md` с описанием slash-команд, autocomplete, кнопок и compatibility layer.
+- Unit- и contract-тесты для каталога slash-команд, position parser, истории поиска и interaction wiring.
+
+### Изменено
+
+- Slash-команды объявлены основным пользовательским интерфейсом бота.
+- Старые `!`-команды сохранены как compatibility layer и продолжают работать.
+- `PlayerManager` больше не зависит от `TextChannel`: асинхронная загрузка возвращает transport-independent `MusicLoadResult`.
+- Prefix- и slash-команды используют единое представление музыкальных результатов через `MusicEmbeds`.
+- `!SongName` и `!TrackList` получили те же кнопки управления, что и slash-интерфейс.
+- `MusicControlPolicy` теперь может проверять как legacy command context, так и Discord interactions.
+- Maven-версия приложения повышена до `0.4.0`.
+
+### Безопасность
+
+- Кнопки, меняющие состояние плеера, проходят ту же проверку голосового канала и административных прав, что и команды.
+- Read-only кнопка очереди не создаёт пустую музыкальную сессию.
+- Slash-команды вне Discord-сервера отклоняются до обращения к guild- и voice-состоянию.
+
+### Исправлено
+
+- Музыкальный загрузчик больше не привязан к конкретному текстовому каналу и может безопасно отвечать через Discord interaction hook.
+- Ошибки slash-команд централизованно перехватываются и возвращают пользователю ephemeral-ответ.
+- Повторный поисковый запрос не создаёт дубликаты в autocomplete-истории.
+
 ## [0.3.0] — 2026-08-03
 
 ### Добавлено
@@ -109,7 +143,8 @@
 - Immutable Docker images в GHCR.
 - Автоматический production-деплой на VPS с healthcheck и rollback.
 
-[Unreleased]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Flawden/BaskovDiscordBot/releases/tag/v0.1.0
