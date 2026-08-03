@@ -13,7 +13,12 @@ RUN --mount=type=cache,target=/root/.m2 \
     ./mvnw --batch-mode --no-transfer-progress package -DskipTests
 
 FROM eclipse-temurin:17-jre-jammy AS runtime
+ARG APP_VERSION=development
 WORKDIR /app
+
+LABEL org.opencontainers.image.title="Baskov Discord Bot" \
+      org.opencontainers.image.description="Музыкальный Discord-бот на Java, Spring Boot, JDA и LavaPlayer" \
+      org.opencontainers.image.version="${APP_VERSION}"
 
 RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid app --create-home --shell /usr/sbin/nologin app \
@@ -22,7 +27,7 @@ RUN groupadd --gid 10001 app \
     && chmod 750 /app/logs
 
 COPY --from=builder --chown=app:app \
-    /workspace/target/BascovDiscordBot-0.0.1-SNAPSHOT.jar /app/app.jar
+    /workspace/target/baskov-discord-bot.jar /app/app.jar
 
 USER 10001:10001
 

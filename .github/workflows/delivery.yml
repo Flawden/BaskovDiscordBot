@@ -80,6 +80,7 @@ jobs:
     timeout-minutes: 30
     outputs:
       digest: ${{ steps.build.outputs.digest }}
+      version: ${{ steps.project.outputs.version }}
 
     steps:
       - name: Checkout repository
@@ -97,6 +98,19 @@ jobs:
 
       - name: Run Maven verification
         run: ./mvnw --batch-mode --no-transfer-progress clean verify
+
+      - name: Resolve application version
+        id: project
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          version="$(./mvnw --batch-mode --no-transfer-progress help:evaluate \
+            -Dexpression=project.version -DforceStdout -q)"
+          if [[ -z "${version}" ]]; then
+            echo "Maven project version is empty" >&2
+            exit 1
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -118,10 +132,12 @@ jobs:
           tags: |
             ${{ needs.context.outputs.image }}:sha-${{ github.sha }}
             ${{ needs.context.outputs.image }}:${{ needs.context.outputs.channel }}
+          build-args: |
+            APP_VERSION=${{ steps.project.outputs.version }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=sha-${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.project.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: mode=max
@@ -134,6 +150,7 @@ jobs:
             echo "## Baskov Discord Bot delivery"
             echo
             echo "- Environment: \`${{ needs.context.outputs.environment }}\`"
+            echo "- Application version: \`v${{ steps.project.outputs.version }}\`"
             echo "- Immutable image: \`${{ needs.context.outputs.image }}:sha-${{ github.sha }}\`"
             echo "- Channel image: \`${{ needs.context.outputs.image }}:${{ needs.context.outputs.channel }}\`"
             echo "- Digest: \`${{ steps.build.outputs.digest }}\`"
@@ -243,6 +260,7 @@ jobs:
             echo "## Deployment complete"
             echo
             echo "- Environment: \`${{ needs.context.outputs.environment }}\`"
+            echo "- Application version: \`v${{ needs.publish.outputs.version }}\`"
             echo "- Image: \`${{ needs.context.outputs.image }}:sha-${{ github.sha }}\`"
             echo "- Digest: \`${{ needs.publish.outputs.digest }}\`"
           } >> "${GITHUB_STEP_SUMMARY}"

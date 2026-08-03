@@ -1,5 +1,7 @@
 # 🎤 Baskov Discord Bot
 
+Текущая стабильная версия: **v0.1.0**.
+
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA и LavaPlayer.
 
 ## Возможности
@@ -7,6 +9,7 @@
 - воспроизведение музыки, пауза, остановка и пропуск треков;
 - очередь воспроизведения и поиск;
 - расширяемая система команд на Spring-компонентах;
+- команда `!version` с версией и метаданными сборки;
 - контейнерный запуск;
 - CI, публикация immutable-образов в GHCR и автоматический деплой на VPS.
 
@@ -74,10 +77,8 @@ ghcr.io/<owner>/<repository>:dev|latest
 | Variable | Значение | Назначение |
 |---|---:|---|
 | `BOT_DEPLOY_ENABLED` | `true` | включает SSH-деплой после публикации образа |
-| `BOT_DEPLOY_DIR` | путь на VPS | необязательно; по умолчанию `/opt/baskov-discord-bot-dev` для development и `/opt/baskov-discord-bot` для production |
-| `BOT_CONTAINER_NAME` | имя контейнера | необязательно; по умолчанию `baskov-discord-bot-dev` и `baskov-discord-bot` соответственно |
 
-`BOT_DEPLOY_DIR` и `BOT_CONTAINER_NAME` удобно задавать как environment variables, если dev и production должны работать на одном VPS с нестандартными именами.
+`BOT_DEPLOY_DIR` и `BOT_CONTAINER_NAME` задаются как environment variables соответствующего GitHub Environment, если нужны нестандартные пути или имена контейнеров.
 
 В каждый environment добавьте secrets с одинаковыми именами:
 
@@ -101,6 +102,10 @@ ssh-keyscan -p 22 your-server.example.com
 ## Режим тестирования
 
 В обычном запуске `DISCORD_BOT_ENABLED=true` по умолчанию. Тестовый Spring context запускается с `discordBot.enabled=false`, поэтому CI не требует токен и не подключается к Discord.
+
+## Версии и релизы
+
+Проект использует Semantic Versioning. История изменений находится в [`CHANGELOG.md`](CHANGELOG.md), а пошаговый процесс выпуска — в [`docs/RELEASING.md`](docs/RELEASING.md). Основная ветка `master` одновременно является production-веткой.
 
 ## Документация
 

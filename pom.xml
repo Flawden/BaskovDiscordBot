@@ -9,12 +9,13 @@
     </parent>
     <groupId>ru.flawden</groupId>
     <artifactId>BascovDiscordBot</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
-    <name>BascovDiscordBot</name>
+    <version>0.1.0</version>
+    <name>BaskovDiscordBot</name>
     <description>Bot kissing hands and loving tea from golden cups</description>
     <properties>
         <java.version>17</java.version>
         <discord4j-core.version>3.2.2</discord4j-core.version>
+        <project.build.outputTimestamp>2026-08-03T00:00:00Z</project.build.outputTimestamp>
     </properties>
 
     <repositories>
@@ -70,6 +71,7 @@
     </dependencies>
 
     <build>
+        <finalName>baskov-discord-bot</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
@@ -82,6 +84,13 @@
                         </exclude>
                     </excludes>
                 </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>build-info</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
