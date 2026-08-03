@@ -6,82 +6,105 @@ import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
 import lombok.extern.slf4j.Slf4j;
-import net.dv8tion.jda.api.entities.Guild;
 
+import java.time.Duration;
+import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /**
- * Класс, отвечающий за планирование и управление воспроизведением аудиотреков.
- * TrackScheduler управляет очередью треков и воспроизводит их, когда предыдущий трек заканчивается.
- *
- * @author Flawden
- * @version 1.0
+ * Потокобезопасная очередь одной Discord-гильдии.
  */
 @Slf4j
 public class TrackScheduler extends AudioEventAdapter {
 
-    /** Аудиоплеер, использующийся для воспроизведения треков. */
-    public final AudioPlayer audioPlayer;
+    private final AudioPlayer audioPlayer;
+    private final BlockingQueue<AudioTrack> queue;
+    private final long maxTrackDurationMillis;
+    private final Runnable onActivity;
+    private final Runnable onIdle;
 
-    private final Guild guild;
-
-    /** Очередь для хранения треков, ожидающих воспроизведения. */
-    public final BlockingQueue<AudioTrack> queue;
-
-
-    public TrackScheduler(AudioPlayer audioPlayer, Guild guild) {
-        this.audioPlayer = audioPlayer;
-        this.guild = guild;
-        this.queue = new LinkedBlockingQueue<>();
-        log.info("TrackScheduler created for AudioPlayer: {}", audioPlayer);
+    public TrackScheduler(
+            AudioPlayer audioPlayer,
+            int maxQueueSize,
+            Duration maxTrackDuration,
+            Runnable onActivity,
+            Runnable onIdle) {
+        this.audioPlayer = Objects.requireNonNull(audioPlayer, "audioPlayer");
+        this.queue = new LinkedBlockingQueue<>(maxQueueSize);
+        this.maxTrackDurationMillis = Objects.requireNonNull(maxTrackDuration, "maxTrackDuration").toMillis();
+        this.onActivity = Objects.requireNonNull(onActivity, "onActivity");
+        this.onIdle = Objects.requireNonNull(onIdle, "onIdle");
     }
 
-    /**
-     * Добавляет трек в очередь.
-     *
-     * <p>Если аудиоплеер не воспроизводит текущий трек, новый трек добавляется в очередь.</p>
-     *
-     * @param track Трек, который будет добавлен в очередь.
-     */
-    public void queue(AudioTrack track) {
-        log.debug("Queuing track: {}", track.getInfo().title);
-        if (!this.audioPlayer.startTrack(track, true)) {
-            queue.offer(track);
-            log.info("Track queued: {} (queue size: {})", track.getInfo().title, queue.size());
-        } else {
-            log.info("Track started playing: {}", track.getInfo().title);
+    public QueueResult queue(AudioTrack track) {
+        Objects.requireNonNull(track, "track");
+
+        if (track.getInfo().isStream) {
+            return new QueueResult(QueueStatus.STREAM_NOT_ALLOWED, queue.size());
         }
+        if (track.getDuration() <= 0 || track.getDuration() > maxTrackDurationMillis) {
+            return new QueueResult(QueueStatus.TRACK_TOO_LONG, queue.size());
+        }
+
+        onActivity.run();
+        if (audioPlayer.startTrack(track, true)) {
+            log.info("Track started: {}", track.getInfo().title);
+            return new QueueResult(QueueStatus.STARTED, 0);
+        }
+
+        if (!queue.offer(track)) {
+            log.warn("Queue limit reached; rejected track: {}", track.getInfo().title);
+            return new QueueResult(QueueStatus.QUEUE_FULL, queue.size());
+        }
+
+        int position = queue.size();
+        log.info("Track queued at position {}: {}", position, track.getInfo().title);
+        return new QueueResult(QueueStatus.QUEUED, position);
     }
 
-    /**
-     * Вызывается, когда текущий трек заканчивается.
-     *
-     * @param player Аудиоплеер, который воспроизводил трек.
-     * @param track Трек, который только что закончился.
-     * @param endReason Причина окончания воспроизведения трека.
-     */
     @Override
     public void onTrackEnd(AudioPlayer player, AudioTrack track, AudioTrackEndReason endReason) {
         log.info("Track ended: {} (reason: {})", track.getInfo().title, endReason);
         if (endReason.mayStartNext) {
             nextTrack();
-        } else {
-            log.warn("Cannot start next track due to end reason: {}", endReason);
         }
     }
 
-    /**
-     * Запускает следующий трек из очереди, если таковой имеется.
-     */
-    public void nextTrack() {
-        AudioTrack nextTrack = queue.poll();
-        if (nextTrack == null) {
-            log.warn("No next track in queue, stopping playback");
+    public AudioTrack nextTrack() {
+        AudioTrack next = queue.poll();
+        if (next == null) {
             audioPlayer.stopTrack();
-        } else {
-            log.info("Playing next track: {}", nextTrack.getInfo().title);
-            audioPlayer.startTrack(nextTrack, false);
+            onIdle.run();
+            return null;
+        }
+
+        onActivity.run();
+        audioPlayer.startTrack(next, false);
+        log.info("Playing next track: {}", next.getInfo().title);
+        return next;
+    }
+
+    public void clearQueue() {
+        queue.clear();
+    }
+
+    public List<AudioTrack> queuedTracks() {
+        return List.copyOf(queue);
+    }
+
+    public int queueSize() {
+        return queue.size();
+    }
+
+    public boolean isIdle() {
+        return audioPlayer.getPlayingTrack() == null && queue.isEmpty();
+    }
+
+    public void scheduleDisconnectIfIdle() {
+        if (isIdle()) {
+            onIdle.run();
         }
     }
 
@@ -95,5 +118,16 @@ public class TrackScheduler extends AudioEventAdapter {
     public void onTrackStuck(AudioPlayer player, AudioTrack track, long thresholdMs) {
         log.error("Track stuck: {} (threshold: {}ms)", track.getInfo().title, thresholdMs);
         nextTrack();
+    }
+
+    public enum QueueStatus {
+        STARTED,
+        QUEUED,
+        QUEUE_FULL,
+        TRACK_TOO_LONG,
+        STREAM_NOT_ALLOWED
+    }
+
+    public record QueueResult(QueueStatus status, int queuePosition) {
     }
 }

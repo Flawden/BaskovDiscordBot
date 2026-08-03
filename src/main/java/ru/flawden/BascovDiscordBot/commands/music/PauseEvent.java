@@ -8,24 +8,32 @@ import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 
-import java.awt.*;
+import java.awt.Color;
 
 @Slf4j
 @Component
 public class PauseEvent implements Event {
 
+    private final PlayerManager playerManager;
+    private final MusicControlPolicy controlPolicy;
+
+    public PauseEvent(PlayerManager playerManager, MusicControlPolicy controlPolicy) {
+        this.playerManager = playerManager;
+        this.controlPolicy = controlPolicy;
+    }
+
     @Override
     public void execute(EventArgs event) {
-        log.info("Pause command executed in guild: {}", event.getTextChannel().getGuild().getId());
-        AudioPlayer audioPlayer = PlayerManager.getINSTANCE()
-                .getMusicManager(event.getTextChannel().getGuild())
-                .audioPlayer;
+        if (!MusicCommandReply.allowOrReply(event, controlPolicy.canControlPlayback(event))) {
+            return;
+        }
 
-        EmbedBuilder embed = new EmbedBuilder();
-        embed.setColor(Color.CYAN);
+        AudioPlayer audioPlayer = playerManager.findMusicManager(event.getGuild())
+                .map(manager -> manager.getAudioPlayer())
+                .orElse(null);
+        EmbedBuilder embed = new EmbedBuilder().setColor(Color.CYAN);
 
-        if (audioPlayer.getPlayingTrack() == null) {
-            log.warn("No track is playing to pause in guild: {}", event.getTextChannel().getGuild().getId());
+        if (audioPlayer == null || audioPlayer.getPlayingTrack() == null) {
             embed.setTitle("⏸️ Ошибка паузы");
             embed.setDescription("Сейчас ничего не играет!");
             event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
@@ -33,7 +41,6 @@ public class PauseEvent implements Event {
         }
 
         if (audioPlayer.isPaused()) {
-            log.info("Playback already paused in guild: {}", event.getTextChannel().getGuild().getId());
             embed.setTitle("⏸️ Пауза уже включена");
             embed.setDescription("Воспроизведение уже приостановлено. Используй `play`, чтобы продолжить!");
             event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
@@ -41,11 +48,9 @@ public class PauseEvent implements Event {
         }
 
         audioPlayer.setPaused(true);
-        log.info("Playback paused in guild: {}, track: {}", event.getTextChannel().getGuild().getId(), audioPlayer.getPlayingTrack().getInfo().title);
-
+        log.info("Playback paused in guild {}", event.getGuild().getId());
         embed.setTitle("⏸️ Воспроизведение приостановлено");
-        embed.setDescription("Музыка успешно поставлена на паузу.\n" +
-                "Текущая песня: `" + audioPlayer.getPlayingTrack().getInfo().title + "`");
+        embed.setDescription("Текущая песня: `" + audioPlayer.getPlayingTrack().getInfo().title + "`");
         event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
     }
 

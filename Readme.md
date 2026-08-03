@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая стабильная версия: **v0.2.0**.
+Текущая стабильная версия: **v0.3.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA и LavaPlayer.
 
@@ -8,6 +8,8 @@
 
 - воспроизведение музыки, пауза, остановка и пропуск треков;
 - очередь воспроизведения и поиск;
+- управление музыкой только из общего voice channel с административным override;
+- bounded queue, лимит длительности и автоматическое отключение пустых сессий;
 - stateless-ядро команд с case-insensitive реестром и защитой от дубликатов;
 - конфигурируемый префикс и cooldown для шумных команд;
 - команда `!version` с версией и метаданными сборки;
@@ -37,6 +39,16 @@ docker compose logs -f bot
 ```
 
 Боту не нужен входящий HTTP-порт. После успешного подключения к Discord приложение создаёт readiness-маркер, который используется Docker healthcheck.
+
+### Настройки музыкальной сессии
+
+| Переменная | По умолчанию | Назначение |
+|---|---:|---|
+| `DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE` | `100` | максимум ожидающих треков на сервер |
+| `DISCORD_BOT_MUSIC_MAX_TRACK_DURATION` | `4h` | максимальная длительность одного трека |
+| `DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT` | `5m` | отключение после опустошения очереди |
+
+Live-потоки отключены. Подробные правила voice-доступа и lifecycle находятся в [`docs/MUSIC-SESSIONS.md`](docs/MUSIC-SESSIONS.md).
 
 ## CI/CD
 
@@ -82,6 +94,17 @@ ghcr.io/<owner>/<repository>:dev|latest
 | `BOT_DEPLOY_ENABLED` | `true` | включает SSH-деплой после публикации образа |
 
 `BOT_DEPLOY_DIR` и `BOT_CONTAINER_NAME` задаются как environment variables соответствующего GitHub Environment, если нужны нестандартные пути или имена контейнеров.
+
+Необязательные environment variables музыкальной сессии:
+
+| Variable | По умолчанию | Назначение |
+|---|---:|---|
+| `DISCORD_BOT_PREFIX` | `!` | префикс legacy-команд |
+| `DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE` | `100` | размер очереди от 1 до 1000 |
+| `DISCORD_BOT_MUSIC_MAX_TRACK_DURATION` | `4h` | максимальная длительность трека |
+| `DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT` | `5m` | таймаут отключения пустой сессии |
+
+Workflow кодирует эти значения перед SSH-передачей, а серверный deploy-скрипт проверяет формат до перезаписи защищённого `.env`.
 
 В каждый environment добавьте secrets с одинаковыми именами:
 

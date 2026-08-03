@@ -2,60 +2,51 @@ package ru.flawden.BascovDiscordBot.commands.music;
 
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
-import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.EmbedBuilder;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
+import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 
-import java.awt.*;
-import java.util.Queue;
+import java.awt.Color;
+import java.util.List;
 
-@Slf4j
 @Component
 public class TrackListEvent implements Event {
 
+    private final PlayerManager playerManager;
+
+    public TrackListEvent(PlayerManager playerManager) {
+        this.playerManager = playerManager;
+    }
+
     @Override
     public void execute(EventArgs event) {
-        log.info("TrackList command executed in guild: {}", event.getTextChannel().getGuild().getId());
-        var musicManager = PlayerManager.getINSTANCE()
-                .getMusicManager(event.getTextChannel().getGuild());
-        AudioPlayer audioPlayer = musicManager.scheduler.audioPlayer;
-        Queue<AudioTrack> tracks = musicManager.scheduler.queue;
-        AudioTrack playingTrack = audioPlayer.getPlayingTrack();
-
-        EmbedBuilder embed = new EmbedBuilder();
-        embed.setColor(Color.CYAN);
+        GuildMusicManager musicManager = playerManager.findMusicManager(event.getGuild()).orElse(null);
+        AudioPlayer audioPlayer = musicManager == null ? null : musicManager.getAudioPlayer();
+        AudioTrack playingTrack = audioPlayer == null ? null : audioPlayer.getPlayingTrack();
+        List<AudioTrack> tracks = musicManager == null
+                ? List.of()
+                : musicManager.getScheduler().queuedTracks();
+        EmbedBuilder embed = new EmbedBuilder().setColor(Color.CYAN);
 
         if (playingTrack == null && tracks.isEmpty()) {
-            log.info("Queue is empty in guild: {}", event.getTextChannel().getGuild().getId());
             embed.setTitle("🎶 Очередь пуста");
-            embed.setDescription("Сейчас ничего не играет, и очередь пуста.\n" +
-                    "Добавь песню с помощью `!search <название или URL>`!");
+            embed.setDescription("Сейчас ничего не играет. Добавь песню через `!search <название или URL>`.");
             event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
             return;
         }
 
         StringBuilder description = new StringBuilder();
         if (playingTrack != null) {
-            String trackTitle = playingTrack.getInfo().title;
-            String trackAuthor = playingTrack.getInfo().author;
-            long position = playingTrack.getPosition();
-            long duration = playingTrack.getDuration();
-            boolean isPaused = audioPlayer.isPaused();
-
-            if (trackTitle.length() > 50) {
-                trackTitle = trackTitle.substring(0, 47) + "...";
-            }
-            if (trackAuthor.length() > 50) {
-                trackAuthor = trackAuthor.substring(0, 47) + "...";
-            }
-
             description.append("**Текущая песня:**\n")
-                    .append("`").append(trackTitle).append("` — ").append(trackAuthor).append("\n")
-                    .append("**Позиция:** `").append(formatTime(position)).append(" / ").append(formatTime(duration)).append("`")
-                    .append(isPaused ? "\n⚠️ Воспроизведение на паузе" : "")
+                    .append('`').append(shorten(playingTrack.getInfo().title)).append("` — ")
+                    .append(shorten(playingTrack.getInfo().author)).append('\n')
+                    .append("**Позиция:** `")
+                    .append(formatTime(playingTrack.getPosition())).append(" / ")
+                    .append(formatTime(playingTrack.getDuration())).append('`')
+                    .append(audioPlayer.isPaused() ? "\n⚠️ Воспроизведение на паузе" : "")
                     .append("\n\n");
         }
 
@@ -63,41 +54,29 @@ public class TrackListEvent implements Event {
             description.append("**Очередь:**\nСписок следующих песен пуст.");
         } else {
             description.append("**Очередь (").append(tracks.size()).append("):**\n");
-            int index = 1;
-            for (AudioTrack track : tracks) {
-                if (index > 10) {
-                    description.append("...и ещё ").append(tracks.size() - 10).append(" треков.\n");
-                    break;
-                }
-                String trackTitle = track.getInfo().title;
-                String trackAuthor = track.getInfo().author;
-
-                if (trackTitle.length() > 50) {
-                    trackTitle = trackTitle.substring(0, 47) + "...";
-                }
-                if (trackAuthor.length() > 50) {
-                    trackAuthor = trackAuthor.substring(0, 47) + "...";
-                }
-
-                description.append(index).append(". `").append(trackTitle).append("` — ").append(trackAuthor).append("\n");
-                index++;
+            for (int index = 0; index < Math.min(10, tracks.size()); index++) {
+                AudioTrack track = tracks.get(index);
+                description.append(index + 1).append(". `")
+                        .append(shorten(track.getInfo().title)).append("` — ")
+                        .append(shorten(track.getInfo().author)).append('\n');
+            }
+            if (tracks.size() > 10) {
+                description.append("...и ещё ").append(tracks.size() - 10).append(" треков.\n");
             }
         }
 
-        log.info("Displaying track list in guild: {}, current track: {}, queue size: {}",
-                event.getTextChannel().getGuild().getId(),
-                playingTrack != null ? playingTrack.getInfo().title : "none", tracks.size());
         embed.setTitle("🎶 Список треков");
         embed.setDescription(description.toString());
         event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
     }
 
-    private String formatTime(long millis) {
+    private static String shorten(String value) {
+        return value.length() > 50 ? value.substring(0, 47) + "..." : value;
+    }
+
+    private static String formatTime(long millis) {
         long seconds = millis / 1000;
-        long hours = seconds / 3600;
-        long minutes = (seconds % 3600) / 60;
-        long remainingSeconds = seconds % 60;
-        return String.format("%02d:%02d:%02d", hours, minutes, remainingSeconds);
+        return String.format("%02d:%02d:%02d", seconds / 3600, (seconds % 3600) / 60, seconds % 60);
     }
 
     @Override
@@ -112,7 +91,7 @@ public class TrackListEvent implements Event {
 
     @Override
     public String helpMessage() {
-        return "Отображает список песен в очереди";
+        return "Отображает текущий трек и очередь";
     }
 
     @Override

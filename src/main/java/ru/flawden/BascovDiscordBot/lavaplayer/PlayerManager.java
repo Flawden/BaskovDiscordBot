@@ -1,132 +1,269 @@
 package ru.flawden.BascovDiscordBot.lavaplayer;
 
 import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
-import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.source.AudioSourceManagers;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import org.springframework.stereotype.Component;
+import ru.flawden.BascovDiscordBot.config.MusicProperties;
 
-import java.awt.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.List;
+import java.awt.Color;
+import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
- * Менеджер плеера, отвечающий за создание и управление
- * {@link GuildMusicManager} для каждой гильдии.
- * Этот класс также предоставляет методы для загрузки и воспроизведения
- * аудиотреков с использованием {@link AudioPlayerManager}.
- *
- * @author Flawden
- * @version 1.0
+ * Spring-managed lifecycle всех музыкальных сессий.
  */
 @Slf4j
+@Component
 public class PlayerManager {
 
-    private final Map<Long, GuildMusicManager> musicManagers;
-    private final AudioPlayerManager audioPlayerManager;
+    private final Map<Long, GuildMusicManager> musicManagers = new ConcurrentHashMap<>();
+    private final Map<Long, ScheduledFuture<?>> idleDisconnects = new ConcurrentHashMap<>();
+    private final DefaultAudioPlayerManager audioPlayerManager;
+    private final ScheduledExecutorService idleScheduler;
+    private final MusicProperties properties;
 
-    public PlayerManager() {
-        this.musicManagers = new ConcurrentHashMap<>();
+    public PlayerManager(MusicProperties properties) {
+        this.properties = properties;
         this.audioPlayerManager = new DefaultAudioPlayerManager();
         AudioSourceManagers.registerRemoteSources(this.audioPlayerManager);
-        log.info("PlayerManager initialized");
+        this.idleScheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "baskov-music-idle-disconnect");
+            thread.setDaemon(true);
+            return thread;
+        });
+        log.info("PlayerManager initialized: maxQueue={}, maxTrack={}, idleTimeout={}",
+                properties.getMaxQueueSize(),
+                properties.getMaxTrackDuration(),
+                properties.getIdleDisconnectTimeout());
     }
 
-    /**
-     * Получает экземпляр {@link GuildMusicManager} для заданной гильдии.
-     *
-     * @param guild гильдия, для которой требуется менеджер музыки
-     * @return экземпляр {@link GuildMusicManager} для указанной гильдии
-     */
     public GuildMusicManager getMusicManager(Guild guild) {
-        return this.musicManagers.computeIfAbsent(guild.getIdLong(), (guildId) -> {
-            final GuildMusicManager guildMusicManager = new GuildMusicManager(this.audioPlayerManager, guild);
-            guild.getAudioManager().setSendingHandler(guildMusicManager.getSendHandler());
-            log.debug("Created new GuildMusicManager for guild: {}", guild.getId());
-            return guildMusicManager;
+        return musicManagers.computeIfAbsent(guild.getIdLong(), guildId -> {
+            GuildMusicManager manager = new GuildMusicManager(
+                    audioPlayerManager,
+                    guild,
+                    properties,
+                    () -> cancelIdleDisconnect(guildId),
+                    () -> scheduleIdleDisconnect(guild));
+            guild.getAudioManager().setSendingHandler(manager.getSendHandler());
+            return manager;
         });
     }
 
-    /**
-     * Загружает трек по-указанному URL и добавляет его в очередь воспроизведения.
-     *
-     * @param textChannel текстовый канал, в который будет отправлено сообщение о результате загрузки
-     * @param trackURL    URL трека для загрузки
-     */
-    public void loadAndPlay(TextChannel textChannel, String trackURL) {
-        final GuildMusicManager musicManager = this.getMusicManager(textChannel.getGuild());
-        log.info("Loading track: {} for guild: {}", trackURL, textChannel.getGuild().getId());
-        this.audioPlayerManager.loadItemOrdered(musicManager, trackURL, new AudioLoadResultHandler() {
+    public Optional<GuildMusicManager> findMusicManager(Guild guild) {
+        return Optional.ofNullable(musicManagers.get(guild.getIdLong()));
+    }
+
+    public void loadAndPlay(TextChannel textChannel, String identifier) {
+        GuildMusicManager musicManager = getMusicManager(textChannel.getGuild());
+        musicManager.markActivity();
+        log.info("Loading media for guild {}: {}", textChannel.getGuild().getId(), identifier);
+
+        audioPlayerManager.loadItemOrdered(musicManager, identifier, new AudioLoadResultHandler() {
             @Override
-            public void trackLoaded(AudioTrack audioTrack) {
-                musicManager.scheduler.queue(audioTrack);
-
-                EmbedBuilder embed = new EmbedBuilder();
-                embed.setTitle("🎶 Добавлено в очередь");
-                embed.setDescription(audioTrack.getInfo().title);
-                embed.setColor(Color.GREEN);
-                embed.setThumbnail("https://i.ytimg.com/vi/" + audioTrack.getInfo().identifier + "/hqdefault.jpg");
-
-                textChannel.sendMessageEmbeds(embed.build()).queue();
+            public void trackLoaded(AudioTrack track) {
+                announceQueueResult(textChannel, musicManager, track);
             }
 
             @Override
-            public void playlistLoaded(AudioPlaylist audioPlaylist) {
-                final List<AudioTrack> tracks = audioPlaylist.getTracks();
-
-                if (!tracks.isEmpty()) {
-                    musicManager.scheduler.queue(tracks.get(0));
-
-                    // Создаем EmbedBuilder для красивого оформления
-                    EmbedBuilder embed = new EmbedBuilder();
-                    embed.setTitle("🎶 Добавлено в очередь");
-                    embed.setDescription("Трек **" + tracks.get(0).getInfo().title + "** от **" + tracks.get(0).getInfo().author + "**.");
-                    embed.setColor(Color.GREEN);
-                    embed.setThumbnail("https://i.ytimg.com/vi/" + tracks.get(0).getInfo().identifier + "/hqdefault.jpg");
-
-                    textChannel.sendMessageEmbeds(embed.build()).queue();
-                } else {
-                    textChannel.sendMessage("Плейлист не был найден. Убедитесь, что вы ввели название без ошибок.").queue();
+            public void playlistLoaded(AudioPlaylist playlist) {
+                AudioTrack selected = playlist.getSelectedTrack();
+                if (selected == null && !playlist.getTracks().isEmpty()) {
+                    selected = playlist.getTracks().get(0);
                 }
+
+                if (selected == null) {
+                    sendError(textChannel, "❌ Ничего не найдено",
+                            "Плейлист или результаты поиска не содержат доступных треков.");
+                    musicManager.getScheduler().scheduleDisconnectIfIdle();
+                    return;
+                }
+
+                announceQueueResult(textChannel, musicManager, selected);
             }
 
             @Override
             public void noMatches() {
-                EmbedBuilder embed = new EmbedBuilder();
-                embed.setTitle("❌ Ошибка");
-                embed.setDescription("Песня не была найдена. Убедитесь, что вы ввели название без ошибок.");
-                embed.setColor(Color.RED);
-                textChannel.sendMessageEmbeds(embed.build()).queue();
+                sendError(textChannel, "❌ Песня не найдена",
+                        "Проверь название или ссылку и попробуй снова.");
+                musicManager.getScheduler().scheduleDisconnectIfIdle();
             }
 
             @Override
-            public void loadFailed(FriendlyException e) {
-                EmbedBuilder embed = new EmbedBuilder();
-                embed.setTitle("❌ Неизвестная ошибка");
-                embed.setDescription("Произошла ошибка при загрузке трека. Попробуйте снова позже.");
-                embed.setColor(Color.RED);
-                textChannel.sendMessageEmbeds(embed.build()).queue();
+            public void loadFailed(FriendlyException exception) {
+                log.warn("Media load failed in guild {}: {}",
+                        textChannel.getGuild().getId(), exception.getMessage());
+                sendError(textChannel, "❌ Ошибка загрузки",
+                        "Не удалось загрузить трек. Попробуй снова чуть позже.");
+                musicManager.getScheduler().scheduleDisconnectIfIdle();
             }
-        }); // <-- Закрывающая скобка для loadItemOrdered
+        });
     }
 
-    /**
-     * Получает экземпляр {@link PlayerManager}.
-     *
-     * @return экземпляр {@link PlayerManager}
-     */
-    public static PlayerManager getINSTANCE() {
-        return Holder.INSTANCE;
+    public void stopAndRelease(Guild guild) {
+        GuildMusicManager manager = musicManagers.remove(guild.getIdLong());
+        cancelIdleDisconnect(guild.getIdLong());
+        guild.getAudioManager().closeAudioConnection();
+        guild.getAudioManager().setSendingHandler(null);
+        if (manager != null) {
+            manager.destroy();
+        }
     }
 
-    private static final class Holder {
-        private static final PlayerManager INSTANCE = new PlayerManager();
+    private void announceQueueResult(TextChannel textChannel, GuildMusicManager manager, AudioTrack track) {
+        if (!manager.isActive()) {
+            log.info("Ignoring completed media load for closed guild session {}", textChannel.getGuild().getId());
+            return;
+        }
+        TrackScheduler.QueueResult result = manager.getScheduler().queue(track);
+        EmbedBuilder embed = new EmbedBuilder().setColor(Color.GREEN);
+
+        switch (result.status()) {
+            case STARTED -> {
+                embed.setTitle("▶️ Воспроизведение началось");
+                embed.setDescription(formatTrack(track));
+            }
+            case QUEUED -> {
+                embed.setTitle("🎶 Добавлено в очередь");
+                embed.setDescription(formatTrack(track)
+                        + "\n**Позиция:** `" + result.queuePosition() + "`");
+            }
+            case QUEUE_FULL -> {
+                embed.setColor(Color.RED);
+                embed.setTitle("🚧 Очередь заполнена");
+                embed.setDescription("В очереди уже `" + properties.getMaxQueueSize()
+                        + "` треков. Дождись свободного места.");
+                manager.getScheduler().scheduleDisconnectIfIdle();
+            }
+            case TRACK_TOO_LONG -> {
+                embed.setColor(Color.RED);
+                embed.setTitle("⏱️ Трек слишком длинный");
+                embed.setDescription("Максимальная длительность трека: `"
+                        + humanDuration(properties.getMaxTrackDuration()) + "`.");
+                manager.getScheduler().scheduleDisconnectIfIdle();
+            }
+            case STREAM_NOT_ALLOWED -> {
+                embed.setColor(Color.RED);
+                embed.setTitle("📡 Поток не поддерживается");
+                embed.setDescription("Прямые трансляции отключены, чтобы музыкальная сессия не зависала навсегда.");
+                manager.getScheduler().scheduleDisconnectIfIdle();
+            }
+        }
+
+        textChannel.sendMessageEmbeds(embed.build()).queue(
+                ignored -> { },
+                failure -> log.warn("Failed to send queue response to channel {}: {}",
+                        textChannel.getId(), failure.getMessage()));
+    }
+
+    private void scheduleIdleDisconnect(Guild guild) {
+        long guildId = guild.getIdLong();
+        cancelIdleDisconnect(guildId);
+
+        GuildMusicManager manager = musicManagers.get(guildId);
+        if (manager == null || !manager.isActive()) {
+            return;
+        }
+        long expectedActivityVersion = manager.getActivityVersion();
+
+        Duration timeout = properties.getIdleDisconnectTimeout();
+        if (timeout.isZero()) {
+            disconnectIfStillIdle(guild, manager, expectedActivityVersion);
+            return;
+        }
+
+        ScheduledFuture<?> future = idleScheduler.schedule(
+                () -> disconnectIfStillIdle(guild, manager, expectedActivityVersion),
+                timeout.toMillis(),
+                TimeUnit.MILLISECONDS);
+        idleDisconnects.put(guildId, future);
+        log.info("Idle disconnect scheduled for guild {} in {}", guild.getId(), timeout);
+    }
+
+    private void disconnectIfStillIdle(
+            Guild guild,
+            GuildMusicManager expectedManager,
+            long expectedActivityVersion) {
+        GuildMusicManager currentManager = musicManagers.get(guild.getIdLong());
+        if (currentManager != expectedManager
+                || !currentManager.isActive()
+                || currentManager.getActivityVersion() != expectedActivityVersion
+                || !currentManager.isIdle()) {
+            return;
+        }
+
+        log.info("Disconnecting idle music session in guild {}", guild.getId());
+        stopAndRelease(guild);
+    }
+
+    private void cancelIdleDisconnect(long guildId) {
+        ScheduledFuture<?> future = idleDisconnects.remove(guildId);
+        if (future != null) {
+            future.cancel(false);
+        }
+    }
+
+    private void sendError(TextChannel channel, String title, String description) {
+        channel.sendMessageEmbeds(new EmbedBuilder()
+                        .setTitle(title)
+                        .setDescription(description)
+                        .setColor(Color.RED)
+                        .build())
+                .queue(
+                        ignored -> { },
+                        failure -> log.warn("Failed to send load error to channel {}: {}",
+                                channel.getId(), failure.getMessage()));
+    }
+
+    private static String formatTrack(AudioTrack track) {
+        return "**" + track.getInfo().title + "** — " + track.getInfo().author;
+    }
+
+    private static String humanDuration(Duration duration) {
+        long minutes = duration.toMinutes();
+        long hours = minutes / 60;
+        long remainingMinutes = minutes % 60;
+        if (hours == 0) {
+            return minutes + " мин";
+        }
+        if (remainingMinutes == 0) {
+            return hours + " ч";
+        }
+        return hours + " ч " + remainingMinutes + " мин";
+    }
+
+    int activeSessionCount() {
+        return musicManagers.size();
+    }
+
+    @PreDestroy
+    public void close() {
+        log.info("Shutting down {} music sessions", musicManagers.size());
+        for (GuildMusicManager manager : musicManagers.values()) {
+            Guild guild = manager.getGuild();
+            guild.getAudioManager().closeAudioConnection();
+            guild.getAudioManager().setSendingHandler(null);
+            manager.destroy();
+        }
+        musicManagers.clear();
+        idleDisconnects.values().forEach(future -> future.cancel(false));
+        idleDisconnects.clear();
+        idleScheduler.shutdownNow();
+        audioPlayerManager.shutdown();
     }
 }

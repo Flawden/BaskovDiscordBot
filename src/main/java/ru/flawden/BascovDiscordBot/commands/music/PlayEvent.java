@@ -8,43 +8,50 @@ import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 
-import java.awt.*;
+import java.awt.Color;
 
 @Slf4j
 @Component
 public class PlayEvent implements Event {
+
+    private final PlayerManager playerManager;
+    private final MusicControlPolicy controlPolicy;
+
+    public PlayEvent(PlayerManager playerManager, MusicControlPolicy controlPolicy) {
+        this.playerManager = playerManager;
+        this.controlPolicy = controlPolicy;
+    }
+
     @Override
     public void execute(EventArgs event) {
-        log.info("Play command executed in guild: {}", event.getTextChannel().getGuild().getId());
-        AudioPlayer audioPlayer = PlayerManager.getINSTANCE()
-                .getMusicManager(event.getTextChannel().getGuild())
-                .audioPlayer;
+        if (!MusicCommandReply.allowOrReply(event, controlPolicy.canControlPlayback(event))) {
+            return;
+        }
 
-        EmbedBuilder embed = new EmbedBuilder();
-        embed.setColor(Color.CYAN);
+        AudioPlayer audioPlayer = playerManager.findMusicManager(event.getGuild())
+                .map(manager -> manager.getAudioPlayer())
+                .orElse(null);
+        EmbedBuilder embed = new EmbedBuilder().setColor(Color.CYAN);
 
-        if (audioPlayer.getPlayingTrack() == null) {
-            log.warn("No track is playing to resume in guild: {}", event.getTextChannel().getGuild().getId());
+        if (audioPlayer == null || audioPlayer.getPlayingTrack() == null) {
             embed.setTitle("▶️ Ошибка воспроизведения");
-            embed.setDescription("Сейчас ничего не играет! Используй `search <название или URL>`, чтобы запустить песню.");
+            embed.setDescription("Сейчас ничего не играет! Используй `search <название или URL>`.");
             event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
             return;
         }
-        if (!audioPlayer.isPaused()) {
-            log.info("Playback already active in guild: {}", event.getTextChannel().getGuild().getId());
-            embed.setTitle("▶️ Уже играет");
-            embed.setDescription("Воспроизведение уже идёт!\n" +
-                    "Текущая песня: `" + audioPlayer.getPlayingTrack().getInfo().title + "`");
-            event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
-            return;
-        }
-        audioPlayer.setPaused(false);
-        log.info("Playback resumed in guild: {}", event.getTextChannel().getGuild().getId());
-        embed.setTitle("▶️ Воспроизведение возобновлено");
-        embed.setDescription("Музыка успешно возобновлена.\n" +
-                "Текущая песня: `" + audioPlayer.getPlayingTrack().getInfo().title + "`");
-        event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
 
+        if (!audioPlayer.isPaused()) {
+            embed.setTitle("▶️ Уже играет");
+            embed.setDescription("Текущая песня: `" + audioPlayer.getPlayingTrack().getInfo().title + "`");
+            event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
+            return;
+        }
+
+        audioPlayer.setPaused(false);
+        log.info("Playback resumed in guild {}", event.getGuild().getId());
+        embed.setTitle("▶️ Воспроизведение возобновлено");
+        embed.setDescription("Текущая песня: `" + audioPlayer.getPlayingTrack().getInfo().title + "`");
+        event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
     }
 
     @Override

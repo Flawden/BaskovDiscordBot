@@ -9,24 +9,31 @@ import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
 import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 
-import java.awt.*;
+import java.awt.Color;
 
 @Slf4j
 @Component
 public class SkipEvent implements Event {
 
+    private final PlayerManager playerManager;
+    private final MusicControlPolicy controlPolicy;
+
+    public SkipEvent(PlayerManager playerManager, MusicControlPolicy controlPolicy) {
+        this.playerManager = playerManager;
+        this.controlPolicy = controlPolicy;
+    }
+
     @Override
     public void execute(EventArgs event) {
-        log.info("Skip command executed in guild: {}", event.getTextChannel().getGuild().getId());
-        GuildMusicManager musicManager = PlayerManager.getINSTANCE()
-                .getMusicManager(event.getTextChannel().getGuild());
+        if (!MusicCommandReply.allowOrReply(event, controlPolicy.canControlPlayback(event))) {
+            return;
+        }
 
-        EmbedBuilder embed = new EmbedBuilder();
-        embed.setColor(Color.CYAN);
+        GuildMusicManager musicManager = playerManager.findMusicManager(event.getGuild()).orElse(null);
+        EmbedBuilder embed = new EmbedBuilder().setColor(Color.CYAN);
+        AudioTrack currentTrack = musicManager == null ? null : musicManager.getAudioPlayer().getPlayingTrack();
 
-        AudioTrack currentTrack = musicManager.audioPlayer.getPlayingTrack();
         if (currentTrack == null) {
-            log.warn("No track is playing to skip in guild: {}", event.getTextChannel().getGuild().getId());
             embed.setTitle("⏭️ Ошибка пропуска");
             embed.setDescription("Сейчас ничего не играет!");
             event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
@@ -34,26 +41,16 @@ public class SkipEvent implements Event {
         }
 
         String skippedTrackTitle = currentTrack.getInfo().title;
-        log.info("Skipping track: {} in guild: {}", skippedTrackTitle, event.getTextChannel().getGuild().getId());
+        AudioTrack nextTrack = musicManager.getScheduler().nextTrack();
+        log.info("Track skipped in guild {}: {}", event.getGuild().getId(), skippedTrackTitle);
 
-        musicManager.scheduler.nextTrack();
-
-        AudioTrack nextTrack = musicManager.audioPlayer.getPlayingTrack();
-        if (nextTrack == null) {
-            log.info("Skipped last track: {} in guild: {}, queue is empty",
-                    skippedTrackTitle, event.getTextChannel().getGuild().getId());
-            embed.setTitle("⏭️ Песня пропущена");
-            embed.setDescription("Песня `" + skippedTrackTitle + "` пропущена.\n" +
-                    "Очередь пуста — это была последняя песня!");
-            event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
-            return;
-        }
-
-        log.info("Skipped track: {} in guild: {}, now playing: {}",
-                skippedTrackTitle, event.getTextChannel().getGuild().getId(), nextTrack.getInfo().title);
         embed.setTitle("⏭️ Песня пропущена");
-        embed.setDescription("Песня `" + skippedTrackTitle + "` пропущена.\n" +
-                "Сейчас играет: `" + nextTrack.getInfo().title + "`");
+        if (nextTrack == null) {
+            embed.setDescription("Песня `" + skippedTrackTitle + "` пропущена.\nОчередь пуста.");
+        } else {
+            embed.setDescription("Песня `" + skippedTrackTitle + "` пропущена.\nСейчас играет: `"
+                    + nextTrack.getInfo().title + "`");
+        }
         event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
     }
 

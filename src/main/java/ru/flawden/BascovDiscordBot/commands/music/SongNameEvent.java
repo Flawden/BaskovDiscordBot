@@ -2,68 +2,54 @@ package ru.flawden.BascovDiscordBot.commands.music;
 
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
-import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.EmbedBuilder;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 
-import java.awt.*;
+import java.awt.Color;
 
-@Slf4j
 @Component
 public class SongNameEvent implements Event {
 
+    private final PlayerManager playerManager;
+
+    public SongNameEvent(PlayerManager playerManager) {
+        this.playerManager = playerManager;
+    }
+
     @Override
     public void execute(EventArgs event) {
-        log.info("SongName command executed in guild: {}", event.getTextChannel().getGuild().getId());
-        AudioPlayer audioPlayer = PlayerManager.getINSTANCE()
-                .getMusicManager(event.getTextChannel().getGuild())
-                .scheduler.audioPlayer;
-        AudioTrack currentTrack = audioPlayer.getPlayingTrack();
-
-        EmbedBuilder embed = new EmbedBuilder();
-        embed.setColor(Color.CYAN);
+        AudioPlayer audioPlayer = playerManager.findMusicManager(event.getGuild())
+                .map(manager -> manager.getAudioPlayer())
+                .orElse(null);
+        AudioTrack currentTrack = audioPlayer == null ? null : audioPlayer.getPlayingTrack();
+        EmbedBuilder embed = new EmbedBuilder().setColor(Color.CYAN);
 
         if (currentTrack == null) {
-            log.warn("No track is playing for SongName in guild: {}", event.getTextChannel().getGuild().getId());
             embed.setTitle("🎵 Ошибка");
             embed.setDescription("В данный момент нет воспроизводимых песен!");
             event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
             return;
         }
 
-        String trackTitle = currentTrack.getInfo().title;
-        String trackAuthor = currentTrack.getInfo().author;
-        long position = currentTrack.getPosition();
-        long duration = currentTrack.getDuration();
-        boolean isPaused = audioPlayer.isPaused();
-
-        if (trackTitle.length() > 50) {
-            trackTitle = trackTitle.substring(0, 47) + "...";
-        }
-        if (trackAuthor.length() > 50) {
-            trackAuthor = trackAuthor.substring(0, 47) + "...";
-        }
-
-        log.info("Displaying song info in guild: {}, track: {}, author: {}, position: {}/{}",
-                event.getTextChannel().getGuild().getId(), trackTitle, trackAuthor,
-                formatTime(position), formatTime(duration));
         embed.setTitle("🎵 Сейчас играет");
-        embed.setDescription("**Название:** `" + trackTitle + "`\n" +
-                "**Автор:** `" + trackAuthor + "`\n" +
-                "**Позиция:** `" + formatTime(position) + " / " + formatTime(duration) + "`\n" +
-                (isPaused ? "⚠️ Воспроизведение на паузе" : ""));
+        embed.setDescription("**Название:** `" + shorten(currentTrack.getInfo().title) + "`\n"
+                + "**Автор:** `" + shorten(currentTrack.getInfo().author) + "`\n"
+                + "**Позиция:** `" + formatTime(currentTrack.getPosition()) + " / "
+                + formatTime(currentTrack.getDuration()) + "`\n"
+                + (audioPlayer.isPaused() ? "⚠️ Воспроизведение на паузе" : ""));
         event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
     }
 
-    private String formatTime(long millis) {
+    private static String shorten(String value) {
+        return value.length() > 50 ? value.substring(0, 47) + "..." : value;
+    }
+
+    private static String formatTime(long millis) {
         long seconds = millis / 1000;
-        long hours = seconds / 3600;
-        long minutes = (seconds % 3600) / 60;
-        long remainingSeconds = seconds % 60;
-        return String.format("%02d:%02d:%02d", hours, minutes, remainingSeconds);
+        return String.format("%02d:%02d:%02d", seconds / 3600, (seconds % 3600) / 60, seconds % 60);
     }
 
     @Override

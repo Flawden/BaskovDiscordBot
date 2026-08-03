@@ -17,9 +17,16 @@ import java.time.Duration;
 public class SearchEvent implements Event {
 
     private final MediaQueryResolver queryResolver;
+    private final MusicControlPolicy controlPolicy;
+    private final PlayerManager playerManager;
 
-    public SearchEvent(MediaQueryResolver queryResolver) {
+    public SearchEvent(
+            MediaQueryResolver queryResolver,
+            MusicControlPolicy controlPolicy,
+            PlayerManager playerManager) {
         this.queryResolver = queryResolver;
+        this.controlPolicy = controlPolicy;
+        this.playerManager = playerManager;
     }
 
     @Override
@@ -43,37 +50,29 @@ public class SearchEvent implements Event {
             return;
         }
 
-        if (!event.getMemberVoiceState().inAudioChannel()) {
-            embed.setTitle("🔍 Ошибка подключения");
-            embed.setDescription("Для начала нужно войти в голосовой чат!");
-            event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
-            return;
-        }
-
-        var memberChannel = event.getMemberVoiceState().getChannel();
-        if (event.getSelfVoiceState().inAudioChannel()
-                && !event.getSelfVoiceState().getChannel().equals(memberChannel)) {
-            embed.setTitle("🔍 Ошибка подключения");
-            embed.setDescription("Я уже подключён к другому голосовому каналу: `"
-                    + event.getSelfVoiceState().getChannel().getName() + "`");
-            event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
+        if (!MusicCommandReply.allowOrReply(event, controlPolicy.canStartOrQueue(event))) {
             return;
         }
 
         if (!event.getSelfVoiceState().inAudioChannel()) {
+            var memberChannel = event.getMemberVoiceState().getChannel();
+            if (memberChannel == null) {
+                embed.setTitle("🔍 Голосовой канал потерян");
+                embed.setDescription("Похоже, ты вышел из голосового канала. Войди снова и повтори команду.");
+                event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
+                return;
+            }
+            GuildMusicManager musicManager = playerManager.getMusicManager(event.getGuild());
             AudioManager audioManager = event.getGuild().getAudioManager();
+            audioManager.setSendingHandler(musicManager.getSendHandler());
             audioManager.openAudioConnection(memberChannel);
-
-            GuildMusicManager guildMusicManager = PlayerManager.getINSTANCE()
-                    .getMusicManager(event.getGuild());
-            audioManager.setSendingHandler(guildMusicManager.getSendHandler());
             log.info("Connected to voice channel {} in guild {}",
                     memberChannel.getId(), event.getGuild().getId());
         }
 
         log.info("Loading media query in guild {}: type={}",
                 event.getGuild().getId(), query.startsWith("scsearch:") ? "search" : "url");
-        PlayerManager.getINSTANCE().loadAndPlay(event.getTextChannel(), query);
+        playerManager.loadAndPlay(event.getTextChannel(), query);
     }
 
     @Override

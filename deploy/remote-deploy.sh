@@ -22,10 +22,40 @@ source "${INPUT_FILE}"
 : "${BOT_IMAGE:?BOT_IMAGE is missing}"
 : "${BOT_CONTAINER_NAME:?BOT_CONTAINER_NAME is missing}"
 : "${DISCORD_BOT_TOKEN_B64:?DISCORD_BOT_TOKEN_B64 is missing}"
+: "${DISCORD_BOT_PREFIX_B64:?DISCORD_BOT_PREFIX_B64 is missing}"
+: "${DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE_B64:?DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE_B64 is missing}"
+: "${DISCORD_BOT_MUSIC_MAX_TRACK_DURATION_B64:?DISCORD_BOT_MUSIC_MAX_TRACK_DURATION_B64 is missing}"
+: "${DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT_B64:?DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT_B64 is missing}"
 
-DISCORD_BOT_TOKEN="$(printf '%s' "${DISCORD_BOT_TOKEN_B64}" | base64 --decode)"
+decode() {
+  printf '%s' "$1" | base64 --decode
+}
+
+DISCORD_BOT_TOKEN="$(decode "${DISCORD_BOT_TOKEN_B64}")"
+DISCORD_BOT_PREFIX="$(decode "${DISCORD_BOT_PREFIX_B64}")"
+DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE="$(decode "${DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE_B64}")"
+DISCORD_BOT_MUSIC_MAX_TRACK_DURATION="$(decode "${DISCORD_BOT_MUSIC_MAX_TRACK_DURATION_B64}")"
+DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT="$(decode "${DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT_B64}")"
+
 if [[ -z "${DISCORD_BOT_TOKEN}" ]]; then
   echo "Decoded Discord token is empty" >&2
+  exit 1
+fi
+if [[ ! "${DISCORD_BOT_PREFIX}" =~ ^[^[:space:]#=]{1,5}$ ]]; then
+  echo "Discord bot prefix must contain 1-5 characters without whitespace, # or =" >&2
+  exit 1
+fi
+if [[ ! "${DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE}" =~ ^[0-9]+$ ]] \
+    || (( DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE < 1 || DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE > 1000 )); then
+  echo "Music max queue size must be between 1 and 1000" >&2
+  exit 1
+fi
+if [[ ! "${DISCORD_BOT_MUSIC_MAX_TRACK_DURATION}" =~ ^[1-9][0-9]*(ms|s|m|h|d)$ ]]; then
+  echo "Music max track duration must be a positive Spring duration such as 30m or 4h" >&2
+  exit 1
+fi
+if [[ ! "${DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT}" =~ ^[0-9]+(ms|s|m|h|d)$ ]]; then
+  echo "Music idle timeout must be a non-negative Spring duration such as 0s or 5m" >&2
   exit 1
 fi
 
@@ -47,6 +77,10 @@ write_env() {
     printf 'BOT_IMAGE=%s\n' "${image}"
     printf 'BOT_CONTAINER_NAME=%s\n' "${BOT_CONTAINER_NAME}"
     printf 'DISCORD_BOT_TOKEN=%s\n' "${token}"
+    printf 'DISCORD_BOT_PREFIX=%s\n' "${DISCORD_BOT_PREFIX}"
+    printf 'DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE=%s\n' "${DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE}"
+    printf 'DISCORD_BOT_MUSIC_MAX_TRACK_DURATION=%s\n' "${DISCORD_BOT_MUSIC_MAX_TRACK_DURATION}"
+    printf 'DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT=%s\n' "${DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT}"
   } > "${temp_file}"
   chmod 600 "${temp_file}"
   mv "${temp_file}" "${ENV_FILE}"

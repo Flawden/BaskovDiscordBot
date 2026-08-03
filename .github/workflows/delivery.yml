@@ -213,16 +213,31 @@ jobs:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           BOT_IMAGE: ${{ needs.context.outputs.image }}:sha-${{ github.sha }}
           BOT_CONTAINER_NAME: ${{ vars.BOT_CONTAINER_NAME }}
+          BOT_COMMAND_PREFIX: ${{ vars.DISCORD_BOT_PREFIX }}
+          BOT_MUSIC_MAX_QUEUE_SIZE: ${{ vars.DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE }}
+          BOT_MUSIC_MAX_TRACK_DURATION: ${{ vars.DISCORD_BOT_MUSIC_MAX_TRACK_DURATION }}
+          BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT: ${{ vars.DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT }}
         run: |
           set -Eeuo pipefail
           deploy_dir="${DEPLOY_DIR:-${{ needs.context.outputs.default_deploy_dir }}}"
-          token_b64="$(printf '%s' "${DISCORD_BOT_TOKEN}" | base64 -w 0)"
           container_name="${BOT_CONTAINER_NAME:-${{ needs.context.outputs.default_container_name }}}"
+          command_prefix="${BOT_COMMAND_PREFIX:-!}"
+          max_queue_size="${BOT_MUSIC_MAX_QUEUE_SIZE:-100}"
+          max_track_duration="${BOT_MUSIC_MAX_TRACK_DURATION:-4h}"
+          idle_disconnect_timeout="${BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT:-5m}"
+
+          encode() {
+            printf '%s' "$1" | base64 -w 0
+          }
 
           {
             printf 'BOT_IMAGE=%s\n' "${BOT_IMAGE}"
             printf 'BOT_CONTAINER_NAME=%s\n' "${container_name}"
-            printf 'DISCORD_BOT_TOKEN_B64=%s\n' "${token_b64}"
+            printf 'DISCORD_BOT_TOKEN_B64=%s\n' "$(encode "${DISCORD_BOT_TOKEN}")"
+            printf 'DISCORD_BOT_PREFIX_B64=%s\n' "$(encode "${command_prefix}")"
+            printf 'DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE_B64=%s\n' "$(encode "${max_queue_size}")"
+            printf 'DISCORD_BOT_MUSIC_MAX_TRACK_DURATION_B64=%s\n' "$(encode "${max_track_duration}")"
+            printf 'DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT_B64=%s\n' "$(encode "${idle_disconnect_timeout}")"
           } | ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "umask 077; cat > '${deploy_dir}/.deploy-input'"
 
