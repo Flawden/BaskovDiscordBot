@@ -26,12 +26,14 @@ class ModernInteractionsContractTest {
     void modernLayerContainsButtonsAutocompleteAndLegacyCompatibility() throws IOException {
         String interactions = Files.readString(MAIN.resolve("interactions/ModernInteractions.java"));
         String botEvents = Files.readString(MAIN.resolve("config/eventconfig/BotEvents.java"));
+        String compactBotEvents = botEvents.replaceAll("\\s+", "");
 
         assertTrue(interactions.contains("onSlashCommandInteraction"));
         assertTrue(interactions.contains("onCommandAutoCompleteInteraction"));
         assertTrue(interactions.contains("onButtonInteraction"));
         assertTrue(interactions.contains("MusicControls"));
-        assertTrue(botEvents.contains("CommandInvocation.parse"), "Prefix commands must remain available");
+        assertTrue(compactBotEvents.contains("CommandInvocation.parse("),
+                "Prefix commands must remain available regardless of source formatting");
     }
 
     @Test
