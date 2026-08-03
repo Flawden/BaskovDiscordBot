@@ -2,163 +2,127 @@ package ru.flawden.BascovDiscordBot.config.eventconfig;
 
 import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.EmbedBuilder;
+import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.MessageEmbed;
+import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import org.jetbrains.annotations.NotNull;
 
-import java.awt.*;
+import java.awt.Color;
 import java.util.List;
+import java.util.Objects;
 
 /**
- * Класс BotEvents обрабатывает события сообщений в Discord и управляет командами бота.
- * Он позволяет регистрировать команды и проверять, были ли введены команды пользователями.
- * В зависимости от прав пользователя, команды могут выполняться или нет.
- *
- * @author Flawden
- * @version 1.0
+ * Stateless dispatcher префиксных команд.
  */
 @Slf4j
 public class BotEvents extends ListenerAdapter {
 
     private final String prefix;
-    private MessageReceivedEvent event;
+    private final CommandRegistry registry;
+    private final CommandCooldowns cooldowns;
 
-    private List<Event> events;
-
-    public BotEvents(String prefix) {
+    public BotEvents(String prefix, List<Event> events, CommandCooldowns cooldowns) {
+        if (prefix == null || prefix.isBlank() || prefix.length() > 5) {
+            throw new IllegalArgumentException("Command prefix must contain 1-5 visible characters");
+        }
         this.prefix = prefix;
-        log.info("BotEvents initialized with prefix: {}", prefix);
+        this.registry = new CommandRegistry(events);
+        this.cooldowns = Objects.requireNonNull(cooldowns, "cooldowns");
+        log.info("BotEvents initialized with prefix '{}' and {} commands", prefix, registry.commands().size());
     }
 
-    /**
-     * Возвращает список зарегистрированных команд.
-     *
-     * @return список команд
-     */
     public List<Event> getCommands() {
-        log.debug("Returning list of registered commands, size: {}", events != null ? events.size() : 0);
-        return events;
+        return registry.commands();
     }
 
-    /**
-     * Регистрирует новую команду.
-     *
-     * @param event команда для регистрации
-     */
-    public void registerCommand(Event event) {
-        this.events.add(event);
-        log.info("Registered new command: {}", event.getName());
-    }
-
-    /**
-     * Регистрирует несколько команд.
-     *
-     * @param events список команд для регистрации
-     */
-    public void registerCommand(List<Event> events) {
-        this.events = events;
-        log.info("Registered {} commands", events.size());
-    }
-
-    /**
-     * Обрабатывает входящие сообщения.
-     *
-     * @param event событие полученного сообщения
-     */
+    @Override
     public void onMessageReceived(@NotNull MessageReceivedEvent event) {
-        String content = event.getMessage().getContentRaw();
-        if (content.startsWith(this.prefix)) {
-            log.debug("Received message with prefix in guild: {}, content: {}",
-                    event.getGuild().getId(), content);
-            this.event = event;
-            init();
-        } else {
-            log.trace("Message ignored, does not start with prefix: {}, content: {}",
-                    this.prefix, content);
+        if (event.getAuthor().isBot() || event.isWebhookMessage()) {
+            return;
+        }
+
+        CommandInvocation invocation = CommandInvocation
+                .parse(event.getMessage().getContentRaw(), prefix)
+                .orElse(null);
+        if (invocation == null) {
+            return;
+        }
+
+        if (!event.isFromGuild()) {
+            log.debug("Ignoring command '{}' outside a guild", invocation.commandName());
+            return;
+        }
+        if (!(event.getChannel() instanceof TextChannel)) {
+            log.debug("Ignoring command '{}' from unsupported channel type {} in guild {}",
+                    invocation.commandName(), event.getChannelType(), event.getGuild().getId());
+            return;
+        }
+
+        Member member = event.getMember();
+        if (member == null) {
+            log.warn("Ignoring command '{}' without guild member context in guild {}",
+                    invocation.commandName(), event.getGuild().getId());
+            return;
+        }
+
+        Event command = registry.find(invocation.commandName()).orElse(null);
+        if (command == null) {
+            log.info("Unknown command '{}' in guild {}", invocation.commandName(), event.getGuild().getId());
+            send(event.getChannel().asTextChannel(), errorEmbed(
+                    "❌ Неизвестная команда",
+                    "Я не знаю эту команду. Используй `" + prefix + "help`, чтобы открыть список команд."));
+            return;
+        }
+
+        if (command.needOwner() && !member.isOwner()) {
+            log.warn("User {} cannot execute owner command '{}' in guild {}",
+                    member.getId(), command.getName(), event.getGuild().getId());
+            send(event.getChannel().asTextChannel(), errorEmbed(
+                    "⚠️ Доступ ограничен",
+                    "Эта команда доступна только создателю сервера."));
+            return;
+        }
+
+        CommandCooldowns.Acquisition acquisition = cooldowns.tryAcquire(
+                event.getGuild().getIdLong(),
+                member.getIdLong(),
+                command.getName(),
+                command.cooldown());
+        if (!acquisition.allowed()) {
+            long seconds = Math.max(1L, (acquisition.remaining().toMillis() + 999L) / 1000L);
+            send(event.getChannel().asTextChannel(), errorEmbed(
+                    "⏳ Команда отдыхает",
+                    "Попробуй снова через `" + seconds + "` сек."));
+            return;
+        }
+
+        log.info("Executing command '{}' in guild {} by user {} with {} arguments",
+                command.getName(), event.getGuild().getId(), member.getId(), invocation.arguments().size());
+        try {
+            command.execute(new EventArgs(event, invocation));
+        } catch (RuntimeException exception) {
+            log.error("Command '{}' failed in guild {} for user {}",
+                    command.getName(), event.getGuild().getId(), member.getId(), exception);
+            send(event.getChannel().asTextChannel(), errorEmbed(
+                    "💥 Команда упала",
+                    "Произошла внутренняя ошибка. Попробуй ещё раз чуть позже."));
         }
     }
 
-    /**
-     * Инициализирует выполнение команды, если она была введена.
-     */
-    private void init() {
-        String commandInput = this.event.getMessage().getContentRaw().split(" ")[0];
-        log.info("Processing command: {} in guild: {}", commandInput, event.getGuild().getId());
-
-        for (int command = 0; command <= events.size() - 1; command++) {
-            Event currentEvent = events.get(command);
-            if (isEnterCommandEqualToExisting(currentEvent)) {
-                log.info("Found matching command: {} in guild: {}", currentEvent.getName(), event.getGuild().getId());
-                executeIfCommandAvailable(currentEvent);
-                break;
-            } else if (command >= events.size() - 1) {
-                log.warn("Unknown command: {} in guild: {}", commandInput, event.getGuild().getId());
-                EmbedBuilder embed = new EmbedBuilder();
-                embed.setTitle("❌ Ошибка");
-                embed.setDescription("Я не знаю данную команду.");
-                embed.setColor(Color.RED);
-                event.getChannel().asTextChannel().sendMessageEmbeds(embed.build()).queue();
-            }
-        }
+    private MessageEmbed errorEmbed(String title, String description) {
+        return new EmbedBuilder()
+                .setTitle(title)
+                .setDescription(description)
+                .setColor(Color.RED)
+                .build();
     }
 
-    /**
-     * Выполняет команду, если у пользователя есть права.
-     *
-     * @param event команда для выполнения
-     */
-    private void executeIfCommandAvailable(Event event) {
-        if (checkPermissionToExecute(event)) {
-            log.info("Executing command: {} in guild: {} by user: {}",
-                    event.getName(), this.event.getGuild().getId(), this.event.getMember().getEffectiveName());
-            execute(event);
-        } else {
-            log.warn("User {} does not have permission to execute command: {} in guild: {}",
-                    this.event.getMember().getEffectiveName(), event.getName(), this.event.getGuild().getId());
-            EmbedBuilder embed = new EmbedBuilder();
-            embed.setTitle("⚠️ Доступ ограничен");
-            embed.setDescription("Данная команда доступна только создателю сервера.");
-            embed.setColor(Color.YELLOW);
-            this.event.getChannel().sendMessageEmbeds(embed.build()).queue();
-        }
+    private void send(TextChannel channel, MessageEmbed embed) {
+        channel.sendMessageEmbeds(embed).queue(
+                ignored -> { },
+                failure -> log.warn("Failed to send command response to channel {}: {}",
+                        channel.getId(), failure.getMessage()));
     }
-
-    /**
-     * Проверяет, есть ли у пользователя права на выполнение команды.
-     *
-     * @param event команда для проверки
-     * @return true, если у пользователя есть права; иначе false
-     */
-    private boolean checkPermissionToExecute(Event event) {
-        boolean hasPermission = !event.needOwner() || this.event.getMember().isOwner();
-        log.debug("Permission check for command: {} in guild: {}, result: {}",
-                event.getName(), this.event.getGuild().getId(), hasPermission);
-        return hasPermission;
-    }
-
-    /**
-     * Проверяет, совпадает ли введенная команда с зарегистрированной командой.
-     *
-     * @param event команда для проверки
-     * @return true, если команда совпадает; иначе false
-     */
-    private boolean isEnterCommandEqualToExisting(Event event) {
-        boolean isMatch = this.event.getMessage().getContentRaw().split(" ")[0]
-                .equalsIgnoreCase(this.prefix + event.getName());
-        log.trace("Checking command match: {} against input: {}, result: {}",
-                event.getName(), this.event.getMessage().getContentRaw().split(" ")[0], isMatch);
-        return isMatch;
-    }
-
-    /**
-     * Выполняет указанную команду.
-     *
-     * @param event команда для выполнения
-     */
-    private void execute(Event event) {
-        log.debug("Executing command: {} with args: {}",
-                event.getName(), String.join(" ", this.event.getMessage().getContentRaw().split(" ")));
-        event.execute(new EventArgs(this.event));
-    }
-
 }

@@ -13,7 +13,7 @@ import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 
 import java.awt.*;
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -29,15 +29,13 @@ import java.util.Map;
 @Slf4j
 public class PlayerManager {
 
-    private static PlayerManager INSTANCE;
     private final Map<Long, GuildMusicManager> musicManagers;
     private final AudioPlayerManager audioPlayerManager;
 
     public PlayerManager() {
-        this.musicManagers = new HashMap<>();
+        this.musicManagers = new ConcurrentHashMap<>();
         this.audioPlayerManager = new DefaultAudioPlayerManager();
         AudioSourceManagers.registerRemoteSources(this.audioPlayerManager);
-        AudioSourceManagers.registerLocalSource(this.audioPlayerManager);
         log.info("PlayerManager initialized");
     }
 
@@ -125,11 +123,10 @@ public class PlayerManager {
      * @return экземпляр {@link PlayerManager}
      */
     public static PlayerManager getINSTANCE() {
+        return Holder.INSTANCE;
+    }
 
-        if (INSTANCE == null) {
-            INSTANCE = new PlayerManager();
-        }
-
-        return INSTANCE;
+    private static final class Holder {
+        private static final PlayerManager INSTANCE = new PlayerManager();
     }
 }

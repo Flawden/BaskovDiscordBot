@@ -18,7 +18,7 @@
         <appender-ref ref="CONSOLE" />
         <appender-ref ref="FILE" />
     </root>
-    <logger name="ru.flawden.BascovDiscordBot" level="DEBUG" additivity="false">
+    <logger name="ru.flawden.BascovDiscordBot" level="INFO" additivity="false">
         <appender-ref ref="CONSOLE" />
         <appender-ref ref="FILE" />
     </logger>

@@ -9,4 +9,5 @@ services:
     environment:
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:?DISCORD_BOT_TOKEN is required}
       DISCORD_BOT_ENABLED: "true"
+      DISCORD_BOT_PREFIX: ${DISCORD_BOT_PREFIX:-!}
     stop_grace_period: 30s

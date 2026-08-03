@@ -6,7 +6,8 @@ import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
 
-import java.awt.*;
+import java.awt.Color;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -15,34 +16,39 @@ import java.util.stream.Collectors;
 @Component
 public class HelpEvent implements Event {
 
-    public List<Event> events;
+    private volatile List<Event> events = List.of();
+
+    public void setEvents(List<Event> events) {
+        this.events = List.copyOf(events);
+    }
 
     @Override
     public void execute(EventArgs event) {
-        log.info("Help command executed in guild: {}", event.getTextChannel().getGuild().getId());
         EmbedBuilder embed = new EmbedBuilder();
         embed.setTitle("📜 Список команд для Баскова");
         embed.setDescription("Команды не чувствительны к регистру");
         embed.setColor(Color.CYAN);
 
         Map<String, List<Event>> groupedCommands = events.stream()
-                .collect(Collectors.groupingBy(Event::getGroup));
+                .collect(Collectors.groupingBy(
+                        Event::getGroup,
+                        LinkedHashMap::new,
+                        Collectors.toList()));
 
         for (Map.Entry<String, List<Event>> entry : groupedCommands.entrySet()) {
-            String group = entry.getKey();
             StringBuilder groupField = new StringBuilder();
-
             for (Event command : entry.getValue()) {
-                groupField.append("`")
+                groupField.append('`')
                         .append(command.getName())
                         .append("` — ")
                         .append(command.helpMessage())
-                        .append("\n");
+                        .append('\n');
             }
-            embed.addField("🎯 " + group, groupField.toString(), false);
+            embed.addField("🎯 " + entry.getKey(), groupField.toString(), false);
         }
-        log.debug("Displaying help with {} command groups in guild: {}",
-                groupedCommands.size(), event.getTextChannel().getGuild().getId());
+
+        log.info("Help displayed in guild {} with {} command groups",
+                event.getGuild().getId(), groupedCommands.size());
         event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
     }
 

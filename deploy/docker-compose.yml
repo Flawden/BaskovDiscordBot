@@ -7,6 +7,7 @@ services:
     environment:
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:?DISCORD_BOT_TOKEN is required}
       DISCORD_BOT_ENABLED: "true"
+      DISCORD_BOT_PREFIX: ${DISCORD_BOT_PREFIX:-!}
     healthcheck:
       test: ["CMD-SHELL", "test -s /tmp/baskov-discord-bot.ready"]
       interval: 15s

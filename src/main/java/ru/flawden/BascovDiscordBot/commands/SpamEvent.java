@@ -8,6 +8,7 @@ import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
 
 import java.awt.*;
+import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -85,5 +86,10 @@ public class SpamEvent implements Event {
     @Override
     public boolean needOwner() {
         return true;
+    }
+
+    @Override
+    public Duration cooldown() {
+        return Duration.ofSeconds(30);
     }
 }

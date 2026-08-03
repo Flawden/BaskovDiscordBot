@@ -1,6 +1,5 @@
 package ru.flawden.BascovDiscordBot.config.eventconfig;
 
-import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.GuildVoiceState;
@@ -9,16 +8,13 @@ import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 
+import java.util.List;
+import java.util.Objects;
+
 /**
- * Класс EventArgs содержит аргументы события, передаваемые при выполнении команд бота.
- * Он инкапсулирует информацию о текстовом канале, участниках, сообщениях и других аспектах
- * события, чтобы упростить доступ к необходимым данным в обработчиках событий.
- *
- * @author Flawden
- * @version 1.0
+ * Неизменяемый контекст выполнения одной команды.
  */
-@Slf4j
-public class EventArgs {
+public final class EventArgs {
     private final TextChannel textChannel;
     private final Member selfMember;
     private final Member member;
@@ -26,102 +22,72 @@ public class EventArgs {
     private final JDA jda;
     private final Message message;
     private final String[] args;
+    private final List<String> arguments;
+    private final String rawArguments;
     private final GuildVoiceState selfVoiceState;
     private final GuildVoiceState memberVoiceState;
 
-    protected EventArgs(MessageReceivedEvent event) {
+    EventArgs(MessageReceivedEvent event, CommandInvocation invocation) {
+        Objects.requireNonNull(event, "event");
+        Objects.requireNonNull(invocation, "invocation");
+
         this.textChannel = event.getChannel().asTextChannel();
-        this.member = event.getMember();
+        this.member = Objects.requireNonNull(event.getMember(), "Guild member");
         this.guild = event.getGuild();
         this.jda = event.getJDA();
         this.message = event.getMessage();
         this.selfMember = this.guild.getSelfMember();
-        this.args = this.message.getContentRaw().split(" ");
+        this.args = invocation.toLegacyArgs();
+        this.arguments = invocation.arguments();
+        this.rawArguments = invocation.rawArguments();
         this.selfVoiceState = this.selfMember.getVoiceState();
         this.memberVoiceState = this.member.getVoiceState();
-        log.debug("EventArgs created for guild: {}, user: {}, message: {}",
-                guild.getId(), member.getEffectiveName(), message.getContentRaw());
     }
 
-    /**
-     * Возвращает текстовый канал, в котором произошло событие.
-     *
-     * @return текстовый канал
-     */
     public TextChannel getTextChannel() {
-        return this.textChannel;
+        return textChannel;
     }
 
-    /**
-     * Возвращает самого бота (участника).
-     *
-     * @return участник, являющийся ботом
-     */
     public Member getSelfMember() {
-        return this.selfMember;
+        return selfMember;
     }
 
-    /**
-     * Возвращает участника, отправившего сообщение.
-     *
-     * @return член гильдии, отправивший сообщение
-     */
     public Member getMember() {
-        return this.member;
+        return member;
     }
 
-    /**
-     * Возвращает группу, в которой произошло событие.
-     *
-     * @return гильдия
-     */
     public Guild getGuild() {
-        return this.guild;
+        return guild;
     }
 
-    /**
-     * Возвращает объект JDA, представляющий интерфейс Discord API.
-     *
-     * @return объект JDA
-     */
     public JDA getJda() {
-        return this.jda;
+        return jda;
     }
 
-    /**
-     * Возвращает сообщение, вызвавшее событие.
-     *
-     * @return объект сообщения
-     */
     public Message getMessage() {
-        return this.message;
+        return message;
     }
 
     /**
-     * Возвращает аргументы команды, разделенные пробелами.
-     *
-     * @return массив аргументов команды
+     * Совместимый массив: индекс 0 содержит введённую команду, далее аргументы.
      */
     public String[] getArgs() {
-        return this.args;
+        return args.clone();
     }
 
-    /**
-     * Возвращает состояние голосового канала бота.
-     *
-     * @return состояние голосового канала бота
-     */
+    public List<String> getArguments() {
+        return arguments;
+    }
+
+    public String getRawArguments() {
+        return rawArguments;
+    }
+
     public GuildVoiceState getSelfVoiceState() {
-        return this.selfVoiceState;
+        return selfVoiceState;
     }
 
-    /**
-     * Возвращает состояние голосового канала участника, отправившего сообщение.
-     *
-     * @return состояние голосового канала участника
-     */
     public GuildVoiceState getMemberVoiceState() {
-        return this.memberVoiceState;
+        return memberVoiceState;
     }
-
 }

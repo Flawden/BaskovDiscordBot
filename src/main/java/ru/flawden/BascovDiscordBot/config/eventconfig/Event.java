@@ -1,5 +1,7 @@
 package ru.flawden.BascovDiscordBot.config.eventconfig;
 
+import java.time.Duration;
+
 /**
  * Интерфейс Event определяет контракт для событий бота.
  * Все классы, реализующие этот интерфейс, должны предоставлять реализацию для выполнения события,
@@ -44,5 +46,13 @@ public interface Event {
      * @return true, если команда требует прав владельца; иначе false
      */
     boolean needOwner();
-}
 
+    /**
+     * Возвращает cooldown команды для одного пользователя на одном сервере.
+     *
+     * @return длительность cooldown; по умолчанию команда не ограничена
+     */
+    default Duration cooldown() {
+        return Duration.ZERO;
+    }
+}

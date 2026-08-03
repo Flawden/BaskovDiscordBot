@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая стабильная версия: **v0.1.0**.
+Текущая стабильная версия: **v0.2.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA и LavaPlayer.
 
@@ -8,8 +8,10 @@
 
 - воспроизведение музыки, пауза, остановка и пропуск треков;
 - очередь воспроизведения и поиск;
-- расширяемая система команд на Spring-компонентах;
+- stateless-ядро команд с case-insensitive реестром и защитой от дубликатов;
+- конфигурируемый префикс и cooldown для шумных команд;
 - команда `!version` с версией и метаданными сборки;
+- безопасная обработка ссылок SoundCloud/YouTube без сетевой проверки пользовательского URL;
 - контейнерный запуск;
 - CI, публикация immutable-образов в GHCR и автоматический деплой на VPS.
 
@@ -21,6 +23,7 @@
 
 ```bash
 export DISCORD_BOT_TOKEN='your-token'
+export DISCORD_BOT_PREFIX='!'
 ./mvnw clean verify
 ./mvnw spring-boot:run
 ```
@@ -101,7 +104,7 @@ ssh-keyscan -p 22 your-server.example.com
 
 ## Режим тестирования
 
-В обычном запуске `DISCORD_BOT_ENABLED=true` по умолчанию. Тестовый Spring context запускается с `discordBot.enabled=false`, поэтому CI не требует токен и не подключается к Discord.
+В обычном запуске `DISCORD_BOT_ENABLED=true` по умолчанию. Префикс задаётся через `DISCORD_BOT_PREFIX` и по умолчанию равен `!`. Тестовый Spring context запускается с `discordBot.enabled=false`, поэтому CI не требует токен и не подключается к Discord.
 
 ## Версии и релизы
 
