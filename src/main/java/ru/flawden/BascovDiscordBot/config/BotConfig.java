@@ -7,6 +7,7 @@ import net.dv8tion.jda.api.OnlineStatus;
 import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.cache.CacheFlag;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
@@ -16,6 +17,9 @@ import ru.flawden.BascovDiscordBot.config.eventconfig.BotEvents;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.events.EventJoin;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -28,8 +32,12 @@ import java.util.List;
  */
 @Slf4j
 @Configuration
+@ConditionalOnProperty(name = "discordBot.enabled", havingValue = "true", matchIfMissing = true)
 @PropertySource("classpath:application.properties")
 public class BotConfig {
+
+    private static final Path READY_FILE = Path.of(System.getProperty("java.io.tmpdir"),
+            "baskov-discord-bot.ready");
 
     private final List<Event> events;
     private final Environment env;
@@ -45,7 +53,7 @@ public class BotConfig {
         this.eventJoin = eventJoin;
         this.helpCommand = helpCommand;
         log.info("BotConfig initialized, token: {}, events size: {}",
-                token != null ? "present" : "missing", events.size());
+                token != null && !token.isBlank() ? "present" : "missing", events.size());
     }
 
     /**
@@ -77,17 +85,28 @@ public class BotConfig {
         log.info("Creating JDA instance");
         JDA jda;
         try {
+            Files.deleteIfExists(READY_FILE);
+            if (token == null || token.isBlank()) {
+                throw new IllegalStateException("DISCORD_BOT_TOKEN is not configured");
+            }
+
             jda = JDABuilder.create(token, GatewayIntent.getIntents(GatewayIntent.ALL_INTENTS))
                     .enableCache(CacheFlag.VOICE_STATE)
                     .setActivity(Activity.watching("золотые чаши"))
                     .setStatus(OnlineStatus.ONLINE)
                     .addEventListeners(eventJoin)
                     .addEventListeners(botEvents)
-                    .build();
-            log.info("JDA instance created successfully, status: {}", jda.getStatus());
-        } catch (Exception e) {
-            log.error("Failed to create JDA instance: {}", e.getMessage(), e);
-            throw new RuntimeException("Упс! Вы использовали неверный токен. Попробуйте другой!");
+                    .build()
+                    .awaitReady();
+
+            Files.writeString(READY_FILE, jda.getSelfUser().getId());
+            log.info("JDA instance is ready, status: {}", jda.getStatus());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Discord bot startup was interrupted", e);
+        } catch (IOException | RuntimeException e) {
+            log.error("Failed to start JDA instance: {}", e.getMessage(), e);
+            throw new IllegalStateException("Discord bot failed to start", e);
         }
         return jda;
     }
