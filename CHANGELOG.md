@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-08-03
+
+### Исправлено
+
+- Исправлена компиляция `ModernCommandCatalogTest` с JDA 5.3.0: проверка options выполняется через конкретный `SlashCommandData`, а не базовый `CommandData`.
+- GitHub Actions снова проходит фазу Maven `testCompile` для релиза современных Discord-команд.
+
+### Изменено
+
+- Maven-версия приложения повышена до `0.4.1`.
+- Runtime-код, slash-команды, музыкальное поведение и deployment-контракт не менялись.
+
 ## [0.4.0] — 2026-08-03
 
 ### Добавлено
@@ -143,7 +155,8 @@
 - Immutable Docker images в GHCR.
 - Автоматический production-деплой на VPS с healthcheck и rollback.
 
-[Unreleased]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.1.0...v0.2.0
