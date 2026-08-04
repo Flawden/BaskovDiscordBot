@@ -9,6 +9,7 @@ import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.MusicLoadResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
+import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
 
 import java.awt.Color;
 import java.time.Duration;
@@ -67,6 +68,37 @@ public final class MusicEmbeds {
                     .setDescription("Трек загрузился после остановки музыкальной сессии и был проигнорирован.");
         }
         return embed.build();
+    }
+
+    public static MessageEmbed voiceConnectionFailure(VoiceConnectionResult result) {
+        String details = result == null || result.details() == null || result.details().isBlank()
+                ? "Не удалось установить стабильное голосовое соединение."
+                : result.details();
+
+        if (result == null) {
+            return error("🔌 Голосовое соединение не установлено", details);
+        }
+
+        return switch (result.status()) {
+            case TIMEOUT -> error(
+                    "⏳ Голосовое подключение не удалось",
+                    details + "\nБот не будет бесконечно переподключаться. Повтори команду чуть позже.");
+            case COOLDOWN -> error(
+                    "🧊 Подключение временно приостановлено",
+                    details);
+            case BUSY -> error(
+                    "🚧 Подключение уже выполняется",
+                    details);
+            case SHUTTING_DOWN -> error(
+                    "🛑 Бот перезапускается",
+                    "Музыкальный сервис сейчас завершает работу. Повтори команду после перезапуска.");
+            case FAILED -> error(
+                    "🔌 Голосовое соединение сорвалось",
+                    details + "\nСессия закрыта, чтобы бот не входил и не выходил из канала по кругу.");
+            case CONNECTED -> success(
+                    "🔌 Голосовое соединение установлено",
+                    details);
+        };
     }
 
     public static MessageEmbed nowPlaying(GuildMusicManager musicManager) {

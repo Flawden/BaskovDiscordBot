@@ -26,6 +26,9 @@ source "${INPUT_FILE}"
 : "${DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE_B64:?DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE_B64 is missing}"
 : "${DISCORD_BOT_MUSIC_MAX_TRACK_DURATION_B64:?DISCORD_BOT_MUSIC_MAX_TRACK_DURATION_B64 is missing}"
 : "${DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT_B64:?DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT_B64 is missing}"
+: "${DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT_B64:?DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT_B64 is missing}"
+: "${DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN_B64:?DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN_B64 is missing}"
+: "${DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE_B64:?DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE_B64 is missing}"
 : "${DISCORD_BOT_MUSIC_DEFAULT_VOLUME_B64:?DISCORD_BOT_MUSIC_DEFAULT_VOLUME_B64 is missing}"
 : "${DISCORD_BOT_MUSIC_MAX_VOLUME_B64:?DISCORD_BOT_MUSIC_MAX_VOLUME_B64 is missing}"
 
@@ -38,6 +41,9 @@ DISCORD_BOT_PREFIX="$(decode "${DISCORD_BOT_PREFIX_B64}")"
 DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE="$(decode "${DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE_B64}")"
 DISCORD_BOT_MUSIC_MAX_TRACK_DURATION="$(decode "${DISCORD_BOT_MUSIC_MAX_TRACK_DURATION_B64}")"
 DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT="$(decode "${DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT_B64}")"
+DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT="$(decode "${DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT_B64}")"
+DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN="$(decode "${DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN_B64}")"
+DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE="$(decode "${DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE_B64}")"
 DISCORD_BOT_MUSIC_DEFAULT_VOLUME="$(decode "${DISCORD_BOT_MUSIC_DEFAULT_VOLUME_B64}")"
 DISCORD_BOT_MUSIC_MAX_VOLUME="$(decode "${DISCORD_BOT_MUSIC_MAX_VOLUME_B64}")"
 
@@ -62,6 +68,18 @@ if [[ ! "${DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT}" =~ ^[0-9]+(ms|s|m|h|d)$ ]
   echo "Music idle timeout must be a non-negative Spring duration such as 0s or 5m" >&2
   exit 1
 fi
+if [[ ! "${DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT}" =~ ^[1-9][0-9]*(ms|s|m)$ ]]; then
+  echo "Music voice connect timeout must be a positive duration such as 15s" >&2
+  exit 1
+fi
+if [[ ! "${DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN}" =~ ^[0-9]+(ms|s|m)$ ]]; then
+  echo "Music voice failure cooldown must be a non-negative duration such as 30s" >&2
+  exit 1
+fi
+if [[ ! "${DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE}" =~ ^[1-9][0-9]*(ms|s|m)$ ]]; then
+  echo "Music voice disconnect grace must be a positive duration such as 5s" >&2
+  exit 1
+fi
 if [[ ! "${DISCORD_BOT_MUSIC_MAX_VOLUME}" =~ ^[0-9]+$ ]] \
     || (( DISCORD_BOT_MUSIC_MAX_VOLUME < 1 || DISCORD_BOT_MUSIC_MAX_VOLUME > 500 )); then
   echo "Music max volume must be between 1 and 500" >&2
@@ -76,6 +94,13 @@ fi
 
 cd "${DEPLOY_DIR}"
 umask 077
+
+PREVIOUS_CONTAINER_RUNNING="$(
+  docker inspect --format '{{.State.Running}}' "${BOT_CONTAINER_NAME}" 2>/dev/null || printf 'false'
+)"
+if [[ "${PREVIOUS_CONTAINER_RUNNING}" != "true" ]]; then
+  PREVIOUS_CONTAINER_RUNNING="false"
+fi
 
 if [[ -f "${ENV_FILE}" ]]; then
   cp "${ENV_FILE}" "${PREVIOUS_ENV_FILE}"
@@ -96,6 +121,9 @@ write_env() {
     printf 'DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE=%s\n' "${DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE}"
     printf 'DISCORD_BOT_MUSIC_MAX_TRACK_DURATION=%s\n' "${DISCORD_BOT_MUSIC_MAX_TRACK_DURATION}"
     printf 'DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT=%s\n' "${DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT}"
+    printf 'DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT=%s\n' "${DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT}"
+    printf 'DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN=%s\n' "${DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN}"
+    printf 'DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE=%s\n' "${DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE}"
     printf 'DISCORD_BOT_MUSIC_DEFAULT_VOLUME=%s\n' "${DISCORD_BOT_MUSIC_DEFAULT_VOLUME}"
     printf 'DISCORD_BOT_MUSIC_MAX_VOLUME=%s\n' "${DISCORD_BOT_MUSIC_MAX_VOLUME}"
   } > "${temp_file}"
@@ -143,6 +171,13 @@ rollback() {
   cp "${PREVIOUS_ENV_FILE}" "${ENV_FILE}"
   chmod 600 "${ENV_FILE}"
   docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" pull bot
+
+  if [[ "${PREVIOUS_CONTAINER_RUNNING}" != "true" ]]; then
+    docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" stop bot || true
+    echo "Rollback restored the previous environment and kept the bot stopped"
+    return 0
+  fi
+
   docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --remove-orphans bot
 
   for _ in {1..24}; do

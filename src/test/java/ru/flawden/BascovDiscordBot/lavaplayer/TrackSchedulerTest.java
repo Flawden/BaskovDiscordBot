@@ -121,6 +121,29 @@ class TrackSchedulerTest {
         assertEquals(RepeatMode.TRACK, scheduler.getRepeatMode());
     }
 
+
+    @Test
+    void cleanupEndReasonClosesUnstableVoiceSessionInsteadOfStartingNextTrack() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        AtomicInteger cleanup = new AtomicInteger();
+        TrackScheduler scheduler = new TrackScheduler(
+                player,
+                10,
+                Duration.ofHours(4),
+                RepeatMode.OFF,
+                () -> { },
+                () -> { },
+                cleanup::incrementAndGet);
+        AudioTrack current = track("Unstable", Duration.ofMinutes(3));
+        when(player.startTrack(current, true)).thenReturn(true);
+        scheduler.queue(current);
+
+        scheduler.onTrackEnd(player, current, AudioTrackEndReason.CLEANUP);
+
+        assertEquals(1, cleanup.get());
+        assertEquals(null, scheduler.getCurrentRequest());
+    }
+
     @Test
     void startsWithPersistedRepeatModeWithoutTriggeringActivity() {
         AudioPlayer player = mock(AudioPlayer.class);

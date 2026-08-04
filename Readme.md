@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая стабильная версия: **v0.7.1**.
+Текущая стабильная версия: **v0.7.2**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA и LavaPlayer.
 
@@ -14,6 +14,7 @@
 - постоянные настройки громкости и повтора отдельно для каждого Discord-сервера;
 - команда `/status` с uptime, Discord gateway, музыкальными сессиями и агрегированными счётчиками команд;
 - динамический Docker heartbeat, который подтверждает свежее подключение к Discord, а не только факт старта;
+- bounded voice connection: одна попытка, отключённый auto-reconnect, timeout/cooldown и watchdog сорванной аудиосессии;
 - ограничения CPU, памяти, PID и ротация Docker-логов;
 - управление музыкой только из общего voice channel с административным override;
 - bounded queue, лимит длительности и автоматическое отключение пустых сессий;
@@ -57,6 +58,9 @@ docker compose logs -f bot
 | `DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE` | `100` | максимум ожидающих треков на сервер |
 | `DISCORD_BOT_MUSIC_MAX_TRACK_DURATION` | `4h` | максимальная длительность одного трека |
 | `DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT` | `5m` | отключение после опустошения очереди |
+| `DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT` | `15s` | максимальное время одной попытки voice-подключения |
+| `DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN` | `30s` | пауза после неудачного подключения/transport failure |
+| `DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE` | `5s` | допустимый краткий разрыв во время воспроизведения |
 | `DISCORD_BOT_MUSIC_DEFAULT_VOLUME` | `100` | громкость новой guild-сессии |
 | `DISCORD_BOT_MUSIC_MAX_VOLUME` | `150` | верхняя граница команды `/volume` |
 | `DISCORD_BOT_PERSISTENCE_FILE` | `data/guild-settings.properties` | файл постоянных guild-настроек; в Docker используется `/app/data/...` |
@@ -66,6 +70,7 @@ Live-потоки отключены. Подробные правила voice-д
 Очередь и новые команды управления описаны в [`docs/QUEUE-EXPERIENCE.md`](docs/QUEUE-EXPERIENCE.md).
 Постоянные guild-настройки описаны в [`docs/GUILD-SETTINGS.md`](docs/GUILD-SETTINGS.md).
 Operations и health-модель описаны в [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
+Voice connection state machine и диагностика описаны в [`docs/VOICE-CONNECTIONS.md`](docs/VOICE-CONNECTIONS.md).
 Релиз с Android описан в [`docs/TERMUX-RELEASE.md`](docs/TERMUX-RELEASE.md).
 
 ## CI/CD
@@ -123,6 +128,9 @@ ghcr.io/<owner>/<repository>:dev|latest
 | `DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE` | `100` | размер очереди от 1 до 1000 |
 | `DISCORD_BOT_MUSIC_MAX_TRACK_DURATION` | `4h` | максимальная длительность трека |
 | `DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT` | `5m` | таймаут отключения пустой сессии |
+| `DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT` | `15s` | timeout одной voice-попытки |
+| `DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN` | `30s` | cooldown после voice failure |
+| `DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE` | `5s` | grace при разрыве активной сессии |
 | `DISCORD_BOT_MUSIC_DEFAULT_VOLUME` | `100` | начальная громкость |
 | `DISCORD_BOT_MUSIC_MAX_VOLUME` | `150` | максимальная громкость |
 

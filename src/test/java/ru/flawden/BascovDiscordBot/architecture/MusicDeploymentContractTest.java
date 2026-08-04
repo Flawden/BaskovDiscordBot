@@ -20,10 +20,15 @@ class MusicDeploymentContractTest {
                 "DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE",
                 "DISCORD_BOT_MUSIC_MAX_TRACK_DURATION",
                 "DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT",
+                "DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT",
+                "DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN",
+                "DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE",
                 "DISCORD_BOT_MUSIC_DEFAULT_VOLUME",
                 "DISCORD_BOT_MUSIC_MAX_VOLUME"}) {
             assertTrue(workflow.contains(variable), variable);
-            assertTrue(deployScript.contains(variable), variable);
+            assertTrue(workflow.contains("printf '" + variable + "_B64=%s"), variable + " workflow B64");
+            assertTrue(deployScript.contains(variable + "_B64"), variable + " deploy B64");
+            assertTrue(deployScript.contains("printf '" + variable + "=%s"), variable + " protected env");
             assertTrue(compose.contains(variable), variable);
         }
     }

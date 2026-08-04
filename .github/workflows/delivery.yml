@@ -229,6 +229,9 @@ jobs:
           BOT_MUSIC_MAX_QUEUE_SIZE: ${{ vars.DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE }}
           BOT_MUSIC_MAX_TRACK_DURATION: ${{ vars.DISCORD_BOT_MUSIC_MAX_TRACK_DURATION }}
           BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT: ${{ vars.DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT }}
+          BOT_MUSIC_VOICE_CONNECT_TIMEOUT: ${{ vars.DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT }}
+          BOT_MUSIC_VOICE_FAILURE_COOLDOWN: ${{ vars.DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN }}
+          BOT_MUSIC_VOICE_DISCONNECT_GRACE: ${{ vars.DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE }}
           BOT_MUSIC_DEFAULT_VOLUME: ${{ vars.DISCORD_BOT_MUSIC_DEFAULT_VOLUME }}
           BOT_MUSIC_MAX_VOLUME: ${{ vars.DISCORD_BOT_MUSIC_MAX_VOLUME }}
         run: |
@@ -239,6 +242,9 @@ jobs:
           max_queue_size="${BOT_MUSIC_MAX_QUEUE_SIZE:-100}"
           max_track_duration="${BOT_MUSIC_MAX_TRACK_DURATION:-4h}"
           idle_disconnect_timeout="${BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT:-5m}"
+          voice_connect_timeout="${BOT_MUSIC_VOICE_CONNECT_TIMEOUT:-15s}"
+          voice_failure_cooldown="${BOT_MUSIC_VOICE_FAILURE_COOLDOWN:-30s}"
+          voice_disconnect_grace="${BOT_MUSIC_VOICE_DISCONNECT_GRACE:-5s}"
           default_volume="${BOT_MUSIC_DEFAULT_VOLUME:-100}"
           max_volume="${BOT_MUSIC_MAX_VOLUME:-150}"
 
@@ -254,6 +260,9 @@ jobs:
             printf 'DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE_B64=%s\n' "$(encode "${max_queue_size}")"
             printf 'DISCORD_BOT_MUSIC_MAX_TRACK_DURATION_B64=%s\n' "$(encode "${max_track_duration}")"
             printf 'DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT_B64=%s\n' "$(encode "${idle_disconnect_timeout}")"
+            printf 'DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT_B64=%s\n' "$(encode "${voice_connect_timeout}")"
+            printf 'DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN_B64=%s\n' "$(encode "${voice_failure_cooldown}")"
+            printf 'DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE_B64=%s\n' "$(encode "${voice_disconnect_grace}")"
             printf 'DISCORD_BOT_MUSIC_DEFAULT_VOLUME_B64=%s\n' "$(encode "${default_volume}")"
             printf 'DISCORD_BOT_MUSIC_MAX_VOLUME_B64=%s\n' "$(encode "${max_volume}")"
           } | ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" \

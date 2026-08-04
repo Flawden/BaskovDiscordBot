@@ -15,7 +15,6 @@ import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.InteractionHook;
 import net.dv8tion.jda.api.interactions.commands.Command;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
-import net.dv8tion.jda.api.managers.AudioManager;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.commands.VersionEvent;
@@ -29,6 +28,7 @@ import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.RepeatMode;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
+import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
@@ -252,30 +252,44 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
-        if (!guild.getSelfMember().getVoiceState().inAudioChannel()) {
-            var memberChannel = member.getVoiceState().getChannel();
-            if (memberChannel == null) {
-                event.replyEmbeds(MusicEmbeds.error(
-                                "🔍 Голосовой канал потерян",
-                                "Похоже, ты вышел из голосового канала. Войди снова и повтори команду."))
-                        .setEphemeral(true)
-                        .queue();
-                return;
-            }
-            GuildMusicManager musicManager = playerManager.getMusicManager(guild);
-            AudioManager audioManager = guild.getAudioManager();
-            audioManager.setSendingHandler(musicManager.getSendHandler());
-            audioManager.openAudioConnection(memberChannel);
-            log.info("Slash command connected to voice channel {} in guild {}",
-                    memberChannel.getId(), guild.getId());
+        var botChannel = guild.getSelfMember().getVoiceState().getChannel();
+        var targetChannel = botChannel != null ? botChannel : member.getVoiceState().getChannel();
+        if (targetChannel == null) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🔍 Голосовой канал потерян",
+                            "Похоже, ты вышел из голосового канала. Войди снова и повтори команду."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
         }
 
         searchHistory.remember(event.getUser().getIdLong(), rawQuery);
-        event.deferReply().queue(hook -> playerManager.loadAndPlay(
-                guild,
-                identifier,
-                new TrackRequester(event.getUser().getIdLong(), member.getEffectiveName()),
-                result -> editLoadResult(hook, result)));
+        TrackRequester requester =
+                new TrackRequester(event.getUser().getIdLong(), member.getEffectiveName());
+        event.deferReply().queue(hook -> playerManager
+                .ensureVoiceConnection(guild, targetChannel)
+                .whenComplete((connection, failure) -> {
+                    if (failure != null) {
+                        log.error("Voice connection future failed in guild {}", guild.getId(), failure);
+                        editVoiceFailure(hook, new VoiceConnectionResult(
+                                VoiceConnectionResult.Status.FAILED,
+                                "Внутренняя ошибка голосового подключения."));
+                        return;
+                    }
+                    if (!connection.connected()) {
+                        editVoiceFailure(hook, connection);
+                        return;
+                    }
+                    playerManager.loadAndPlay(
+                            guild,
+                            identifier,
+                            requester,
+                            result -> editLoadResult(hook, result));
+                }));
+    }
+
+    private void editVoiceFailure(InteractionHook hook, VoiceConnectionResult result) {
+        hook.editOriginalEmbeds(MusicEmbeds.voiceConnectionFailure(result)).queue();
     }
 
     private void editLoadResult(InteractionHook hook, MusicLoadResult result) {

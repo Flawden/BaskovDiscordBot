@@ -15,6 +15,9 @@ public class MusicProperties {
     private int maxQueueSize = 100;
     private Duration maxTrackDuration = Duration.ofHours(4);
     private Duration idleDisconnectTimeout = Duration.ofMinutes(5);
+    private Duration voiceConnectTimeout = Duration.ofSeconds(15);
+    private Duration voiceFailureCooldown = Duration.ofSeconds(30);
+    private Duration voiceDisconnectGrace = Duration.ofSeconds(5);
     private int defaultVolume = 100;
     private int maxVolume = 150;
 
@@ -38,6 +41,50 @@ public class MusicProperties {
             throw new IllegalArgumentException("discord-bot.music.maxTrackDuration must be positive");
         }
         this.maxTrackDuration = maxTrackDuration;
+    }
+
+    public Duration getVoiceConnectTimeout() {
+        return voiceConnectTimeout;
+    }
+
+    public void setVoiceConnectTimeout(Duration voiceConnectTimeout) {
+        if (voiceConnectTimeout == null
+                || voiceConnectTimeout.isNegative()
+                || voiceConnectTimeout.isZero()
+                || voiceConnectTimeout.compareTo(Duration.ofMinutes(2)) > 0) {
+            throw new IllegalArgumentException(
+                    "discord-bot.music.voiceConnectTimeout must be between 1ms and 2m");
+        }
+        this.voiceConnectTimeout = voiceConnectTimeout;
+    }
+
+    public Duration getVoiceFailureCooldown() {
+        return voiceFailureCooldown;
+    }
+
+    public void setVoiceFailureCooldown(Duration voiceFailureCooldown) {
+        if (voiceFailureCooldown == null
+                || voiceFailureCooldown.isNegative()
+                || voiceFailureCooldown.compareTo(Duration.ofMinutes(10)) > 0) {
+            throw new IllegalArgumentException(
+                    "discord-bot.music.voiceFailureCooldown must be between 0 and 10m");
+        }
+        this.voiceFailureCooldown = voiceFailureCooldown;
+    }
+
+    public Duration getVoiceDisconnectGrace() {
+        return voiceDisconnectGrace;
+    }
+
+    public void setVoiceDisconnectGrace(Duration voiceDisconnectGrace) {
+        if (voiceDisconnectGrace == null
+                || voiceDisconnectGrace.isNegative()
+                || voiceDisconnectGrace.isZero()
+                || voiceDisconnectGrace.compareTo(Duration.ofMinutes(1)) > 0) {
+            throw new IllegalArgumentException(
+                    "discord-bot.music.voiceDisconnectGrace must be between 1ms and 1m");
+        }
+        this.voiceDisconnectGrace = voiceDisconnectGrace;
     }
 
     public int getDefaultVolume() {

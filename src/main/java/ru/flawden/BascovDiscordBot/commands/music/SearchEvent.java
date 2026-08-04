@@ -2,17 +2,16 @@ package ru.flawden.BascovDiscordBot.commands.music;
 
 import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.EmbedBuilder;
-import net.dv8tion.jda.api.managers.AudioManager;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
 import ru.flawden.BascovDiscordBot.interactions.MusicControls;
 import ru.flawden.BascovDiscordBot.interactions.RecentSearchHistory;
-import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.MusicLoadResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
+import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
 
 import java.awt.Color;
 import java.time.Duration;
@@ -65,41 +64,64 @@ public class SearchEvent implements Event {
             return;
         }
 
-        if (!event.getSelfVoiceState().inAudioChannel()) {
-            var memberChannel = event.getMemberVoiceState().getChannel();
-            if (memberChannel == null) {
-                embed.setTitle("🔍 Голосовой канал потерян");
-                embed.setDescription("Похоже, ты вышел из голосового канала. Войди снова и повтори команду.");
-                event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
-                return;
-            }
-            GuildMusicManager musicManager = playerManager.getMusicManager(event.getGuild());
-            AudioManager audioManager = event.getGuild().getAudioManager();
-            audioManager.setSendingHandler(musicManager.getSendHandler());
-            audioManager.openAudioConnection(memberChannel);
-            log.info("Connected to voice channel {} in guild {}",
-                    memberChannel.getId(), event.getGuild().getId());
+        var botChannel = event.getSelfVoiceState().getChannel();
+        var targetChannel = botChannel != null ? botChannel : event.getMemberVoiceState().getChannel();
+        if (targetChannel == null) {
+            embed.setTitle("🔍 Голосовой канал потерян");
+            embed.setDescription("Похоже, ты вышел из голосового канала. Войди снова и повтори команду.");
+            event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
+            return;
         }
 
         searchHistory.remember(event.getMember().getIdLong(), event.getRawArguments());
-        log.info("Loading media query in guild {}: type={}",
-                event.getGuild().getId(), query.startsWith("scsearch:") ? "search" : "url");
-        playerManager.loadAndPlay(
-                event.getGuild(),
-                query,
-                new TrackRequester(event.getMember().getIdLong(), event.getMember().getEffectiveName()),
-                result -> {
-                    var action = event.getTextChannel()
-                            .sendMessageEmbeds(MusicEmbeds.loadResult(result, musicProperties));
-                    if (result.status() == MusicLoadResult.Status.STARTED
-                            || result.status() == MusicLoadResult.Status.QUEUED) {
-                        action.setComponents(MusicControls.rows());
+        TrackRequester requester =
+                new TrackRequester(event.getMember().getIdLong(), event.getMember().getEffectiveName());
+        playerManager.ensureVoiceConnection(event.getGuild(), targetChannel)
+                .whenComplete((connection, failure) -> {
+                    if (failure != null) {
+                        log.error("Voice connection future failed in guild {}",
+                                event.getGuild().getId(), failure);
+                        sendVoiceFailure(event, new VoiceConnectionResult(
+                                VoiceConnectionResult.Status.FAILED,
+                                "Внутренняя ошибка голосового подключения."));
+                        return;
                     }
-                    action.queue(
-                            ignored -> { },
-                            failure -> log.warn("Failed to send music response to channel {}: {}",
-                                    event.getTextChannel().getId(), failure.getMessage()));
+                    if (!connection.connected()) {
+                        sendVoiceFailure(event, connection);
+                        return;
+                    }
+
+                    log.info("Loading media query in guild {} after voice readiness: type={}",
+                            event.getGuild().getId(),
+                            query.startsWith("scsearch:") ? "search" : "url");
+                    playerManager.loadAndPlay(
+                            event.getGuild(),
+                            query,
+                            requester,
+                            result -> {
+                                var action = event.getTextChannel()
+                                        .sendMessageEmbeds(MusicEmbeds.loadResult(result, musicProperties));
+                                if (result.status() == MusicLoadResult.Status.STARTED
+                                        || result.status() == MusicLoadResult.Status.QUEUED) {
+                                    action.setComponents(MusicControls.rows());
+                                }
+                                action.queue(
+                                        ignored -> { },
+                                        sendFailure -> log.warn(
+                                                "Failed to send music response to channel {}: {}",
+                                                event.getTextChannel().getId(),
+                                                sendFailure.getMessage()));
+                            });
                 });
+    }
+
+    private void sendVoiceFailure(EventArgs event, VoiceConnectionResult result) {
+        event.getTextChannel()
+                .sendMessageEmbeds(MusicEmbeds.voiceConnectionFailure(result))
+                .queue(
+                        ignored -> { },
+                        failure -> log.warn("Failed to send voice failure to channel {}: {}",
+                                event.getTextChannel().getId(), failure.getMessage()));
     }
 
     @Override

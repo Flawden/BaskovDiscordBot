@@ -7,6 +7,36 @@
 ## [Unreleased]
 
 
+## [0.7.2] — 2026-08-04
+
+### Исправлено
+
+- Отключён бесконечный автоматический reconnect JDA: voice-подключение теперь выполняется одной ограниченной попыткой на гильдию.
+- Трек больше не загружается и не запускается до подтверждённого подключения бота к ожидаемому голосовому каналу.
+- `AudioTrackEndReason.CLEANUP` теперь считается потерей Discord audio transport и закрывает повреждённую музыкальную сессию вместо продолжения цикла reconnect.
+- Shutdown-path безопасно переносит уже остановленный JDA executor и больше не выбрасывает `RejectedExecutionException` при ручной остановке контейнера.
+
+### Добавлено
+
+- `VoiceConnectionCoordinator` со статусами `CONNECTED`, `TIMEOUT`, `COOLDOWN`, `BUSY`, `FAILED` и `SHUTTING_DOWN`.
+- Один общий connection future для параллельных запросов к одному guild/channel и защита от второго подключения к другому каналу.
+- Voice watchdog: при ожидаемом воспроизведении разрыв дольше grace-периода завершает сессию один раз.
+- Настройки `DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT`, `DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN` и `DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE`.
+- Документ `docs/VOICE-CONNECTIONS.md` с incident evidence, state machine и production diagnostics.
+
+### Изменено
+
+- Maven-версия приложения повышена до `0.7.2`.
+- Legacy `!search` и slash `/play` используют один voice readiness gate.
+- Deployment передаёт и валидирует новые voice timeout/cooldown/grace параметры.
+
+### Тестирование
+
+- Добавлены unit-тесты timeout, shared attempt и already-connected fast path.
+- Добавлен architecture contract на отключённый reconnect, порядок `connect -> load`, обработку `CLEANUP`, безопасный shutdown и delivery новых настроек.
+- Тестовый baseline повышен до 28 test classes / 84 `@Test` methods.
+
+
 ## [0.7.1] — 2026-08-04
 
 ### Исправлено

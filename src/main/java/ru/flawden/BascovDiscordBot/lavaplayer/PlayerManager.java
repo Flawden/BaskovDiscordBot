@@ -9,6 +9,8 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
+import net.dv8tion.jda.api.managers.AudioManager;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
@@ -16,11 +18,14 @@ import ru.flawden.BascovDiscordBot.settings.GuildPreferences;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -34,23 +39,32 @@ public class PlayerManager {
 
     private final Map<Long, GuildMusicManager> musicManagers = new ConcurrentHashMap<>();
     private final Map<Long, ScheduledFuture<?>> idleDisconnects = new ConcurrentHashMap<>();
+    private final Map<Long, Instant> voiceDisconnectedSince = new ConcurrentHashMap<>();
     private final DefaultAudioPlayerManager audioPlayerManager;
     private final ScheduledExecutorService idleScheduler;
     private final MusicProperties properties;
     private final GuildPreferencesRepository preferencesRepository;
+    private final VoiceConnectionCoordinator voiceConnections;
 
     public PlayerManager(
             MusicProperties properties,
-            GuildPreferencesRepository preferencesRepository) {
+            GuildPreferencesRepository preferencesRepository,
+            VoiceConnectionCoordinator voiceConnections) {
         this.properties = properties;
         this.preferencesRepository = preferencesRepository;
+        this.voiceConnections = voiceConnections;
         this.audioPlayerManager = new DefaultAudioPlayerManager();
         AudioSourceManagers.registerRemoteSources(this.audioPlayerManager);
         this.idleScheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "baskov-music-idle-disconnect");
+            Thread thread = new Thread(runnable, "baskov-music-lifecycle");
             thread.setDaemon(true);
             return thread;
         });
+        this.idleScheduler.scheduleWithFixedDelay(
+                this::monitorVoiceConnections,
+                1L,
+                1L,
+                TimeUnit.SECONDS);
         log.info("PlayerManager initialized: maxQueue={}, maxTrack={}, idleTimeout={}, volume={}/{}",
                 properties.getMaxQueueSize(),
                 properties.getMaxTrackDuration(),
@@ -68,7 +82,8 @@ public class PlayerManager {
                     properties,
                     preferences,
                     () -> cancelIdleDisconnect(guildId),
-                    () -> scheduleIdleDisconnect(guild));
+                    () -> scheduleIdleDisconnect(guild),
+                    () -> submitPlaybackCleanup(guild));
             guild.getAudioManager().setSendingHandler(manager.getSendHandler());
             return manager;
         });
@@ -76,6 +91,22 @@ public class PlayerManager {
 
     public Optional<GuildMusicManager> findMusicManager(Guild guild) {
         return Optional.ofNullable(musicManagers.get(guild.getIdLong()));
+    }
+
+    /**
+     * Устанавливает ограниченное voice-подключение без бесконечного reconnect.
+     */
+    public CompletableFuture<VoiceConnectionResult> ensureVoiceConnection(
+            Guild guild,
+            AudioChannel target) {
+        GuildMusicManager manager = getMusicManager(guild);
+        return voiceConnections.ensureConnected(guild, target, manager.getSendHandler())
+                .thenApply(result -> {
+                    if (!result.connected()) {
+                        stopAndRelease(guild);
+                    }
+                    return result;
+                });
     }
 
     /**
@@ -134,8 +165,9 @@ public class PlayerManager {
     public void stopAndRelease(Guild guild) {
         GuildMusicManager manager = musicManagers.remove(guild.getIdLong());
         cancelIdleDisconnect(guild.getIdLong());
-        guild.getAudioManager().closeAudioConnection();
-        guild.getAudioManager().setSendingHandler(null);
+        voiceDisconnectedSince.remove(guild.getIdLong());
+        voiceConnections.cancel(guild);
+        safeCloseAudio(guild);
         if (manager != null) {
             manager.destroy();
         }
@@ -174,6 +206,83 @@ public class PlayerManager {
                 queueResult.queuePosition(),
                 queueResult.estimatedWaitMillis(),
                 requester));
+    }
+
+    private void monitorVoiceConnections() {
+        Instant now = Instant.now();
+        for (GuildMusicManager manager : musicManagers.values()) {
+            if (!manager.isActive()) {
+                continue;
+            }
+
+            Guild guild = manager.getGuild();
+            long guildId = guild.getIdLong();
+            boolean playbackExpected = manager.getAudioPlayer().getPlayingTrack() != null
+                    || manager.getScheduler().getCurrentRequest() != null;
+            try {
+                if (!playbackExpected || guild.getAudioManager().isConnected()) {
+                    voiceDisconnectedSince.remove(guildId);
+                    continue;
+                }
+            } catch (RuntimeException exception) {
+                log.debug("Voice watchdog skipped unavailable guild {}: {}",
+                        guild.getId(), exception.getMessage());
+                continue;
+            }
+
+            Instant disconnectedAt = voiceDisconnectedSince.putIfAbsent(guildId, now);
+            if (disconnectedAt == null) {
+                log.warn("Voice transport became disconnected while playback was expected: guild={}",
+                        guild.getId());
+                continue;
+            }
+
+            Duration disconnectedFor = Duration.between(disconnectedAt, now);
+            if (disconnectedFor.compareTo(properties.getVoiceDisconnectGrace()) < 0) {
+                continue;
+            }
+
+            log.error("Voice transport did not recover within {}: guild={}",
+                    properties.getVoiceDisconnectGrace(), guild.getId());
+            voiceConnections.recordTransportFailure(
+                    guild,
+                    "Discord voice transport was disconnected for " + disconnectedFor.toSeconds() + " s");
+            stopAndRelease(guild);
+        }
+    }
+
+    private void submitPlaybackCleanup(Guild guild) {
+        try {
+            idleScheduler.execute(() -> {
+                GuildMusicManager manager = musicManagers.get(guild.getIdLong());
+                if (manager == null || !manager.isActive()) {
+                    return;
+                }
+                voiceConnections.recordTransportFailure(
+                        guild,
+                        "LavaPlayer stopped because Discord no longer requested audio frames");
+                stopAndRelease(guild);
+            });
+        } catch (RejectedExecutionException exception) {
+            log.debug("Playback cleanup ignored during shutdown for guild {}", guild.getId());
+        }
+    }
+
+    private void safeCloseAudio(Guild guild) {
+        AudioManager audioManager = guild.getAudioManager();
+        try {
+            audioManager.setAutoReconnect(false);
+            audioManager.closeAudioConnection();
+        } catch (RuntimeException exception) {
+            log.debug("Voice connection already unavailable in guild {}: {}",
+                    guild.getId(), exception.getMessage());
+        }
+        try {
+            audioManager.setSendingHandler(null);
+        } catch (RuntimeException exception) {
+            log.debug("Audio sending handler already unavailable in guild {}: {}",
+                    guild.getId(), exception.getMessage());
+        }
     }
 
     private void scheduleIdleDisconnect(Guild guild) {
@@ -249,13 +358,14 @@ public class PlayerManager {
         log.info("Shutting down {} music sessions", musicManagers.size());
         for (GuildMusicManager manager : musicManagers.values()) {
             Guild guild = manager.getGuild();
-            guild.getAudioManager().closeAudioConnection();
-            guild.getAudioManager().setSendingHandler(null);
+            voiceConnections.cancel(guild);
+            safeCloseAudio(guild);
             manager.destroy();
         }
         musicManagers.clear();
         idleDisconnects.values().forEach(future -> future.cancel(false));
         idleDisconnects.clear();
+        voiceDisconnectedSince.clear();
         idleScheduler.shutdownNow();
         audioPlayerManager.shutdown();
     }

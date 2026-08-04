@@ -26,6 +26,7 @@ public class TrackScheduler extends AudioEventAdapter {
     private final long maxTrackDurationMillis;
     private final Runnable onActivity;
     private final Runnable onIdle;
+    private final Runnable onPlaybackCleanup;
     private final Object mutationLock = new Object();
 
     private volatile TrackRequest currentRequest;
@@ -37,7 +38,7 @@ public class TrackScheduler extends AudioEventAdapter {
             Duration maxTrackDuration,
             Runnable onActivity,
             Runnable onIdle) {
-        this(audioPlayer, maxQueueSize, maxTrackDuration, RepeatMode.OFF, onActivity, onIdle);
+        this(audioPlayer, maxQueueSize, maxTrackDuration, RepeatMode.OFF, onActivity, onIdle, onIdle);
     }
 
     public TrackScheduler(
@@ -47,12 +48,24 @@ public class TrackScheduler extends AudioEventAdapter {
             RepeatMode initialRepeatMode,
             Runnable onActivity,
             Runnable onIdle) {
+        this(audioPlayer, maxQueueSize, maxTrackDuration, initialRepeatMode, onActivity, onIdle, onIdle);
+    }
+
+    public TrackScheduler(
+            AudioPlayer audioPlayer,
+            int maxQueueSize,
+            Duration maxTrackDuration,
+            RepeatMode initialRepeatMode,
+            Runnable onActivity,
+            Runnable onIdle,
+            Runnable onPlaybackCleanup) {
         this.audioPlayer = Objects.requireNonNull(audioPlayer, "audioPlayer");
         this.queue = new LinkedBlockingQueue<>(maxQueueSize);
         this.maxTrackDurationMillis = Objects.requireNonNull(maxTrackDuration, "maxTrackDuration").toMillis();
         this.repeatMode = Objects.requireNonNull(initialRepeatMode, "initialRepeatMode");
         this.onActivity = Objects.requireNonNull(onActivity, "onActivity");
         this.onIdle = Objects.requireNonNull(onIdle, "onIdle");
+        this.onPlaybackCleanup = Objects.requireNonNull(onPlaybackCleanup, "onPlaybackCleanup");
     }
 
     public QueueResult queue(AudioTrack track) {
@@ -95,6 +108,14 @@ public class TrackScheduler extends AudioEventAdapter {
     @Override
     public void onTrackEnd(AudioPlayer player, AudioTrack track, AudioTrackEndReason endReason) {
         log.info("Track ended: {} (reason: {})", track.getInfo().title, endReason);
+        if (endReason == AudioTrackEndReason.CLEANUP) {
+            synchronized (mutationLock) {
+                currentRequest = null;
+            }
+            log.error("Audio output stopped requesting frames; closing unstable voice session");
+            onPlaybackCleanup.run();
+            return;
+        }
         if (!endReason.mayStartNext) {
             return;
         }
