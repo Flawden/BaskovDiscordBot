@@ -28,13 +28,19 @@ class DaveVoiceMigrationContractTest {
                 "src/main/java/ru/flawden/BascovDiscordBot/lavaplayer/PlayerManager.java"));
         String interactions = Files.readString(Path.of(
                 "src/main/java/ru/flawden/BascovDiscordBot/interactions/ModernInteractions.java"));
+        String legacy = Files.readString(Path.of(
+                "src/main/java/ru/flawden/BascovDiscordBot/commands/music/SearchEvent.java"));
+        String policy = Files.readString(Path.of(
+                "src/main/java/ru/flawden/BascovDiscordBot/lavaplayer/PlaybackReadinessPolicy.java"));
         String embeds = Files.readString(Path.of(
                 "src/main/java/ru/flawden/BascovDiscordBot/commands/music/MusicEmbeds.java"));
 
         assertTrue(manager.contains("awaitPlaybackReady"));
-        assertTrue(manager.contains("currentFrameRequests > baselineFrameRequests"));
-        assertTrue(interactions.contains("playbackConfirmed"));
-        assertTrue(interactions.contains("playbackReadinessFailure"));
+        assertTrue(compact(policy).contains("currentFrameRequests>baselineFrameRequests"));
+        assertTrue(compact(interactions).contains("MusicEmbeds.playbackConfirmed("));
+        assertTrue(compact(interactions).contains("MusicEmbeds.playbackReadinessFailure("));
+        assertTrue(compact(legacy).contains("MusicEmbeds.playbackConfirmed("));
+        assertTrue(compact(legacy).contains("MusicEmbeds.playbackReadinessFailure("));
         assertFalse(embeds.contains("Воспроизведение началось"),
                 "The bot must not claim playback before media transport is confirmed");
     }
@@ -48,5 +54,9 @@ class DaveVoiceMigrationContractTest {
 
         assertTrue(formatter.contains("JDA: `"));
         assertTrue(botConfig.contains("JdaRuntimeInfo.version()"));
+    }
+
+    private static String compact(String value) {
+        return value.replaceAll("\\s+", "");
     }
 }

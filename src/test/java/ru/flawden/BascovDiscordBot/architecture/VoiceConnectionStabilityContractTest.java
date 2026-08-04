@@ -18,6 +18,7 @@ class VoiceConnectionStabilityContractTest {
         String coordinator = read("lavaplayer/VoiceConnectionCoordinator.java");
         String modern = read("interactions/ModernInteractions.java");
         String legacy = read("commands/music/SearchEvent.java");
+        String compactCoordinator = compact(coordinator);
 
         assertTrue(coordinator.contains("setAutoReconnect(false)"));
         assertTrue(
@@ -27,8 +28,8 @@ class VoiceConnectionStabilityContractTest {
                 coordinator.contains("properties.getVoiceFailureCooldown()"),
                 "Transport failures must use the configured cooldown accessor");
         assertTrue(
-                coordinator.contains("@Autowired\n    public VoiceConnectionCoordinator"),
-                "Spring must select the production constructor when the test-only constructor also exists");
+                compactCoordinator.contains("@AutowiredpublicVoiceConnectionCoordinator("),
+                "Spring must select the production constructor regardless of line endings or formatting");
         assertTrue(modern.contains("ensureVoiceConnection"));
         assertTrue(legacy.contains("ensureVoiceConnection"));
         assertFalse(modern.contains("openAudioConnection"));

@@ -7,6 +7,25 @@
 ## [Unreleased]
 
 
+## [0.8.1] — 2026-08-04
+
+### Исправлено
+
+- `VoiceConnectionStabilityContractTest` больше не зависит от `LF`/`CRLF` и форматирования конструктора: проверка `@Autowired` выполняется по нормализованному Java source.
+- `DaveVoiceMigrationContractTest` теперь проверяет сравнение `currentFrameRequests > baselineFrameRequests` в реальном владельце этой политики — `PlaybackReadinessPolicy`, а не ошибочно в `PlayerManager`.
+- Source-contract DAVE migration дополнительно подтверждает одинаковый playback-ready flow для slash `/play` и legacy `!search`.
+
+### Изменено
+
+- Maven-версия приложения повышена до `0.8.1`.
+- Runtime-код, JDA `5.6.1`, Spring Boot `3.4.3`, LavaPlayer `2.2.3`, Docker и deployment не менялись.
+
+### Тестирование
+
+- Тестовый baseline остаётся 34 test classes / 105 `@Test` methods.
+- Контракты стали переносимыми между Windows и Linux и больше не дают ложный красный результат из-за окончания строк или расположения выражения в соседнем классе.
+
+
 ## [0.8.0] — 2026-08-04
 
 ### Исправлено
