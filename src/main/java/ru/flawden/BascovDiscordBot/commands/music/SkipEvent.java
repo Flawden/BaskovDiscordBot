@@ -8,6 +8,7 @@ import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
 import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
+import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 
 import java.awt.Color;
 
@@ -41,7 +42,7 @@ public class SkipEvent implements Event {
         }
 
         String skippedTrackTitle = currentTrack.getInfo().title;
-        AudioTrack nextTrack = musicManager.getScheduler().nextTrack();
+        TrackRequest nextTrack = musicManager.getScheduler().nextTrack();
         log.info("Track skipped in guild {}: {}", event.getGuild().getId(), skippedTrackTitle);
 
         embed.setTitle("⏭️ Песня пропущена");
@@ -49,7 +50,7 @@ public class SkipEvent implements Event {
             embed.setDescription("Песня `" + skippedTrackTitle + "` пропущена.\nОчередь пуста.");
         } else {
             embed.setDescription("Песня `" + skippedTrackTitle + "` пропущена.\nСейчас играет: `"
-                    + nextTrack.getInfo().title + "`");
+                    + nextTrack.track().getInfo().title + "`");
         }
         event.getTextChannel().sendMessageEmbeds(embed.build()).queue();
     }

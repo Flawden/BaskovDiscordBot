@@ -16,6 +16,8 @@ class MusicPropertiesTest {
         assertEquals(100, properties.getMaxQueueSize());
         assertEquals(Duration.ofHours(4), properties.getMaxTrackDuration());
         assertEquals(Duration.ofMinutes(5), properties.getIdleDisconnectTimeout());
+        assertEquals(100, properties.getDefaultVolume());
+        assertEquals(150, properties.getMaxVolume());
     }
 
     @Test
@@ -28,5 +30,9 @@ class MusicPropertiesTest {
                 () -> properties.setMaxTrackDuration(Duration.ZERO));
         assertThrows(IllegalArgumentException.class,
                 () -> properties.setIdleDisconnectTimeout(Duration.ofSeconds(-1)));
+        assertThrows(IllegalArgumentException.class, () -> properties.setMaxVolume(0));
+        assertThrows(IllegalArgumentException.class, () -> properties.setMaxVolume(501));
+        assertThrows(IllegalArgumentException.class, () -> properties.setDefaultVolume(-1));
+        assertThrows(IllegalArgumentException.class, () -> properties.setDefaultVolume(151));
     }
 }

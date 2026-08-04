@@ -15,6 +15,7 @@ public final class MusicControls {
     public static final String SKIP = "baskov:music:skip";
     public static final String STOP = "baskov:music:stop";
     public static final String QUEUE = "baskov:music:queue";
+    public static final String REPEAT = "baskov:music:repeat";
 
     private MusicControls() {
     }
@@ -24,6 +25,7 @@ public final class MusicControls {
                 Button.primary(TOGGLE, "Пауза / играть"),
                 Button.secondary(SKIP, "Пропустить"),
                 Button.secondary(QUEUE, "Очередь"),
+                Button.secondary(REPEAT, "Повтор"),
                 Button.danger(STOP, "Стоп")
         ));
     }
@@ -32,6 +34,7 @@ public final class MusicControls {
         return TOGGLE.equals(componentId)
                 || SKIP.equals(componentId)
                 || STOP.equals(componentId)
-                || QUEUE.equals(componentId);
+                || QUEUE.equals(componentId)
+                || REPEAT.equals(componentId);
     }
 }

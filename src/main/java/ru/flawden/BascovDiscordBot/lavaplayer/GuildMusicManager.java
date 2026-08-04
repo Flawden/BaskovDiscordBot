@@ -33,6 +33,7 @@ public class GuildMusicManager {
         this.guild = Objects.requireNonNull(guild, "guild");
         this.onActivity = Objects.requireNonNull(onActivity, "onActivity");
         this.audioPlayer = Objects.requireNonNull(manager, "manager").createPlayer();
+        this.audioPlayer.setVolume(properties.getDefaultVolume());
         this.scheduler = new TrackScheduler(
                 audioPlayer,
                 properties.getMaxQueueSize(),

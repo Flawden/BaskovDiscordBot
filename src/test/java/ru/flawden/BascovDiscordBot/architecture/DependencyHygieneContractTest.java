@@ -31,7 +31,7 @@ class DependencyHygieneContractTest {
     void loggingVersionsRemainOwnedBySpringBootAndAndroidJsonStaysExcluded() throws Exception {
         Document document = parsePom();
 
-        assertEquals("0.4.4", directChildText(document.getDocumentElement(), "version"));
+        assertEquals("0.5.0", directChildText(document.getDocumentElement(), "version"));
         assertFalse(propertyNames(document).contains("discord4j-core.version"),
                 "Unused Discord4J property must not return");
 

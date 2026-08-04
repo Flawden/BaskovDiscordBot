@@ -31,6 +31,8 @@
 | Максимальная очередь | 100 ожидающих треков |
 | Максимальная длительность | 4 часа |
 | Idle disconnect | 5 минут |
+| Громкость новой сессии | 100% |
+| Максимальная громкость | 150% |
 | Live streams | отключены |
 
 ## Переменные окружения
@@ -39,6 +41,8 @@
 DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE=100
 DISCORD_BOT_MUSIC_MAX_TRACK_DURATION=4h
 DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT=5m
+DISCORD_BOT_MUSIC_DEFAULT_VOLUME=100
+DISCORD_BOT_MUSIC_MAX_VOLUME=150
 ```
 
 Spring duration поддерживает значения вроде `30s`, `5m`, `4h` и `1d`.
@@ -49,4 +53,6 @@ Spring duration поддерживает значения вроде `30s`, `5m`
 
 - очередь: от 1 до 1000;
 - максимальная длительность: строго больше нуля;
-- idle timeout: ноль или положительное значение.
+- idle timeout: ноль или положительное значение;
+- default volume: от 0 до max volume;
+- max volume: от 1 до 500.

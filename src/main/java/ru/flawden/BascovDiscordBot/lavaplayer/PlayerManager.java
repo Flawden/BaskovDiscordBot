@@ -44,10 +44,12 @@ public class PlayerManager {
             thread.setDaemon(true);
             return thread;
         });
-        log.info("PlayerManager initialized: maxQueue={}, maxTrack={}, idleTimeout={}",
+        log.info("PlayerManager initialized: maxQueue={}, maxTrack={}, idleTimeout={}, volume={}/{}",
                 properties.getMaxQueueSize(),
                 properties.getMaxTrackDuration(),
-                properties.getIdleDisconnectTimeout());
+                properties.getIdleDisconnectTimeout(),
+                properties.getDefaultVolume(),
+                properties.getMaxVolume());
     }
 
     public GuildMusicManager getMusicManager(Guild guild) {
@@ -71,6 +73,14 @@ public class PlayerManager {
      * Загружает трек и возвращает транспорт-независимый результат через callback.
      */
     public void loadAndPlay(Guild guild, String identifier, Consumer<MusicLoadResult> resultConsumer) {
+        loadAndPlay(guild, identifier, TrackRequester.unknown(), resultConsumer);
+    }
+
+    public void loadAndPlay(
+            Guild guild,
+            String identifier,
+            TrackRequester requester,
+            Consumer<MusicLoadResult> resultConsumer) {
         GuildMusicManager musicManager = getMusicManager(guild);
         musicManager.markActivity();
         log.info("Loading media for guild {}: {}", guild.getId(), identifier);
@@ -78,7 +88,7 @@ public class PlayerManager {
         audioPlayerManager.loadItemOrdered(musicManager, identifier, new AudioLoadResultHandler() {
             @Override
             public void trackLoaded(AudioTrack track) {
-                deliverQueueResult(guild, musicManager, track, resultConsumer);
+                deliverQueueResult(guild, musicManager, track, requester, resultConsumer);
             }
 
             @Override
@@ -94,7 +104,7 @@ public class PlayerManager {
                     return;
                 }
 
-                deliverQueueResult(guild, musicManager, selected, resultConsumer);
+                deliverQueueResult(guild, musicManager, selected, requester, resultConsumer);
             }
 
             @Override
@@ -126,6 +136,7 @@ public class PlayerManager {
             Guild guild,
             GuildMusicManager musicManager,
             AudioTrack track,
+            TrackRequester requester,
             Consumer<MusicLoadResult> resultConsumer) {
         if (!musicManager.isActive()) {
             log.info("Ignoring completed media load for closed guild session {}", guild.getId());
@@ -133,7 +144,7 @@ public class PlayerManager {
             return;
         }
 
-        TrackScheduler.QueueResult queueResult = musicManager.getScheduler().queue(track);
+        TrackScheduler.QueueResult queueResult = musicManager.getScheduler().queue(track, requester);
         MusicLoadResult.Status status = switch (queueResult.status()) {
             case STARTED -> MusicLoadResult.Status.STARTED;
             case QUEUED -> MusicLoadResult.Status.QUEUED;
@@ -148,7 +159,12 @@ public class PlayerManager {
             musicManager.getScheduler().scheduleDisconnectIfIdle();
         }
 
-        resultConsumer.accept(MusicLoadResult.of(status, track, queueResult.queuePosition()));
+        resultConsumer.accept(MusicLoadResult.of(
+                status,
+                track,
+                queueResult.queuePosition(),
+                queueResult.estimatedWaitMillis(),
+                requester));
     }
 
     private void scheduleIdleDisconnect(Guild guild) {

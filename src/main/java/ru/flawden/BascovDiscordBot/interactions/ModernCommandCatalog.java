@@ -37,7 +37,33 @@ public final class ModernCommandCatalog {
                                 OptionType.STRING,
                                 "position",
                                 "Позиция: SS, MM:SS или HH:MM:SS",
+                                true),
+                Commands.slash("volume", "Изменяет громкость музыкальной сессии")
+                        .addOption(
+                                OptionType.INTEGER,
+                                "level",
+                                "Громкость от 0 до настроенного максимума",
+                                true),
+                Commands.slash("repeat", "Выбирает режим повтора")
+                        .addOptions(new OptionData(
+                                OptionType.STRING,
+                                "mode",
+                                "Что повторять",
                                 true)
+                                .addChoice("Выключить", "off")
+                                .addChoice("Текущий трек", "track")
+                                .addChoice("Всю очередь", "queue")),
+                Commands.slash("shuffle", "Перемешивает ожидающие треки"),
+                Commands.slash("remove", "Удаляет трек из очереди")
+                        .addOption(
+                                OptionType.INTEGER,
+                                "position",
+                                "Номер трека в /queue",
+                                true),
+                Commands.slash("move", "Перемещает трек внутри очереди")
+                        .addOption(OptionType.INTEGER, "from", "Текущая позиция", true)
+                        .addOption(OptionType.INTEGER, "to", "Новая позиция", true),
+                Commands.slash("clear", "Очищает ожидающие треки, не останавливая текущий")
         );
     }
 }

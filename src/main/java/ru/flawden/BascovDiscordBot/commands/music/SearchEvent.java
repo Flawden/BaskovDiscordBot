@@ -7,9 +7,12 @@ import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
+import ru.flawden.BascovDiscordBot.interactions.MusicControls;
 import ru.flawden.BascovDiscordBot.interactions.RecentSearchHistory;
 import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
+import ru.flawden.BascovDiscordBot.lavaplayer.MusicLoadResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
+import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
 
 import java.awt.Color;
 import java.time.Duration;
@@ -81,11 +84,22 @@ public class SearchEvent implements Event {
         searchHistory.remember(event.getMember().getIdLong(), event.getRawArguments());
         log.info("Loading media query in guild {}: type={}",
                 event.getGuild().getId(), query.startsWith("scsearch:") ? "search" : "url");
-        playerManager.loadAndPlay(event.getGuild(), query, result ->
-                event.getTextChannel().sendMessageEmbeds(MusicEmbeds.loadResult(result, musicProperties)).queue(
-                        ignored -> { },
-                        failure -> log.warn("Failed to send music response to channel {}: {}",
-                                event.getTextChannel().getId(), failure.getMessage())));
+        playerManager.loadAndPlay(
+                event.getGuild(),
+                query,
+                new TrackRequester(event.getMember().getIdLong(), event.getMember().getEffectiveName()),
+                result -> {
+                    var action = event.getTextChannel()
+                            .sendMessageEmbeds(MusicEmbeds.loadResult(result, musicProperties));
+                    if (result.status() == MusicLoadResult.Status.STARTED
+                            || result.status() == MusicLoadResult.Status.QUEUED) {
+                        action.setComponents(MusicControls.rows());
+                    }
+                    action.queue(
+                            ignored -> { },
+                            failure -> log.warn("Failed to send music response to channel {}: {}",
+                                    event.getTextChannel().getId(), failure.getMessage()));
+                });
     }
 
     @Override

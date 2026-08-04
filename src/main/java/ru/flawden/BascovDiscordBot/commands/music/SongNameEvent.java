@@ -1,10 +1,10 @@
 package ru.flawden.BascovDiscordBot.commands.music;
 
-import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.config.eventconfig.EventArgs;
 import ru.flawden.BascovDiscordBot.interactions.MusicControls;
+import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 
 @Component
@@ -18,12 +18,10 @@ public class SongNameEvent implements Event {
 
     @Override
     public void execute(EventArgs event) {
-        AudioPlayer audioPlayer = playerManager.findMusicManager(event.getGuild())
-                .map(manager -> manager.getAudioPlayer())
-                .orElse(null);
+        GuildMusicManager musicManager = playerManager.findMusicManager(event.getGuild()).orElse(null);
 
         event.getTextChannel()
-                .sendMessageEmbeds(MusicEmbeds.nowPlaying(audioPlayer))
+                .sendMessageEmbeds(MusicEmbeds.nowPlaying(musicManager))
                 .setComponents(MusicControls.rows())
                 .queue();
     }

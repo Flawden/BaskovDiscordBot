@@ -7,25 +7,38 @@
 ## [Unreleased]
 
 
-## [0.4.4] — 2026-08-04
+## [0.5.0] — 2026-08-04
 
-### Исправлено
+### Добавлено
 
-- Восстановлен последний подтверждённый совместимый dependency baseline после пакетного major-обновления, сломавшего компиляцию `MusicControls`.
-- JDA возвращён с `6.5.0` на `5.3.0`, совместимый с текущими package names `interactions.components.*`.
-- Spring Boot возвращён с `4.1.0` на проверенный `3.4.3`; migration на Boot 4 больше не смешивается с JDA migration.
-- GitHub Actions возвращены на последние реально зелёные major-теги текущего pipeline.
+- Requester metadata для текущего и каждого ожидающего трека.
+- ETA старта добавленного трека на основе остатка текущей песни и длительности очереди.
+- Slash-команды `/volume`, `/repeat`, `/shuffle`, `/remove`, `/move` и `/clear`.
+- Режимы повтора `off`, `track` и `queue`.
+- Кнопка `Повтор`, циклически переключающая режимы музыкальной сессии.
+- Настройки `DISCORD_BOT_MUSIC_DEFAULT_VOLUME` и `DISCORD_BOT_MUSIC_MAX_VOLUME`.
+- Документ `docs/QUEUE-EXPERIENCE.md` с семантикой очереди и ограничениями.
 
 ### Изменено
 
-- Lombok, LavaPlayer и Maven Compiler Plugin возвращены к точным версиям зелёного `v0.4.3`, чтобы исключить несколько независимых переменных из одного hotfix.
-- Maven-версия приложения повышена до `0.4.4`.
-- Dependabot больше не предлагает автоматические major-обновления Maven и GitHub Actions.
-- Документирована политика: один major framework upgrade — один отдельный migration-релиз.
+- Очередь хранит `TrackRequest`, объединяющий LavaPlayer track, requester и время заказа.
+- `/queue` показывает requester, длительность, громкость, repeat mode и приблизительное время до конца очереди.
+- `/now` показывает requester, громкость и режим повтора.
+- `/play` и legacy `!search` передают Discord requester в музыкальное ядро.
+- `TrackScheduler` поддерживает атомарные remove/move/shuffle/clear операции без остановки текущего трека.
+- Новая guild-сессия получает безопасную громкость по умолчанию.
+- Maven-версия приложения повышена до `0.5.0`.
+
+### Совместимость
+
+- Релиз включает возврат на подтверждённую зелёную линию Spring Boot 3.4.3 / JDA 5.3.0 после пользовательского пакетного major-обновления.
+- Patch рассчитан непосредственно на присланное состояние репозитория с Boot 4 / JDA 6, поэтому промежуточный `v0.4.4` применять отдельно не требуется.
 
 ### Тестирование
 
-- Добавлен `DependencyCompatibilityContractTest`, фиксирующий production-линию Spring Boot 3 / JDA 5 и известные зелёные major-теги GitHub Actions.
+- Расширен `TrackSchedulerTest`: requester, ETA, move/remove/clear и repeat track.
+- Добавлен `QueueExperienceContractTest`.
+- Каталог slash-команд и deployment-контракт обновлены для новых функций и volume variables.
 
 ## [0.4.3] — 2026-08-04
 
@@ -209,8 +222,8 @@
 - Immutable Docker images в GHCR.
 - Автоматический production-деплой на VPS с healthcheck и rollback.
 
-[Unreleased]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.4...HEAD
-[0.4.4]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.3...v0.4.4
+[Unreleased]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.0...v0.4.1

@@ -15,6 +15,8 @@ public class MusicProperties {
     private int maxQueueSize = 100;
     private Duration maxTrackDuration = Duration.ofHours(4);
     private Duration idleDisconnectTimeout = Duration.ofMinutes(5);
+    private int defaultVolume = 100;
+    private int maxVolume = 150;
 
     public int getMaxQueueSize() {
         return maxQueueSize;
@@ -22,7 +24,7 @@ public class MusicProperties {
 
     public void setMaxQueueSize(int maxQueueSize) {
         if (maxQueueSize < 1 || maxQueueSize > 1_000) {
-            throw new IllegalArgumentException("discordBot.music.maxQueueSize must be between 1 and 1000");
+            throw new IllegalArgumentException("discord-bot.music.maxQueueSize must be between 1 and 1000");
         }
         this.maxQueueSize = maxQueueSize;
     }
@@ -33,9 +35,34 @@ public class MusicProperties {
 
     public void setMaxTrackDuration(Duration maxTrackDuration) {
         if (maxTrackDuration == null || maxTrackDuration.isNegative() || maxTrackDuration.isZero()) {
-            throw new IllegalArgumentException("discordBot.music.maxTrackDuration must be positive");
+            throw new IllegalArgumentException("discord-bot.music.maxTrackDuration must be positive");
         }
         this.maxTrackDuration = maxTrackDuration;
+    }
+
+    public int getDefaultVolume() {
+        return defaultVolume;
+    }
+
+    public void setDefaultVolume(int defaultVolume) {
+        if (defaultVolume < 0 || defaultVolume > maxVolume) {
+            throw new IllegalArgumentException("discord-bot.music.defaultVolume must be between 0 and maxVolume");
+        }
+        this.defaultVolume = defaultVolume;
+    }
+
+    public int getMaxVolume() {
+        return maxVolume;
+    }
+
+    public void setMaxVolume(int maxVolume) {
+        if (maxVolume < 1 || maxVolume > 500) {
+            throw new IllegalArgumentException("discord-bot.music.maxVolume must be between 1 and 500");
+        }
+        this.maxVolume = maxVolume;
+        if (defaultVolume > maxVolume) {
+            defaultVolume = maxVolume;
+        }
     }
 
     public Duration getIdleDisconnectTimeout() {
@@ -44,7 +71,7 @@ public class MusicProperties {
 
     public void setIdleDisconnectTimeout(Duration idleDisconnectTimeout) {
         if (idleDisconnectTimeout == null || idleDisconnectTimeout.isNegative()) {
-            throw new IllegalArgumentException("discordBot.music.idleDisconnectTimeout cannot be negative");
+            throw new IllegalArgumentException("discord-bot.music.idleDisconnectTimeout cannot be negative");
         }
         this.idleDisconnectTimeout = idleDisconnectTimeout;
     }

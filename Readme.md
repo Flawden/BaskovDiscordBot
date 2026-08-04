@@ -1,16 +1,16 @@
 # 🎤 Baskov Discord Bot
 
-Текущая стабильная версия: **v0.4.4**.
+Текущая стабильная версия: **v0.5.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA и LavaPlayer.
 
 ## Возможности
 
-- slash-команды `/play`, `/pause`, `/resume`, `/skip`, `/stop`, `/queue`, `/now` и `/seek`;
+- slash-команды воспроизведения и полноценного управления очередью;
 - autocomplete последних поисковых запросов и интерактивные кнопки управления;
 - legacy `!`-команды как compatibility layer;
 - воспроизведение музыки, пауза, остановка и пропуск треков;
-- очередь воспроизведения и поиск;
+- requester, ETA, repeat mode, shuffle, remove/move/clear и управление громкостью;
 - управление музыкой только из общего voice channel с административным override;
 - bounded queue, лимит длительности и автоматическое отключение пустых сессий;
 - stateless-ядро команд с case-insensitive реестром и защитой от дубликатов;
@@ -53,9 +53,12 @@ docker compose logs -f bot
 | `DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE` | `100` | максимум ожидающих треков на сервер |
 | `DISCORD_BOT_MUSIC_MAX_TRACK_DURATION` | `4h` | максимальная длительность одного трека |
 | `DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT` | `5m` | отключение после опустошения очереди |
+| `DISCORD_BOT_MUSIC_DEFAULT_VOLUME` | `100` | громкость новой guild-сессии |
+| `DISCORD_BOT_MUSIC_MAX_VOLUME` | `150` | верхняя граница команды `/volume` |
 
 Live-потоки отключены. Подробные правила voice-доступа и lifecycle находятся в [`docs/MUSIC-SESSIONS.md`](docs/MUSIC-SESSIONS.md).
 Современный Discord-интерфейс описан в [`docs/MODERN-COMMANDS.md`](docs/MODERN-COMMANDS.md).
+Очередь и новые команды управления описаны в [`docs/QUEUE-EXPERIENCE.md`](docs/QUEUE-EXPERIENCE.md).
 
 ## CI/CD
 
@@ -112,6 +115,8 @@ ghcr.io/<owner>/<repository>:dev|latest
 | `DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE` | `100` | размер очереди от 1 до 1000 |
 | `DISCORD_BOT_MUSIC_MAX_TRACK_DURATION` | `4h` | максимальная длительность трека |
 | `DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT` | `5m` | таймаут отключения пустой сессии |
+| `DISCORD_BOT_MUSIC_DEFAULT_VOLUME` | `100` | начальная громкость |
+| `DISCORD_BOT_MUSIC_MAX_VOLUME` | `150` | максимальная громкость |
 
 Workflow кодирует эти значения перед SSH-передачей, а серверный deploy-скрипт проверяет формат до перезаписи защищённого `.env`.
 

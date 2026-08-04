@@ -22,7 +22,8 @@ class ModernCommandCatalogTest {
         assertEquals(commands.size(), names.size());
         assertEquals(Set.of(
                 "help", "version", "play", "pause", "resume",
-                "skip", "stop", "queue", "now", "seek"), names);
+                "skip", "stop", "queue", "now", "seek",
+                "volume", "repeat", "shuffle", "remove", "move", "clear"), names);
     }
 
     @Test
@@ -35,5 +36,30 @@ class ModernCommandCatalogTest {
 
         assertTrue(play.getOptions().stream()
                 .anyMatch(option -> option.getName().equals("query") && option.isAutoComplete()));
+    }
+
+    @Test
+    void queueExperienceCommandsExposeRequiredOptions() {
+        SlashCommandData repeat = command("repeat");
+        SlashCommandData move = command("move");
+        SlashCommandData volume = command("volume");
+
+        assertEquals(Set.of("mode"), repeat.getOptions().stream()
+                .map(option -> option.getName())
+                .collect(Collectors.toSet()));
+        assertEquals(Set.of("from", "to"), move.getOptions().stream()
+                .map(option -> option.getName())
+                .collect(Collectors.toSet()));
+        assertEquals(Set.of("level"), volume.getOptions().stream()
+                .map(option -> option.getName())
+                .collect(Collectors.toSet()));
+    }
+
+    private static SlashCommandData command(String name) {
+        CommandData command = ModernCommandCatalog.commands().stream()
+                .filter(candidate -> candidate.getName().equals(name))
+                .findFirst()
+                .orElseThrow();
+        return assertInstanceOf(SlashCommandData.class, command);
     }
 }
