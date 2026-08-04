@@ -21,7 +21,7 @@ class ModernCommandCatalogTest {
 
         assertEquals(commands.size(), names.size());
         assertEquals(Set.of(
-                "help", "version", "play", "pause", "resume",
+                "help", "version", "status", "play", "pause", "resume",
                 "skip", "stop", "queue", "now", "seek",
                 "volume", "repeat", "shuffle", "remove", "move", "clear", "settings"), names);
     }

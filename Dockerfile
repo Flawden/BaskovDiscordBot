@@ -28,10 +28,11 @@ RUN groupadd --gid 10001 app \
 
 COPY --from=builder --chown=app:app \
     /workspace/target/baskov-discord-bot.jar /app/app.jar
+COPY --chmod=0555 --chown=app:app deploy/healthcheck.sh /app/healthcheck.sh
 
 USER 10001:10001
 
 HEALTHCHECK --interval=15s --timeout=3s --start-period=45s --retries=4 \
-  CMD test -s /tmp/baskov-discord-bot.ready || exit 1
+  CMD ["/app/healthcheck.sh"]
 
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

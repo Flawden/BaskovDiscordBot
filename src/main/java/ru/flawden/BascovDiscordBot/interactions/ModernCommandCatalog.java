@@ -20,6 +20,7 @@ public final class ModernCommandCatalog {
         return List.of(
                 Commands.slash("help", "Показывает современные команды Баскова"),
                 Commands.slash("version", "Показывает версию запущенного бота"),
+                Commands.slash("status", "Показывает состояние Discord, музыки и команд"),
                 Commands.slash("play", "Ищет и добавляет песню")
                         .addOptions(new OptionData(
                                 OptionType.STRING,

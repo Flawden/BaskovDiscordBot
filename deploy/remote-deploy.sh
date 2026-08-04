@@ -103,6 +103,35 @@ write_env() {
   mv "${temp_file}" "${ENV_FILE}"
 }
 
+read_env_value() {
+  local key="$1"
+  awk -F= -v wanted="${key}" '$1 == wanted {sub(/^[^=]*=/, ""); print; exit}' "${ENV_FILE}"
+}
+
+verify_runtime() {
+  local expected_image="$1"
+  local actual_image restart_count
+
+  actual_image="$(docker inspect --format '{{.Config.Image}}' "${BOT_CONTAINER_NAME}")"
+  restart_count="$(docker inspect --format '{{.RestartCount}}' "${BOT_CONTAINER_NAME}")"
+
+  if [[ "${actual_image}" != "${expected_image}" ]]; then
+    echo "Container image mismatch: expected ${expected_image}, got ${actual_image}" >&2
+    return 1
+  fi
+  if [[ ! "${restart_count}" =~ ^[0-9]+$ ]] || (( restart_count != 0 )); then
+    echo "Container restarted during verification: count=${restart_count}" >&2
+    return 1
+  fi
+  if ! docker exec "${BOT_CONTAINER_NAME}" /app/healthcheck.sh; then
+    echo "In-container heartbeat verification failed" >&2
+    return 1
+  fi
+
+  echo "Runtime verification passed: image=${actual_image}, restarts=${restart_count}"
+  docker exec "${BOT_CONTAINER_NAME}" cat /tmp/baskov-discord-bot.ready
+}
+
 rollback() {
   echo "Deployment verification failed; attempting rollback" >&2
   if [[ ! -s "${PREVIOUS_ENV_FILE}" ]]; then
@@ -119,8 +148,12 @@ rollback() {
   for _ in {1..24}; do
     health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${BOT_CONTAINER_NAME}" 2>/dev/null || true)"
     if [[ "${health}" == "healthy" ]]; then
-      echo "Rollback succeeded"
-      return 0
+      rollback_image="$(read_env_value BOT_IMAGE)"
+      if verify_runtime "${rollback_image}"; then
+        echo "Rollback succeeded"
+        return 0
+      fi
+      break
     fi
     sleep 5
   done
@@ -138,9 +171,12 @@ for _ in {1..24}; do
   health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${BOT_CONTAINER_NAME}" 2>/dev/null || true)"
   case "${health}" in
     healthy)
-      echo "Deployment is healthy: ${BOT_IMAGE}"
-      docker image prune -f --filter 'until=168h' >/dev/null 2>&1 || true
-      exit 0
+      if verify_runtime "${BOT_IMAGE}"; then
+        echo "Deployment is healthy: ${BOT_IMAGE}"
+        docker image prune -f --filter 'until=168h' >/dev/null 2>&1 || true
+        exit 0
+      fi
+      break
       ;;
     unhealthy|exited|dead)
       break

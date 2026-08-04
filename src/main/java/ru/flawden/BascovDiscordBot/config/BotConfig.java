@@ -18,10 +18,9 @@ import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.events.EventJoin;
 import ru.flawden.BascovDiscordBot.interactions.ModernCommandCatalog;
 import ru.flawden.BascovDiscordBot.interactions.ModernInteractions;
+import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
+import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Clock;
 import java.util.EnumSet;
 import java.util.List;
@@ -33,9 +32,6 @@ import java.util.List;
 @Configuration
 @ConditionalOnProperty(name = "discordBot.enabled", havingValue = "true", matchIfMissing = true)
 public class BotConfig {
-
-    private static final Path READY_FILE = Path.of(System.getProperty("java.io.tmpdir"),
-            "baskov-discord-bot.ready");
 
     private static final EnumSet<GatewayIntent> REQUIRED_INTENTS = EnumSet.of(
             GatewayIntent.GUILD_MESSAGES,
@@ -49,19 +45,25 @@ public class BotConfig {
     private final EventJoin eventJoin;
     private final HelpEvent helpCommand;
     private final ModernInteractions modernInteractions;
+    private final OperationalMetrics operationalMetrics;
+    private final RuntimeHealthMonitor healthMonitor;
 
     public BotConfig(
             List<Event> events,
             Environment env,
             EventJoin eventJoin,
             HelpEvent helpCommand,
-            ModernInteractions modernInteractions) {
+            ModernInteractions modernInteractions,
+            OperationalMetrics operationalMetrics,
+            RuntimeHealthMonitor healthMonitor) {
         this.events = List.copyOf(events);
         this.token = env.getProperty("discordBot.token", "");
         this.prefix = env.getProperty("discordBot.prefix", "!");
         this.eventJoin = eventJoin;
         this.helpCommand = helpCommand;
         this.modernInteractions = modernInteractions;
+        this.operationalMetrics = operationalMetrics;
+        this.healthMonitor = healthMonitor;
         log.info("BotConfig initialized: token={}, prefix='{}', commands={}",
                 token.isBlank() ? "missing" : "present", prefix, events.size());
     }
@@ -73,7 +75,7 @@ public class BotConfig {
 
     @Bean
     public BotEvents createCommand(CommandCooldowns commandCooldowns) {
-        BotEvents botEvents = new BotEvents(prefix, events, commandCooldowns);
+        BotEvents botEvents = new BotEvents(prefix, events, commandCooldowns, operationalMetrics);
         helpCommand.setEvents(botEvents.getCommands());
         return botEvents;
     }
@@ -81,7 +83,6 @@ public class BotConfig {
     @Bean(destroyMethod = "shutdown")
     public JDA createBot(BotEvents botEvents) {
         try {
-            Files.deleteIfExists(READY_FILE);
             if (token.isBlank()) {
                 throw new IllegalStateException("DISCORD_BOT_TOKEN is not configured");
             }
@@ -98,14 +99,14 @@ public class BotConfig {
                     .addCommands(ModernCommandCatalog.commands())
                     .complete()
                     .size();
-            Files.writeString(READY_FILE, jda.getSelfUser().getId());
+            healthMonitor.start(jda, registeredCommands);
             log.info("JDA is ready: status={}, guilds={}, slashCommands={}",
                     jda.getStatus(), jda.getGuilds().size(), registeredCommands);
             return jda;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Discord bot startup was interrupted", exception);
-        } catch (IOException | RuntimeException exception) {
+        } catch (RuntimeException exception) {
             log.error("Failed to start JDA", exception);
             throw new IllegalStateException("Discord bot failed to start", exception);
         }

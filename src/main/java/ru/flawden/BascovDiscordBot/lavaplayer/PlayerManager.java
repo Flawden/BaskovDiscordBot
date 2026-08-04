@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.entities.Guild;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
+import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferences;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
 
@@ -220,6 +221,23 @@ public class PlayerManager {
         if (future != null) {
             future.cancel(false);
         }
+    }
+
+    public MusicRuntimeSnapshot runtimeSnapshot() {
+        int activeSessions = 0;
+        int playingSessions = 0;
+        int queuedTracks = 0;
+        for (GuildMusicManager manager : musicManagers.values()) {
+            if (!manager.isActive()) {
+                continue;
+            }
+            activeSessions++;
+            if (manager.getAudioPlayer().getPlayingTrack() != null) {
+                playingSessions++;
+            }
+            queuedTracks += manager.getScheduler().queueSize();
+        }
+        return new MusicRuntimeSnapshot(activeSessions, playingSessions, queuedTracks);
     }
 
     int activeSessionCount() {

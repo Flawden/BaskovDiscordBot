@@ -7,6 +7,36 @@
 ## [Unreleased]
 
 
+## [0.7.0] — 2026-08-04
+
+### Добавлено
+
+- Slash-команда `/status` с uptime, Discord gateway, количеством серверов, музыкальных сессий, ожидающих треков и агрегированными счётчиками команд.
+- `OperationalMetrics` с отдельными success/failure-счётчиками prefix-команд, slash-команд и component buttons.
+- Динамический `RuntimeHealthMonitor`, обновляющий readiness heartbeat каждые 10 секунд только при подключённом JDA gateway.
+- Контейнерный `/app/healthcheck.sh`, проверяющий одновременно статус `CONNECTED` и свежесть heartbeat.
+- Документ `docs/OPERATIONS.md` с operational-моделью, лимитами и post-deploy проверками.
+
+### Изменено
+
+- Docker healthcheck больше не доверяет бессрочному startup-файлу.
+- Production и local Compose получили лимиты `768 MiB`, `1 CPU`, `256 PIDs` и ротацию Docker-логов `3 × 10 MiB`.
+- Серверный deploy после состояния `healthy` сверяет immutable image, нулевой `RestartCount` и внутренний heartbeat.
+- `/help` теперь показывает `/status` среди сервисных команд.
+- Maven-версия приложения повышена до `0.7.0`.
+
+### Надёжность
+
+- Потерявший Discord gateway или переставший обновлять heartbeat процесс автоматически становится `unhealthy`.
+- Неудачная post-deploy проверка использует существующий rollback на предыдущий `.env` и образ.
+- Runtime status не раскрывает токены, пользовательские запросы, имена участников или содержимое очереди.
+
+### Тестирование
+
+- Добавлены unit-тесты operational counters и runtime heartbeat lifecycle.
+- Добавлен architecture contract для `/status`, свежего healthcheck, ресурсных границ, log rotation и post-deploy verification.
+
+
 ## [0.6.0] — 2026-08-04
 
 ### Добавлено

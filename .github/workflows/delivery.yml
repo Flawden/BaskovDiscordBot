@@ -96,6 +96,18 @@ jobs:
       - name: Make Maven wrapper executable
         run: chmod +x ./mvnw
 
+      - name: Validate operational assets
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          chmod +x deploy/remote-deploy.sh deploy/healthcheck.sh
+          bash -n deploy/remote-deploy.sh
+          sh -n deploy/healthcheck.sh
+          BOT_IMAGE=ghcr.io/example/baskov-discord-bot:ci \
+          BOT_CONTAINER_NAME=baskov-discord-bot-ci \
+          DISCORD_BOT_TOKEN=ci-placeholder \
+            docker compose -f deploy/docker-compose.yml config >/dev/null
+
       - name: Run Maven verification
         run: ./mvnw --batch-mode --no-transfer-progress clean verify
 

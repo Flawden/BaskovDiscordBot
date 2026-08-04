@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая стабильная версия: **v0.6.0**.
+Текущая стабильная версия: **v0.7.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA и LavaPlayer.
 
@@ -12,6 +12,9 @@
 - воспроизведение музыки, пауза, остановка и пропуск треков;
 - requester, ETA, repeat mode, shuffle, remove/move/clear и управление громкостью;
 - постоянные настройки громкости и повтора отдельно для каждого Discord-сервера;
+- команда `/status` с uptime, Discord gateway, музыкальными сессиями и агрегированными счётчиками команд;
+- динамический Docker heartbeat, который подтверждает свежее подключение к Discord, а не только факт старта;
+- ограничения CPU, памяти, PID и ротация Docker-логов;
 - управление музыкой только из общего voice channel с административным override;
 - bounded queue, лимит длительности и автоматическое отключение пустых сессий;
 - stateless-ядро команд с case-insensitive реестром и защитой от дубликатов;
@@ -45,7 +48,7 @@ docker compose up -d --build
 docker compose logs -f bot
 ```
 
-Боту не нужен входящий HTTP-порт. После успешного подключения к Discord приложение создаёт readiness-маркер, который используется Docker healthcheck.
+Боту не нужен входящий HTTP-порт. После подключения к Discord приложение обновляет readiness heartbeat каждые 10 секунд; Docker считает контейнер healthy только при свежем `CONNECTED`-сигнале.
 
 ### Настройки музыкальной сессии
 
@@ -62,6 +65,7 @@ Live-потоки отключены. Подробные правила voice-д
 Современный Discord-интерфейс описан в [`docs/MODERN-COMMANDS.md`](docs/MODERN-COMMANDS.md).
 Очередь и новые команды управления описаны в [`docs/QUEUE-EXPERIENCE.md`](docs/QUEUE-EXPERIENCE.md).
 Постоянные guild-настройки описаны в [`docs/GUILD-SETTINGS.md`](docs/GUILD-SETTINGS.md).
+Operations и health-модель описаны в [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 Релиз с Android описан в [`docs/TERMUX-RELEASE.md`](docs/TERMUX-RELEASE.md).
 
 ## CI/CD
@@ -92,7 +96,7 @@ ghcr.io/<owner>/<repository>:sha-<full-git-sha>
 ghcr.io/<owner>/<repository>:dev|latest
 ```
 
-На VPS всегда разворачивается immutable SHA-тег. После запуска workflow ждёт Docker healthcheck. При неуспешном старте автоматически восстанавливается предыдущий `.env` и предыдущий образ.
+На VPS всегда разворачивается immutable SHA-тег. После Docker healthcheck workflow дополнительно сверяет фактический image, `RestartCount` и внутренний heartbeat. При любой неудаче автоматически восстанавливаются предыдущий `.env` и предыдущий образ.
 
 ## Настройка GitHub
 

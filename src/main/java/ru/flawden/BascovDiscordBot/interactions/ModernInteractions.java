@@ -29,10 +29,14 @@ import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.RepeatMode;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
+import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
+import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
+import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferences;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
 
 import java.awt.Color;
+import java.time.Duration;
 import java.util.List;
 import java.util.OptionalLong;
 
@@ -50,6 +54,8 @@ public class ModernInteractions extends ListenerAdapter {
     private final RecentSearchHistory searchHistory;
     private final VersionEvent versionEvent;
     private final GuildPreferencesRepository preferencesRepository;
+    private final OperationalMetrics operationalMetrics;
+    private final RuntimeHealthMonitor healthMonitor;
 
     public ModernInteractions(
             PlayerManager playerManager,
@@ -58,7 +64,9 @@ public class ModernInteractions extends ListenerAdapter {
             MusicProperties musicProperties,
             RecentSearchHistory searchHistory,
             VersionEvent versionEvent,
-            GuildPreferencesRepository preferencesRepository) {
+            GuildPreferencesRepository preferencesRepository,
+            OperationalMetrics operationalMetrics,
+            RuntimeHealthMonitor healthMonitor) {
         this.playerManager = playerManager;
         this.controlPolicy = controlPolicy;
         this.queryResolver = queryResolver;
@@ -66,6 +74,8 @@ public class ModernInteractions extends ListenerAdapter {
         this.searchHistory = searchHistory;
         this.versionEvent = versionEvent;
         this.preferencesRepository = preferencesRepository;
+        this.operationalMetrics = operationalMetrics;
+        this.healthMonitor = healthMonitor;
     }
 
     @Override
@@ -83,6 +93,7 @@ public class ModernInteractions extends ListenerAdapter {
             switch (event.getName()) {
                 case "help" -> event.replyEmbeds(helpEmbed()).setEphemeral(true).queue();
                 case "version" -> event.replyEmbeds(versionEvent.buildEmbed()).setEphemeral(true).queue();
+                case "status" -> status(event);
                 case "play" -> play(event);
                 case "pause" -> pause(event, true);
                 case "resume" -> pause(event, false);
@@ -104,7 +115,9 @@ public class ModernInteractions extends ListenerAdapter {
                         .setEphemeral(true)
                         .queue();
             }
+            operationalMetrics.recordSuccess(OperationalMetrics.Channel.SLASH);
         } catch (RuntimeException exception) {
+            operationalMetrics.recordFailure(OperationalMetrics.Channel.SLASH);
             log.error("Slash command '{}' failed in guild {} for user {}",
                     event.getName(), event.getGuild().getId(), event.getUser().getId(), exception);
             if (!event.isAcknowledged()) {
@@ -142,6 +155,24 @@ public class ModernInteractions extends ListenerAdapter {
         if (!MusicControls.supports(event.getComponentId())) {
             return;
         }
+        try {
+            handleMusicButton(event);
+            operationalMetrics.recordSuccess(OperationalMetrics.Channel.BUTTON);
+        } catch (RuntimeException exception) {
+            operationalMetrics.recordFailure(OperationalMetrics.Channel.BUTTON);
+            log.error("Music button '{}' failed for user {}",
+                    event.getComponentId(), event.getUser().getId(), exception);
+            if (!event.isAcknowledged()) {
+                event.replyEmbeds(MusicEmbeds.error(
+                                "💥 Кнопка не сработала",
+                                "Произошла внутренняя ошибка. Попробуй ещё раз чуть позже."))
+                        .setEphemeral(true)
+                        .queue();
+            }
+        }
+    }
+
+    private void handleMusicButton(ButtonInteractionEvent event) {
         Guild guild = event.getGuild();
         Member member = event.getMember();
         if (guild == null || member == null) {
@@ -172,6 +203,43 @@ public class ModernInteractions extends ListenerAdapter {
             case MusicControls.REPEAT -> repeatFromButton(event, guild);
             default -> { }
         }
+    }
+
+    private void status(SlashCommandInteractionEvent event) {
+        RuntimeHealthMonitor.Snapshot runtime = healthMonitor.snapshot();
+        OperationalMetrics.Snapshot commands = operationalMetrics.snapshot();
+        MusicRuntimeSnapshot music = playerManager.runtimeSnapshot();
+
+        String discord = "Статус: `" + runtime.jdaStatus() + "`
+"
+                + "Серверов: `" + runtime.guildCount() + "`
+"
+                + "Slash-команд: `" + runtime.registeredSlashCommands() + "`";
+        String musicState = "Активных сессий: `" + music.activeSessions() + "`
+"
+                + "Сейчас играет: `" + music.playingSessions() + "`
+"
+                + "Треков в очередях: `" + music.queuedTracks() + "`";
+        String commandState = "Успешно: `" + commands.totalSuccesses() + "`
+"
+                + "Ошибок: `" + commands.totalFailures() + "`
+"
+                + "Prefix/Slash/Buttons: `"
+                + commands.prefixSuccesses() + "/"
+                + commands.slashSuccesses() + "/"
+                + commands.buttonSuccesses() + "`";
+
+        event.replyEmbeds(new EmbedBuilder()
+                        .setTitle("🩺 Состояние Baskov Discord Bot")
+                        .setDescription("Uptime: `" + formatDuration(commands.uptime()) + "`")
+                        .setColor("CONNECTED".equals(runtime.jdaStatus()) ? Color.GREEN : Color.ORANGE)
+                        .addField("Discord gateway", discord, true)
+                        .addField("Музыка", musicState, true)
+                        .addField("Команды с запуска", commandState, false)
+                        .setFooter("Health heartbeat обновляется каждые 10 секунд")
+                        .build())
+                .setEphemeral(true)
+                .queue();
     }
 
     private void play(SlashCommandInteractionEvent event) {
@@ -717,6 +785,18 @@ public class ModernInteractions extends ListenerAdapter {
                 .queue();
     }
 
+    private String formatDuration(Duration duration) {
+        long seconds = Math.max(0L, duration.toSeconds());
+        long days = seconds / 86_400L;
+        long hours = (seconds % 86_400L) / 3_600L;
+        long minutes = (seconds % 3_600L) / 60L;
+        long remainingSeconds = seconds % 60L;
+        if (days > 0) {
+            return "%dд %02d:%02d:%02d".formatted(days, hours, minutes, remainingSeconds);
+        }
+        return "%02d:%02d:%02d".formatted(hours, minutes, remainingSeconds);
+    }
+
     private MessageEmbed helpEmbed() {
         return new EmbedBuilder()
                 .setTitle("🎤 Современные команды Баскова")
@@ -726,7 +806,7 @@ public class ModernInteractions extends ListenerAdapter {
                 .addField("📋 Очередь", "`/queue` `/remove` `/move` `/shuffle` `/clear`", false)
                 .addField("🎚️ Режимы", "`/volume` `/repeat` `/now`", false)
                 .addField("⚙️ Настройки", "`/settings show` `/settings volume` `/settings repeat` `/settings reset`", false)
-                .addField("ℹ️ Сервис", "`/version` `/help`", false)
+                .addField("ℹ️ Сервис", "`/version` `/status` `/help`", false)
                 .addField("🖱️ Кнопки", "Пауза, пропуск, очередь, повтор и стоп доступны под музыкальными сообщениями.", false)
                 .addField("💡 Autocomplete", "`/play` предлагает твои недавние поисковые запросы.", false)
                 .build();
