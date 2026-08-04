@@ -7,6 +7,24 @@
 ## [Unreleased]
 
 
+## [0.9.2] — 2026-08-04
+
+### Исправлено
+
+- `VoiceConnectionCoordinatorTest` использует фактический JDA 6 тип `SelfMember`, возвращаемый `Guild#getSelfMember()`, вместо общего `Member`.
+- Устранён единственный обнаруженный `testCompile` blocker миграции JDA `6.5.0`.
+- `JdaSixSourceMigrationContractTest` защищает fixture от возврата к несовместимому типу `Member`.
+
+### Изменено
+
+- Maven-версия приложения повышена до `0.9.2`.
+- Runtime DAVE/E2EE migration, JDA `6.5.0`, Spring Boot `3.4.3`, Java 17, LavaPlayer `2.2.3`, Docker и deployment не менялись.
+
+### Тестирование
+
+- Тестовый baseline составляет 35 test classes / 109 `@Test` methods.
+- Hotfix предназначен для продолжения полного `clean verify` после успешной компиляции production-кода JDA 6.
+
 ## [0.9.1] — 2026-08-04
 
 ### Исправлено

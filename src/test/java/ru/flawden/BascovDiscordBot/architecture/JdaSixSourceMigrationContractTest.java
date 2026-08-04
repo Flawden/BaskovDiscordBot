@@ -41,6 +41,18 @@ class JdaSixSourceMigrationContractTest {
     }
 
     @Test
+    void voiceCoordinatorFixtureUsesJdaSixSelfMemberType() throws Exception {
+        String testSource = Files.readString(Path.of(
+                "src/test/java/ru/flawden/BascovDiscordBot/lavaplayer/VoiceConnectionCoordinatorTest.java"));
+
+        assertTrue(testSource.contains("import net.dv8tion.jda.api.entities.SelfMember;"));
+        assertTrue(compact(testSource).contains(
+                "SelfMemberselfMember=mock(SelfMember.class);"));
+        assertFalse(testSource.contains("import net.dv8tion.jda.api.entities.Member;"),
+                "Guild#getSelfMember returns SelfMember in JDA 6");
+    }
+
+    @Test
     void playbackSuccessStillDependsOnDiscordFramePolling() throws Exception {
         String manager = Files.readString(Path.of(
                 "src/main/java/ru/flawden/BascovDiscordBot/lavaplayer/PlayerManager.java"));

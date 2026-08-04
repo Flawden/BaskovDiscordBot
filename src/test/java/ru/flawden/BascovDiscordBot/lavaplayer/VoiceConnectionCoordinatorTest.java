@@ -2,7 +2,7 @@ package ru.flawden.BascovDiscordBot.lavaplayer;
 
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.GuildVoiceState;
-import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.SelfMember;
 import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
 import net.dv8tion.jda.api.entities.channel.unions.AudioChannelUnion;
 import net.dv8tion.jda.api.managers.AudioManager;
@@ -87,7 +87,7 @@ class VoiceConnectionCoordinatorTest {
         AudioManager audioManager = mock(AudioManager.class);
         AudioChannelUnion channel = mock(AudioChannelUnion.class);
         AudioPlayerSendHandler sendHandler = mock(AudioPlayerSendHandler.class);
-        Member selfMember = mock(Member.class);
+        SelfMember selfMember = mock(SelfMember.class);
         GuildVoiceState voiceState = mock(GuildVoiceState.class);
 
         when(guild.getIdLong()).thenReturn(42L);
