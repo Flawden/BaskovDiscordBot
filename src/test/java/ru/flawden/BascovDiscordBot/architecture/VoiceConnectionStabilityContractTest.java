@@ -20,8 +20,15 @@ class VoiceConnectionStabilityContractTest {
         String legacy = read("commands/music/SearchEvent.java");
 
         assertTrue(coordinator.contains("setAutoReconnect(false)"));
-        assertTrue(coordinator.contains("voiceConnectTimeout"));
-        assertTrue(coordinator.contains("voiceFailureCooldown"));
+        assertTrue(
+                coordinator.contains("properties.getVoiceConnectTimeout()"),
+                "Connection attempts must use the configured timeout accessor");
+        assertTrue(
+                coordinator.contains("properties.getVoiceFailureCooldown()"),
+                "Transport failures must use the configured cooldown accessor");
+        assertTrue(
+                coordinator.contains("@Autowired\n    public VoiceConnectionCoordinator"),
+                "Spring must select the production constructor when the test-only constructor also exists");
         assertTrue(modern.contains("ensureVoiceConnection"));
         assertTrue(legacy.contains("ensureVoiceConnection"));
         assertFalse(modern.contains("openAudioConnection"));

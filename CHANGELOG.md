@@ -7,6 +7,24 @@
 ## [Unreleased]
 
 
+## [0.7.4] — 2026-08-04
+
+### Исправлено
+
+- Исправлен ложный отказ `VoiceConnectionStabilityContractTest`: контракт теперь проверяет реальные вызовы `MusicProperties#getVoiceConnectTimeout()` и `MusicProperties#getVoiceFailureCooldown()`, а не несуществующие имена полей в `VoiceConnectionCoordinator`.
+- Исправлен запуск Spring test context: production-конструктор `VoiceConnectionCoordinator(MusicProperties)` явно отмечен `@Autowired`, поэтому Spring однозначно выбирает его при наличии package-private конструктора с `Clock` для unit-тестов.
+
+### Изменено
+
+- Maven-версия приложения повышена до `0.7.4`.
+- Voice state machine, timeout, cooldown, watchdog, Docker healthcheck и аварийный rollback не менялись.
+
+### Тестирование
+
+- Сохраняется baseline из 28 test classes / 84 `@Test` methods.
+- Контракт дополнительно защищает однозначный Spring constructor selection.
+
+
 ## [0.7.3] — 2026-08-04
 
 ### Исправлено

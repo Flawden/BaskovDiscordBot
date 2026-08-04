@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
 import net.dv8tion.jda.api.managers.AudioManager;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
 
@@ -41,6 +42,7 @@ public class VoiceConnectionCoordinator {
     private final Clock clock;
     private final AtomicBoolean active = new AtomicBoolean(true);
 
+    @Autowired
     public VoiceConnectionCoordinator(MusicProperties properties) {
         this(properties, Clock.systemUTC());
     }
