@@ -14,7 +14,7 @@
 - постоянные настройки громкости и повтора отдельно для каждого Discord-сервера;
 - команда `/status` с uptime, Discord gateway, музыкальными сессиями, voice transport snapshot и последними voice/source ошибками;
 - динамический Docker heartbeat, который подтверждает свежее подключение к Discord, а не только факт старта;
-- JDA 6.5.0 с настоящей JNI libDAVE 0.1.3, положительной protocol version и подтверждением playback только после реального запроса аудиофрейма Discord media transport;
+- JDA 6.5.0 с настоящей JNI libDAVE `ce725965e`, положительной protocol version и подтверждением playback только после реального запроса аудиофрейма Discord media transport;
 - bounded voice connection: одна попытка, отключённый auto-reconnect, startup-grace и observe-only watchdog по реальному запросу аудиофреймов;
 - защита от stale LavaPlayer callbacks после запуска fallback;
 - переключаемый diagnostic network mode `bridge|host` для A/B-проверки Docker UDP/NAT;

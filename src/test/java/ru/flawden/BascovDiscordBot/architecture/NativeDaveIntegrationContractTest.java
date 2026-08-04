@@ -15,7 +15,10 @@ class NativeDaveIntegrationContractTest {
         String pom = Files.readString(Path.of("pom.xml"));
         String compact = compact(pom);
 
-        assertTrue(compact.contains("<libdave-jvm.version>0.1.3</libdave-jvm.version>"));
+        assertTrue(compact.contains("<libdave-jvm.version>ce725965e</libdave-jvm.version>"));
+        assertTrue(compact.contains("<id>lavalink-libdave-snapshots</id>"));
+        assertTrue(compact.contains("<url>https://maven.lavalink.dev/snapshots</url>"));
+        assertFalse(compact.contains("<id>jitpack</id>"));
         assertTrue(compact.contains("<artifactId>adapter-jda</artifactId>"));
         assertTrue(compact.contains("<artifactId>impl-jni</artifactId>"));
         assertTrue(compact.contains("<artifactId>natives-linux-x86-64</artifactId>"));
@@ -23,6 +26,19 @@ class NativeDaveIntegrationContractTest {
         assertFalse(compact.contains(
                         "<groupId>club.minnced</groupId><artifactId>jdave-api</artifactId>"),
                 "JDAVE requires Java 25 and must not enter the Java 17 release line");
+    }
+
+    @Test
+    void libdaveUsesTheExactReleaseCommitSnapshotInsteadOfMissingTagArtifacts() throws Exception {
+        String pom = Files.readString(Path.of("pom.xml"));
+        String runtime = Files.readString(Path.of(
+                "src/main/java/ru/flawden/BascovDiscordBot/dave/DaveRuntimeInfo.java"));
+        String compactPom = compact(pom);
+
+        assertTrue(compactPom.contains("<libdave-jvm.version>ce725965e</libdave-jvm.version>"));
+        assertTrue(compactPom.contains("https://maven.lavalink.dev/snapshots"));
+        assertFalse(compactPom.contains("<libdave-jvm.version>0.1.3</libdave-jvm.version>"));
+        assertTrue(runtime.contains("IMPLEMENTATION_VERSION = \"ce725965e\""));
     }
 
     @Test

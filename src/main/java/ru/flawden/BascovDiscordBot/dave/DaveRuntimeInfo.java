@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class DaveRuntimeInfo {
 
     public static final String IMPLEMENTATION = "libdave-jvm";
-    public static final String IMPLEMENTATION_VERSION = "0.1.3";
+    public static final String IMPLEMENTATION_VERSION = "ce725965e";
 
     private final AtomicReference<Snapshot> snapshot = new AtomicReference<>(
             new Snapshot("NOT_LOADED", IMPLEMENTATION, IMPLEMENTATION_VERSION,

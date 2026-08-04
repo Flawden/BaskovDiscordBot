@@ -4,7 +4,7 @@
 
 Discord voice требует DAVE/E2EE. JDA 6 содержит только контракт `DaveSessionFactory` и по умолчанию использует `PassthroughDaveSessionFactory`, которая объявляет максимальную версию протокола `0`. Discord отклоняет такую voice-сессию close code `4017`.
 
-Baskov Discord Bot использует `libdave-jvm 0.1.3`:
+Baskov Discord Bot использует `libdave-jvm ce725965e`:
 
 - `moe.kyokobot.libdave:adapter-jda` — адаптер к JDA `DaveSessionFactory`;
 - `moe.kyokobot.libdave:impl-jni` — JNI-реализация поверх официальной C++ `libdave`;

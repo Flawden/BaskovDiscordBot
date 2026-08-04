@@ -7,6 +7,25 @@
 ## [Unreleased]
 
 
+## [0.9.5] — 2026-08-04
+
+### Исправлено
+
+- Устранён dependency-resolution blocker `v0.9.4`: артефакты `adapter-jda:0.1.3` и `impl-jni:0.1.3` отсутствуют и в Maven Central, и в ошибочно подключённом JitPack.
+- libdave-jvm переведён на документированную commit-snapshot поставку `ce725965e` из `https://maven.lavalink.dev/snapshots`. Это первые 9 символов commit SHA тега `0.1.3`.
+- Удалён бесполезный репозиторий JitPack; Java adapter, JNI implementation и platform natives используют один и тот же immutable commit pin.
+
+### Сохранено
+
+- Native libDAVE bootstrap, fail-fast protocol gate, JDA `6.5.0`, Java 17, Spring Boot `3.4.3` и LavaPlayer `2.2.3`.
+- Production Docker `bridge`, playback readiness по первому Discord audio-frame poll и rollback deployment.
+
+### Тестирование
+
+- Architecture contract проверяет Lavalink snapshot repository, commit pin `ce725965e`, отсутствие JitPack и отсутствие возврата к неразрешимому `0.1.3`.
+- Тестовый baseline повышен до 120 `@Test` methods.
+
+
 ## [0.9.4] — 2026-08-04
 
 ### Исправлено

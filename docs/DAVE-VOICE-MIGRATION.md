@@ -95,6 +95,6 @@ Playback confirmed
 
 ## Native implementation (v0.9.4)
 
-JDA 6 alone is insufficient: its default `PassthroughDaveSessionFactory` reports maximum protocol version `0`, which Discord rejects with close code `4017`. Release v0.9.4 installs `libdave-jvm 0.1.3`, validates the JNI runtime before JDA startup and injects `LDJDADaveSessionFactory` through `AudioModuleConfig`.
+JDA 6 alone is insufficient: its default `PassthroughDaveSessionFactory` reports maximum protocol version `0`, which Discord rejects with close code `4017`. Release v0.9.4 installs `libdave-jvm ce725965e`, validates the JNI runtime before JDA startup and injects `LDJDADaveSessionFactory` through `AudioModuleConfig`.
 
 See [`NATIVE-DAVE.md`](NATIVE-DAVE.md) for platform profiles, fail-fast behavior and smoke checks.

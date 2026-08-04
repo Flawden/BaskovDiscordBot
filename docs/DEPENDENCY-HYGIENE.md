@@ -72,4 +72,4 @@ Dependabot настроен игнорировать автоматически�
 
 ## Native libDAVE pin
 
-Voice encryption uses the isolated `libdave-jvm 0.1.3` line (`adapter-jda`, `impl-jni` and platform natives). It must be upgraded only in a dedicated voice migration release because Java adapter, JNI binding and native binaries have to stay on exactly the same version.
+Voice encryption uses the isolated `libdave-jvm ce725965e` line (`adapter-jda`, `impl-jni` and platform natives). It must be upgraded only in a dedicated voice migration release because Java adapter, JNI binding and native binaries have to stay on exactly the same version.

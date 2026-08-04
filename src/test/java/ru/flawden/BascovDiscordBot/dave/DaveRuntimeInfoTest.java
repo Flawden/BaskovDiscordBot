@@ -28,7 +28,7 @@ class DaveRuntimeInfoTest {
         assertTrue(snapshot.ready());
         assertEquals("READY", snapshot.status());
         assertEquals("libdave-jvm", snapshot.implementation());
-        assertEquals("0.1.3", snapshot.implementationVersion());
+        assertEquals("ce725965e", snapshot.implementationVersion());
         assertEquals(1, snapshot.maxProtocolVersion());
     }
 

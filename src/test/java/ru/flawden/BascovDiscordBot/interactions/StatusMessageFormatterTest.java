@@ -35,7 +35,7 @@ class StatusMessageFormatterTest {
         String rendered = StatusMessageFormatter.dave(info.snapshot());
 
         assertTrue(rendered.contains("Статус: `READY`"));
-        assertTrue(rendered.contains("Реализация: `libdave-jvm 0.1.3`"));
+        assertTrue(rendered.contains("Реализация: `libdave-jvm ce725965e`"));
         assertTrue(rendered.contains("Max protocol: `1`"));
         assertTrue(rendered.contains("Ошибка: `none`"));
     }
