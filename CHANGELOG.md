@@ -7,6 +7,23 @@
 ## [Unreleased]
 
 
+## [0.7.3] — 2026-08-04
+
+### Исправлено
+
+- Исправлена компиляция `VoiceConnectionCoordinatorTest` с JDA 5.3.0: `GuildVoiceState#getChannel()` возвращает `AudioChannelUnion`, поэтому Mockito fixture теперь использует тот же union-тип вместо несовместимого базового `AudioChannel`.
+- Maven снова проходит фазу `testCompile`, не меняя runtime-реализацию voice connection state machine.
+
+### Изменено
+
+- Maven-версия приложения повышена до `0.7.3`.
+- Runtime-код, voice timeout/cooldown/watchdog, Docker healthcheck и deployment rollback не менялись.
+
+### Тестирование
+
+- Сохраняется baseline из 28 test classes / 84 `@Test` methods; исправлен единственный compile-time mismatch в Mockito fixture.
+
+
 ## [0.7.2] — 2026-08-04
 
 ### Исправлено

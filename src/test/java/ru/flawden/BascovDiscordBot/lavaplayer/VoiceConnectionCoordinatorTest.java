@@ -4,6 +4,7 @@ import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.GuildVoiceState;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
+import net.dv8tion.jda.api.entities.channel.unions.AudioChannelUnion;
 import net.dv8tion.jda.api.managers.AudioManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -84,7 +85,7 @@ class VoiceConnectionCoordinatorTest {
     private static Fixture fixture(boolean audioConnected, boolean voiceStateConnected) {
         Guild guild = mock(Guild.class);
         AudioManager audioManager = mock(AudioManager.class);
-        AudioChannel channel = mock(AudioChannel.class);
+        AudioChannelUnion channel = mock(AudioChannelUnion.class);
         AudioPlayerSendHandler sendHandler = mock(AudioPlayerSendHandler.class);
         Member selfMember = mock(Member.class);
         GuildVoiceState voiceState = mock(GuildVoiceState.class);
