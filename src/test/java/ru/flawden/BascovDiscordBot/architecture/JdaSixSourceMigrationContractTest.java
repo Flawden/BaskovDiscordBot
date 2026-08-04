@@ -18,9 +18,13 @@ class JdaSixSourceMigrationContractTest {
         String controls = Files.readString(Path.of(
                 "src/main/java/ru/flawden/BascovDiscordBot/interactions/MusicControls.java"));
 
-        assertTrue(controls.contains("net.dv8tion.jda.api.components.ActionRow"));
-        assertTrue(controls.contains("net.dv8tion.jda.api.components.LayoutComponent"));
+        assertTrue(controls.contains("net.dv8tion.jda.api.components.actionrow.ActionRow"));
         assertTrue(controls.contains("net.dv8tion.jda.api.components.buttons.Button"));
+        assertTrue(compact(controls).contains("publicstaticList<ActionRow>rows()"));
+        assertFalse(controls.contains("net.dv8tion.jda.api.components.ActionRow"),
+                "ActionRow lives in the JDA 6 actionrow subpackage");
+        assertFalse(controls.contains("LayoutComponent"),
+                "MusicControls should expose the concrete ActionRow type instead of a removed base type");
         assertFalse(controls.contains("net.dv8tion.jda.api.interactions.components"),
                 "JDA 5 component packages must not return after the JDA 6 migration");
     }

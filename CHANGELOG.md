@@ -7,6 +7,24 @@
 ## [Unreleased]
 
 
+## [0.9.1] — 2026-08-04
+
+### Исправлено
+
+- `MusicControls` использует фактический пакет JDA 6 `net.dv8tion.jda.api.components.actionrow.ActionRow` вместо несуществующего `net.dv8tion.jda.api.components.ActionRow`.
+- Удалена ссылка на отсутствующий в JDA 6 тип `LayoutComponent`; метод `rows()` теперь возвращает конкретный `List<ActionRow>`.
+- `JdaSixSourceMigrationContractTest` проверяет реальную структуру component API JDA 6 и запрещает возврат ошибочных импортов.
+
+### Изменено
+
+- Maven-версия приложения повышена до `0.9.1`.
+- JDA остаётся `6.5.0`; DAVE readiness gate, Spring Boot `3.4.3`, Java 17, LavaPlayer `2.2.3`, Docker и deployment не менялись.
+
+### Тестирование
+
+- Тестовый baseline остаётся 36 test classes / 108 `@Test` methods.
+- Hotfix устраняет единственный обнаруженный production compile blocker перед первым полноценным JDA 6 migration gate.
+
 ## [0.9.0] — 2026-08-04
 
 ### Исправлено

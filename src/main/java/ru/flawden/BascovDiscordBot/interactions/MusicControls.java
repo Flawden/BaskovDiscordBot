@@ -1,7 +1,6 @@
 package ru.flawden.BascovDiscordBot.interactions;
 
-import net.dv8tion.jda.api.components.ActionRow;
-import net.dv8tion.jda.api.components.LayoutComponent;
+import net.dv8tion.jda.api.components.actionrow.ActionRow;
 import net.dv8tion.jda.api.components.buttons.Button;
 
 import java.util.List;
@@ -20,7 +19,7 @@ public final class MusicControls {
     private MusicControls() {
     }
 
-    public static List<LayoutComponent> rows() {
+    public static List<ActionRow> rows() {
         return List.of(ActionRow.of(
                 Button.primary(TOGGLE, "Пауза / играть"),
                 Button.secondary(SKIP, "Пропустить"),
