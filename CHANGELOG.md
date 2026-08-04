@@ -6,6 +6,27 @@
 
 ## [Unreleased]
 
+
+## [0.4.4] — 2026-08-04
+
+### Исправлено
+
+- Восстановлен последний подтверждённый совместимый dependency baseline после пакетного major-обновления, сломавшего компиляцию `MusicControls`.
+- JDA возвращён с `6.5.0` на `5.3.0`, совместимый с текущими package names `interactions.components.*`.
+- Spring Boot возвращён с `4.1.0` на проверенный `3.4.3`; migration на Boot 4 больше не смешивается с JDA migration.
+- GitHub Actions возвращены на последние реально зелёные major-теги текущего pipeline.
+
+### Изменено
+
+- Lombok, LavaPlayer и Maven Compiler Plugin возвращены к точным версиям зелёного `v0.4.3`, чтобы исключить несколько независимых переменных из одного hotfix.
+- Maven-версия приложения повышена до `0.4.4`.
+- Dependabot больше не предлагает автоматические major-обновления Maven и GitHub Actions.
+- Документирована политика: один major framework upgrade — один отдельный migration-релиз.
+
+### Тестирование
+
+- Добавлен `DependencyCompatibilityContractTest`, фиксирующий production-линию Spring Boot 3 / JDA 5 и известные зелёные major-теги GitHub Actions.
+
 ## [0.4.3] — 2026-08-04
 
 ### Исправлено
@@ -188,7 +209,8 @@
 - Immutable Docker images в GHCR.
 - Автоматический production-деплой на VPS с healthcheck и rollback.
 
-[Unreleased]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.4...HEAD
+[0.4.4]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.0...v0.4.1

@@ -46,3 +46,26 @@
 ## Обновления
 
 Dependabot ежемесячно проверяет Maven dependencies и GitHub Actions. Его pull request не объединяется автоматически: сначала должны пройти Maven verification и Docker build.
+
+## Совместимый baseline
+
+Текущая production-линия зафиксирована на совместимом наборе:
+
+- Spring Boot `3.4.3`;
+- JDA `5.3.0`;
+- LavaPlayer `2.2.3`;
+- Lombok `1.18.36`;
+- Maven Compiler Plugin `3.13.0`;
+- Java `17`.
+
+Major-переходы вроде Spring Boot `3 → 4` или JDA `5 → 6` не являются обычным обновлением версии. Они могут менять Java API, package names, lifecycle, тестовую инфраструктуру и требования к runtime. Такие переходы выполняются только отдельным migration-релизом с адаптацией исходников, тестов и deployment-контрактов.
+
+## Правило обновлений
+
+- Не объединять пакетные обновления нескольких framework-зависимостей в один production-коммит.
+- Один major framework upgrade — один отдельный релиз.
+- Сначала `./mvnw clean verify`, затем Docker build, только потом commit и push.
+- Если CI красный после dependency-only изменения, возвращаться к последнему зелёному baseline, а не адаптировать production-код вслепую под несколько новых major API одновременно.
+- GitHub Actions обновляются по тому же правилу: major-теги меняются отдельно и только после проверки синтаксиса workflow и реального CI-прогона.
+
+Dependabot настроен игнорировать автоматические major-обновления Maven и GitHub Actions. Minor/patch PR остаются доступными, но не объединяются автоматически.
