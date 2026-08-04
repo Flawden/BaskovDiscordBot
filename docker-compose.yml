@@ -15,4 +15,11 @@ services:
       DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT: ${DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT:-5m}
       DISCORD_BOT_MUSIC_DEFAULT_VOLUME: ${DISCORD_BOT_MUSIC_DEFAULT_VOLUME:-100}
       DISCORD_BOT_MUSIC_MAX_VOLUME: ${DISCORD_BOT_MUSIC_MAX_VOLUME:-150}
+      DISCORD_BOT_PERSISTENCE_FILE: /app/data/guild-settings.properties
+    volumes:
+      - bot-data:/app/data
     stop_grace_period: 30s
+
+volumes:
+  bot-data:
+    name: ${BOT_CONTAINER_NAME:-baskov-discord-bot}-data

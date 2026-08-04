@@ -11,6 +11,8 @@ import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.entities.Guild;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
+import ru.flawden.BascovDiscordBot.settings.GuildPreferences;
+import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
 
 import java.time.Duration;
 import java.util.Map;
@@ -34,9 +36,13 @@ public class PlayerManager {
     private final DefaultAudioPlayerManager audioPlayerManager;
     private final ScheduledExecutorService idleScheduler;
     private final MusicProperties properties;
+    private final GuildPreferencesRepository preferencesRepository;
 
-    public PlayerManager(MusicProperties properties) {
+    public PlayerManager(
+            MusicProperties properties,
+            GuildPreferencesRepository preferencesRepository) {
         this.properties = properties;
+        this.preferencesRepository = preferencesRepository;
         this.audioPlayerManager = new DefaultAudioPlayerManager();
         AudioSourceManagers.registerRemoteSources(this.audioPlayerManager);
         this.idleScheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -54,10 +60,12 @@ public class PlayerManager {
 
     public GuildMusicManager getMusicManager(Guild guild) {
         return musicManagers.computeIfAbsent(guild.getIdLong(), guildId -> {
+            GuildPreferences preferences = preferencesRepository.get(guildId);
             GuildMusicManager manager = new GuildMusicManager(
                     audioPlayerManager,
                     guild,
                     properties,
+                    preferences,
                     () -> cancelIdleDisconnect(guildId),
                     () -> scheduleIdleDisconnect(guild));
             guild.getAudioManager().setSendingHandler(manager.getSendHandler());

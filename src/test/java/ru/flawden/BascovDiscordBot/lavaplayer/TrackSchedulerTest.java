@@ -121,6 +121,22 @@ class TrackSchedulerTest {
         assertEquals(RepeatMode.TRACK, scheduler.getRepeatMode());
     }
 
+    @Test
+    void startsWithPersistedRepeatModeWithoutTriggeringActivity() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        AtomicInteger activity = new AtomicInteger();
+        TrackScheduler scheduler = new TrackScheduler(
+                player,
+                10,
+                Duration.ofHours(4),
+                RepeatMode.QUEUE,
+                activity::incrementAndGet,
+                () -> { });
+
+        assertEquals(RepeatMode.QUEUE, scheduler.getRepeatMode());
+        assertEquals(0, activity.get());
+    }
+
     private static AudioTrack track(String title, Duration duration) {
         AudioTrack track = mock(AudioTrack.class);
         AudioTrackInfo info = mock(AudioTrackInfo.class);

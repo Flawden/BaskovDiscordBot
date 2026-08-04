@@ -22,9 +22,9 @@ LABEL org.opencontainers.image.title="Baskov Discord Bot" \
 
 RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid app --create-home --shell /usr/sbin/nologin app \
-    && mkdir -p /app/logs \
+    && mkdir -p /app/logs /app/data \
     && chown -R app:app /app \
-    && chmod 750 /app/logs
+    && chmod 750 /app/logs /app/data
 
 COPY --from=builder --chown=app:app \
     /workspace/target/baskov-discord-bot.jar /app/app.jar

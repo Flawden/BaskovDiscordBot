@@ -44,3 +44,7 @@ docker logs --tail 200 baskov-discord-bot
 ```
 
 Ожидаемый health status: `healthy`.
+
+## Выпуск с Android
+
+Полный эквивалент PowerShell-процесса для Termux находится в [`TERMUX-RELEASE.md`](TERMUX-RELEASE.md). Он включает `/storage/emulated/0/Download/`, SHA-256, `git apply --check`, Maven verification, commit, push, tag и rollback.

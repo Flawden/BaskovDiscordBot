@@ -4,6 +4,7 @@ import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.CommandData;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
+import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
 
 import java.util.List;
 
@@ -63,7 +64,26 @@ public final class ModernCommandCatalog {
                 Commands.slash("move", "Перемещает трек внутри очереди")
                         .addOption(OptionType.INTEGER, "from", "Текущая позиция", true)
                         .addOption(OptionType.INTEGER, "to", "Новая позиция", true),
-                Commands.slash("clear", "Очищает ожидающие треки, не останавливая текущий")
+                Commands.slash("clear", "Очищает ожидающие треки, не останавливая текущий"),
+                Commands.slash("settings", "Показывает и изменяет постоянные настройки сервера")
+                        .addSubcommands(
+                                new SubcommandData("show", "Показывает сохранённые настройки"),
+                                new SubcommandData("volume", "Сохраняет громкость по умолчанию")
+                                        .addOption(
+                                                OptionType.INTEGER,
+                                                "level",
+                                                "Громкость для новых музыкальных сессий",
+                                                true),
+                                new SubcommandData("repeat", "Сохраняет режим повтора по умолчанию")
+                                        .addOptions(new OptionData(
+                                                OptionType.STRING,
+                                                "mode",
+                                                "Режим повтора для новых музыкальных сессий",
+                                                true)
+                                                .addChoice("Выключить", "off")
+                                                .addChoice("Текущий трек", "track")
+                                                .addChoice("Всю очередь", "queue")),
+                                new SubcommandData("reset", "Возвращает настройки сервера к значениям по умолчанию"))
         );
     }
 }

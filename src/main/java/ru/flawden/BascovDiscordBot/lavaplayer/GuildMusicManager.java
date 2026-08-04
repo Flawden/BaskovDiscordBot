@@ -5,6 +5,7 @@ import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
 import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.entities.Guild;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
+import ru.flawden.BascovDiscordBot.settings.GuildPreferences;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -28,16 +29,19 @@ public class GuildMusicManager {
             AudioPlayerManager manager,
             Guild guild,
             MusicProperties properties,
+            GuildPreferences preferences,
             Runnable onActivity,
             Runnable onIdle) {
         this.guild = Objects.requireNonNull(guild, "guild");
         this.onActivity = Objects.requireNonNull(onActivity, "onActivity");
         this.audioPlayer = Objects.requireNonNull(manager, "manager").createPlayer();
-        this.audioPlayer.setVolume(properties.getDefaultVolume());
+        GuildPreferences initialPreferences = Objects.requireNonNull(preferences, "preferences");
+        this.audioPlayer.setVolume(initialPreferences.volume());
         this.scheduler = new TrackScheduler(
                 audioPlayer,
                 properties.getMaxQueueSize(),
                 properties.getMaxTrackDuration(),
+                initialPreferences.repeatMode(),
                 this::markActivity,
                 onIdle);
         this.audioPlayer.addListener(this.scheduler);

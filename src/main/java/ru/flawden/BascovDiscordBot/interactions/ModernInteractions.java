@@ -4,6 +4,7 @@ import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.EmbedBuilder;
+import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.MessageEmbed;
@@ -28,6 +29,8 @@ import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.RepeatMode;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
+import ru.flawden.BascovDiscordBot.settings.GuildPreferences;
+import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
 
 import java.awt.Color;
 import java.util.List;
@@ -46,6 +49,7 @@ public class ModernInteractions extends ListenerAdapter {
     private final MusicProperties musicProperties;
     private final RecentSearchHistory searchHistory;
     private final VersionEvent versionEvent;
+    private final GuildPreferencesRepository preferencesRepository;
 
     public ModernInteractions(
             PlayerManager playerManager,
@@ -53,13 +57,15 @@ public class ModernInteractions extends ListenerAdapter {
             MediaQueryResolver queryResolver,
             MusicProperties musicProperties,
             RecentSearchHistory searchHistory,
-            VersionEvent versionEvent) {
+            VersionEvent versionEvent,
+            GuildPreferencesRepository preferencesRepository) {
         this.playerManager = playerManager;
         this.controlPolicy = controlPolicy;
         this.queryResolver = queryResolver;
         this.musicProperties = musicProperties;
         this.searchHistory = searchHistory;
         this.versionEvent = versionEvent;
+        this.preferencesRepository = preferencesRepository;
     }
 
     @Override
@@ -91,6 +97,7 @@ public class ModernInteractions extends ListenerAdapter {
                 case "remove" -> remove(event);
                 case "move" -> move(event);
                 case "clear" -> clear(event);
+                case "settings" -> settings(event);
                 default -> event.replyEmbeds(MusicEmbeds.error(
                                 "❌ Неизвестная slash-команда",
                                 "Обнови список команд Discord или используй `/help`."))
@@ -371,11 +378,12 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
-        manager.getAudioPlayer().setVolume((int) requested);
+        int volume = Math.toIntExact(requested);
+        manager.getAudioPlayer().setVolume(volume);
         manager.markActivity();
         event.replyEmbeds(MusicEmbeds.success(
                         "🔊 Громкость изменена",
-                        "Новая громкость: `" + requested + "%`."))
+                        "Новая громкость текущей сессии: `" + requested + "%`."))
                 .setComponents(MusicControls.rows())
                 .queue();
     }
@@ -405,7 +413,7 @@ public class ModernInteractions extends ListenerAdapter {
         manager.getScheduler().setRepeatMode(mode);
         event.replyEmbeds(MusicEmbeds.success(
                         "🔁 Режим повтора изменён",
-                        "Текущий режим: `" + mode.label() + "`."))
+                        "Текущий режим сессии: `" + mode.label() + "`."))
                 .setComponents(MusicControls.rows())
                 .queue();
     }
@@ -504,6 +512,105 @@ public class ModernInteractions extends ListenerAdapter {
                                 : "Удалено ожидающих треков: `" + removed
                                 + "`. Текущая песня продолжает играть."))
                 .queue();
+    }
+
+    private void settings(SlashCommandInteractionEvent event) {
+        String subcommand = event.getSubcommandName();
+        if (subcommand == null || "show".equals(subcommand)) {
+            GuildPreferences preferences = preferencesRepository.get(event.getGuild().getIdLong());
+            event.replyEmbeds(settingsEmbed(preferences)).setEphemeral(true).queue();
+            return;
+        }
+
+        if (!allowManageSettings(event)) {
+            return;
+        }
+
+        switch (subcommand) {
+            case "volume" -> updateDefaultVolume(event);
+            case "repeat" -> updateDefaultRepeat(event);
+            case "reset" -> resetSettings(event);
+            default -> event.replyEmbeds(MusicEmbeds.error(
+                            "⚙️ Неизвестная настройка",
+                            "Используй `/settings show`, `/settings volume`, `/settings repeat` или `/settings reset`."))
+                    .setEphemeral(true)
+                    .queue();
+        }
+    }
+
+    private void updateDefaultVolume(SlashCommandInteractionEvent event) {
+        long requested = event.getOption("level", -1L, OptionMapping::getAsLong);
+        if (requested < 0 || requested > musicProperties.getMaxVolume()) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🔊 Недопустимая громкость",
+                            "Укажи значение от `0` до `" + musicProperties.getMaxVolume() + "`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        int volume = Math.toIntExact(requested);
+        GuildPreferences preferences = preferencesRepository.saveVolume(event.getGuild().getIdLong(), volume);
+        playerManager.findMusicManager(event.getGuild()).ifPresent(manager -> {
+            manager.getAudioPlayer().setVolume(volume);
+            manager.markActivity();
+        });
+        event.replyEmbeds(settingsEmbed(preferences)).setEphemeral(true).queue();
+    }
+
+    private void updateDefaultRepeat(SlashCommandInteractionEvent event) {
+        String rawMode = event.getOption("mode", "off", OptionMapping::getAsString);
+        RepeatMode mode;
+        try {
+            mode = RepeatMode.parse(rawMode);
+        } catch (IllegalArgumentException exception) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🔁 Неизвестный режим",
+                            "Доступны режимы: `off`, `track` и `queue`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        GuildPreferences preferences = preferencesRepository.saveRepeatMode(
+                event.getGuild().getIdLong(), mode);
+        playerManager.findMusicManager(event.getGuild())
+                .ifPresent(manager -> manager.getScheduler().setRepeatMode(mode));
+        event.replyEmbeds(settingsEmbed(preferences)).setEphemeral(true).queue();
+    }
+
+    private void resetSettings(SlashCommandInteractionEvent event) {
+        GuildPreferences preferences = preferencesRepository.reset(event.getGuild().getIdLong());
+        playerManager.findMusicManager(event.getGuild()).ifPresent(manager -> {
+            manager.getAudioPlayer().setVolume(preferences.volume());
+            manager.getScheduler().setRepeatMode(preferences.repeatMode());
+        });
+        event.replyEmbeds(settingsEmbed(preferences))
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private boolean allowManageSettings(SlashCommandInteractionEvent event) {
+        Member member = event.getMember();
+        if (member.isOwner() || member.hasPermission(Permission.MANAGE_SERVER)) {
+            return true;
+        }
+        event.replyEmbeds(MusicEmbeds.error(
+                        "🔐 Недостаточно прав",
+                        "Изменять постоянные настройки может владелец сервера или участник с правом `Manage Server`."))
+                .setEphemeral(true)
+                .queue();
+        return false;
+    }
+
+    private MessageEmbed settingsEmbed(GuildPreferences preferences) {
+        return new EmbedBuilder()
+                .setTitle("⚙️ Настройки музыкального сервера")
+                .setColor(Color.ORANGE)
+                .addField("Громкость новых сессий", "`" + preferences.volume() + "%`", true)
+                .addField("Повтор новых сессий", "`" + preferences.repeatMode().label() + "`", true)
+                .setFooter("Настройки сохраняются между перезапусками и применяются к активной сессии сразу")
+                .build();
     }
 
     private GuildMusicManager activeManager(SlashCommandInteractionEvent event) {
@@ -618,6 +725,7 @@ public class ModernInteractions extends ListenerAdapter {
                 .addField("▶️ Воспроизведение", "`/play` `/pause` `/resume` `/skip` `/stop` `/seek`", false)
                 .addField("📋 Очередь", "`/queue` `/remove` `/move` `/shuffle` `/clear`", false)
                 .addField("🎚️ Режимы", "`/volume` `/repeat` `/now`", false)
+                .addField("⚙️ Настройки", "`/settings show` `/settings volume` `/settings repeat` `/settings reset`", false)
                 .addField("ℹ️ Сервис", "`/version` `/help`", false)
                 .addField("🖱️ Кнопки", "Пауза, пропуск, очередь, повтор и стоп доступны под музыкальными сообщениями.", false)
                 .addField("💡 Autocomplete", "`/play` предлагает твои недавние поисковые запросы.", false)

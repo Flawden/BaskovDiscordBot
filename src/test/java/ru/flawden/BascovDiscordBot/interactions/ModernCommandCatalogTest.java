@@ -23,7 +23,7 @@ class ModernCommandCatalogTest {
         assertEquals(Set.of(
                 "help", "version", "play", "pause", "resume",
                 "skip", "stop", "queue", "now", "seek",
-                "volume", "repeat", "shuffle", "remove", "move", "clear"), names);
+                "volume", "repeat", "shuffle", "remove", "move", "clear", "settings"), names);
     }
 
     @Test
@@ -52,6 +52,14 @@ class ModernCommandCatalogTest {
                 .collect(Collectors.toSet()));
         assertEquals(Set.of("level"), volume.getOptions().stream()
                 .map(option -> option.getName())
+                .collect(Collectors.toSet()));
+    }
+
+    @Test
+    void settingsCommandExposesPersistentPreferenceSubcommands() {
+        SlashCommandData settings = command("settings");
+        assertEquals(Set.of("show", "volume", "repeat", "reset"), settings.getSubcommands().stream()
+                .map(subcommand -> subcommand.getName())
                 .collect(Collectors.toSet()));
     }
 

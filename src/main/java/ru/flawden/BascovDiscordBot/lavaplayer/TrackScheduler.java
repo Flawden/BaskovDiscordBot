@@ -37,9 +37,20 @@ public class TrackScheduler extends AudioEventAdapter {
             Duration maxTrackDuration,
             Runnable onActivity,
             Runnable onIdle) {
+        this(audioPlayer, maxQueueSize, maxTrackDuration, RepeatMode.OFF, onActivity, onIdle);
+    }
+
+    public TrackScheduler(
+            AudioPlayer audioPlayer,
+            int maxQueueSize,
+            Duration maxTrackDuration,
+            RepeatMode initialRepeatMode,
+            Runnable onActivity,
+            Runnable onIdle) {
         this.audioPlayer = Objects.requireNonNull(audioPlayer, "audioPlayer");
         this.queue = new LinkedBlockingQueue<>(maxQueueSize);
         this.maxTrackDurationMillis = Objects.requireNonNull(maxTrackDuration, "maxTrackDuration").toMillis();
+        this.repeatMode = Objects.requireNonNull(initialRepeatMode, "initialRepeatMode");
         this.onActivity = Objects.requireNonNull(onActivity, "onActivity");
         this.onIdle = Objects.requireNonNull(onIdle, "onIdle");
     }
