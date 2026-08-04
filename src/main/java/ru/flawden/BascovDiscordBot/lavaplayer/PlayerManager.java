@@ -26,7 +26,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -84,8 +83,7 @@ public class PlayerManager {
                     properties,
                     preferences,
                     () -> cancelIdleDisconnect(guildId),
-                    () -> scheduleIdleDisconnect(guild),
-                    () -> submitPlaybackCleanup(guild));
+                    () -> scheduleIdleDisconnect(guild));
             guild.getAudioManager().setSendingHandler(manager.getSendHandler());
             return manager;
         });
@@ -289,23 +287,6 @@ public class PlayerManager {
                 && !track.getInfo().isStream
                 && track.getDuration() > 0L
                 && track.getDuration() <= properties.getMaxTrackDuration().toMillis();
-    }
-
-    private void submitPlaybackCleanup(Guild guild) {
-        try {
-            idleScheduler.execute(() -> {
-                GuildMusicManager manager = musicManagers.get(guild.getIdLong());
-                if (manager == null || !manager.isActive()) {
-                    return;
-                }
-                voiceConnections.recordTransportFailure(
-                        guild,
-                        "LavaPlayer stopped because Discord no longer requested audio frames");
-                stopAndRelease(guild);
-            });
-        } catch (RejectedExecutionException exception) {
-            log.debug("Playback cleanup ignored during shutdown for guild {}", guild.getId());
-        }
     }
 
     private void safeCloseAudio(Guild guild) {

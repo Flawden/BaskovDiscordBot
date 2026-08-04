@@ -7,6 +7,30 @@
 ## [Unreleased]
 
 
+## [0.7.6] — 2026-08-04
+
+### Исправлено
+
+- Удалён второй, обходной путь мгновенного отключения: `AudioTrackEndReason.CLEANUP` больше не вызывает немедленный `stopAndRelease`, минуя startup-grace и bounded voice watchdog.
+- При `CLEANUP` scheduler сначала пытается запустить резервный результат поиска; при отсутствии fallback продолжает обычную очередь или запускает стандартный idle-disconnect.
+- Удалён устаревший callback `onPlaybackCleanup`, который закрывал рабочую voice-сессию раньше, чем watchdog мог подтвердить реальный обрыв транспорта.
+
+### Диагностика
+
+- Зелёный `v0.7.5` подтвердил, что проблема оставалась не в CI и не в reconnect, а в отдельном runtime-path LavaPlayer cleanup.
+- Единственным компонентом, который теперь может аварийно закрыть voice transport, остаётся bounded watchdog после startup-grace и disconnect-grace.
+
+### Изменено
+
+- Maven-версия приложения повышена до `0.7.6`.
+- Connect timeout, cooldown, frame-demand telemetry, SoundCloud fallback, Docker healthcheck и rollback semantics сохранены.
+
+### Тестирование
+
+- Тесты защищают два сценария `CLEANUP`: переход на fallback без отключения и обычный переход к очереди/idle без аварийного закрытия voice-сессии.
+- Тестовый baseline повышен до 31 test classes / 90 `@Test` methods.
+
+
 ## [0.7.5] — 2026-08-04
 
 ### Исправлено

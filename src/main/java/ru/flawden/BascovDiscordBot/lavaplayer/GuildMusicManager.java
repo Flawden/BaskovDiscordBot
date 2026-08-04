@@ -31,8 +31,7 @@ public class GuildMusicManager {
             MusicProperties properties,
             GuildPreferences preferences,
             Runnable onActivity,
-            Runnable onIdle,
-            Runnable onPlaybackCleanup) {
+            Runnable onIdle) {
         this.guild = Objects.requireNonNull(guild, "guild");
         this.onActivity = Objects.requireNonNull(onActivity, "onActivity");
         this.audioPlayer = Objects.requireNonNull(manager, "manager").createPlayer();
@@ -44,8 +43,7 @@ public class GuildMusicManager {
                 properties.getMaxTrackDuration(),
                 initialPreferences.repeatMode(),
                 this::markActivity,
-                onIdle,
-                Objects.requireNonNull(onPlaybackCleanup, "onPlaybackCleanup"));
+                onIdle);
         this.audioPlayer.addListener(this.scheduler);
         this.sendHandler = new AudioPlayerSendHandler(this.audioPlayer);
         log.info("Music session created for guild {}", guild.getId());

@@ -71,3 +71,8 @@ Voice connection ready ...
 ## Emergency deployment
 
 Если production-контейнер был вручную остановлен из-за voice-loop, deployment запоминает это состояние. При неудаче нового образа rollback восстанавливает предыдущий `.env`, но не запускает известный проблемный контейнер снова.
+
+
+## v0.7.6
+
+`AudioTrackEndReason.CLEANUP` больше не закрывает voice-сессию напрямую. Scheduler пробует fallback/очередь, а реальный обрыв подтверждает bounded watchdog.

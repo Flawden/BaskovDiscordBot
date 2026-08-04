@@ -47,14 +47,14 @@ class VoiceConnectionStabilityContractTest {
     }
 
     @Test
-    void lavaplayerCleanupClosesBrokenVoiceSession() throws IOException {
+    void lavaplayerCleanupCannotBypassTheBoundedVoiceWatchdog() throws IOException {
         String scheduler = read("lavaplayer/TrackScheduler.java");
         String player = read("lavaplayer/PlayerManager.java");
 
         assertTrue(scheduler.contains("AudioTrackEndReason.CLEANUP"));
-        assertTrue(scheduler.contains("onPlaybackCleanup.run()"));
-        assertTrue(player.contains("recordTransportFailure"));
-        assertTrue(player.contains("safeCloseAudio"));
+        assertTrue(scheduler.contains("startFallback(track, \"cleanup\")"));
+        assertFalse(scheduler.contains("onPlaybackCleanup.run()"));
+        assertFalse(player.contains("submitPlaybackCleanup"));
         assertTrue(player.contains("hasRecentFrameRequest"));
         assertTrue(player.contains("voiceWatchdogNotBefore"));
         assertFalse(player.contains("!playbackExpected || guild.getAudioManager().isConnected()"));

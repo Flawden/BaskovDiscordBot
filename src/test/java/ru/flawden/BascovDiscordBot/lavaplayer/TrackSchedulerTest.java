@@ -123,25 +123,48 @@ class TrackSchedulerTest {
 
 
     @Test
-    void cleanupEndReasonClosesUnstableVoiceSessionInsteadOfStartingNextTrack() {
+    void cleanupEndReasonUsesFallbackWithoutClosingVoiceSession() {
         AudioPlayer player = mock(AudioPlayer.class);
-        AtomicInteger cleanup = new AtomicInteger();
+        AtomicInteger idle = new AtomicInteger();
         TrackScheduler scheduler = new TrackScheduler(
                 player,
                 10,
                 Duration.ofHours(4),
                 RepeatMode.OFF,
                 () -> { },
+                idle::incrementAndGet);
+        AudioTrack current = track("Unstable", Duration.ofMinutes(3));
+        AudioTrack fallback = track("Fallback", Duration.ofMinutes(3));
+        when(player.startTrack(current, true)).thenReturn(true);
+        scheduler.queue(current, TrackRequester.unknown(), List.of(fallback));
+
+        scheduler.onTrackEnd(player, current, AudioTrackEndReason.CLEANUP);
+
+        verify(player).startTrack(fallback, false);
+        assertSame(fallback, scheduler.getCurrentRequest().track());
+        assertEquals(0, idle.get());
+    }
+
+    @Test
+    void cleanupWithoutFallbackMovesToQueueOrSchedulesNormalIdleDisconnect() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        AtomicInteger idle = new AtomicInteger();
+        TrackScheduler scheduler = new TrackScheduler(
+                player,
+                10,
+                Duration.ofHours(4),
+                RepeatMode.OFF,
                 () -> { },
-                cleanup::incrementAndGet);
+                idle::incrementAndGet);
         AudioTrack current = track("Unstable", Duration.ofMinutes(3));
         when(player.startTrack(current, true)).thenReturn(true);
         scheduler.queue(current);
 
         scheduler.onTrackEnd(player, current, AudioTrackEndReason.CLEANUP);
 
-        assertEquals(1, cleanup.get());
+        verify(player).stopTrack();
         assertEquals(null, scheduler.getCurrentRequest());
+        assertEquals(1, idle.get());
     }
 
     @Test
