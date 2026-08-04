@@ -7,6 +7,22 @@
 ## [Unreleased]
 
 
+## [0.5.1] — 2026-08-04
+
+### Исправлено
+
+- Исправлена компиляция slash-команд `/remove` и `/move` с JDA 5.3.0: значения integer options теперь преобразуются из `Long` через `Math.toIntExact(...)` вместо недопустимого прямого cast `Long` в `int`.
+- GitHub Actions снова проходит фазу Maven `compile` для релиза Queue Experience.
+
+### Изменено
+
+- Maven-версия приложения повышена до `0.5.1`.
+- Runtime-семантика очереди, requester, ETA, repeat, shuffle, remove/move/clear и deployment не менялись.
+
+### Тестирование
+
+- `QueueExperienceContractTest` защищает три integer option conversion от возврата прямого `(int) event.getOption(...)`.
+
 ## [0.5.0] — 2026-08-04
 
 ### Добавлено

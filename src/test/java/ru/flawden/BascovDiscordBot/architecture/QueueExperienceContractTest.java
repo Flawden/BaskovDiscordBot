@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class QueueExperienceContractTest {
@@ -33,6 +34,19 @@ class QueueExperienceContractTest {
             assertTrue(catalog.contains("Commands.slash(\"" + command + "\""), command);
             assertTrue(interactions.contains("case \"" + command + "\""), command);
         }
+    }
+
+    @Test
+    void integerSlashOptionsUseCheckedLongToIntConversion() throws IOException {
+        String interactions = read("interactions/ModernInteractions.java");
+
+        assertFalse(interactions.contains("(int) event.getOption("));
+        assertTrue(interactions.contains(
+                "Math.toIntExact(event.getOption(\"position\", -1L, OptionMapping::getAsLong))"));
+        assertTrue(interactions.contains(
+                "Math.toIntExact(event.getOption(\"from\", -1L, OptionMapping::getAsLong))"));
+        assertTrue(interactions.contains(
+                "Math.toIntExact(event.getOption(\"to\", -1L, OptionMapping::getAsLong))"));
     }
 
     @Test

@@ -444,7 +444,7 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
-        int position = (int) event.getOption("position", -1L, OptionMapping::getAsLong);
+        int position = Math.toIntExact(event.getOption("position", -1L, OptionMapping::getAsLong));
         TrackRequest removed = manager.getScheduler().removeAt(position);
         if (removed == null) {
             event.replyEmbeds(MusicEmbeds.error(
@@ -470,8 +470,8 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
-        int from = (int) event.getOption("from", -1L, OptionMapping::getAsLong);
-        int to = (int) event.getOption("to", -1L, OptionMapping::getAsLong);
+        int from = Math.toIntExact(event.getOption("from", -1L, OptionMapping::getAsLong));
+        int to = Math.toIntExact(event.getOption("to", -1L, OptionMapping::getAsLong));
         if (!manager.getScheduler().move(from, to)) {
             event.replyEmbeds(MusicEmbeds.error(
                             "↕️ Перемещение не выполнено",
