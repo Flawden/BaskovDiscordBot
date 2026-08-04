@@ -7,6 +7,24 @@
 ## [Unreleased]
 
 
+## [0.7.1] — 2026-08-04
+
+### Исправлено
+
+- Исправлена компиляция `/status`: физические переводы строк больше не попадают внутрь обычных Java string literals.
+- Формирование трёх секций статуса вынесено в `StatusMessageFormatter` и использует `String.join("\n", ...)`.
+
+### Изменено
+
+- Maven-версия приложения повышена до `0.7.1`.
+- Runtime health, Docker limits, deployment verification и пользовательская семантика `/status` не менялись.
+
+### Тестирование
+
+- Добавлен unit-тест точного многострочного формата Discord, Music и command metrics секций.
+- Тестовый baseline повышен до 26 test classes / 75 `@Test` methods.
+
+
 ## [0.7.0] — 2026-08-04
 
 ### Добавлено

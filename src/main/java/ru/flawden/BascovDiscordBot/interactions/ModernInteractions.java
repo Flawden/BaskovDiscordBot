@@ -210,24 +210,9 @@ public class ModernInteractions extends ListenerAdapter {
         OperationalMetrics.Snapshot commands = operationalMetrics.snapshot();
         MusicRuntimeSnapshot music = playerManager.runtimeSnapshot();
 
-        String discord = "Статус: `" + runtime.jdaStatus() + "`
-"
-                + "Серверов: `" + runtime.guildCount() + "`
-"
-                + "Slash-команд: `" + runtime.registeredSlashCommands() + "`";
-        String musicState = "Активных сессий: `" + music.activeSessions() + "`
-"
-                + "Сейчас играет: `" + music.playingSessions() + "`
-"
-                + "Треков в очередях: `" + music.queuedTracks() + "`";
-        String commandState = "Успешно: `" + commands.totalSuccesses() + "`
-"
-                + "Ошибок: `" + commands.totalFailures() + "`
-"
-                + "Prefix/Slash/Buttons: `"
-                + commands.prefixSuccesses() + "/"
-                + commands.slashSuccesses() + "/"
-                + commands.buttonSuccesses() + "`";
+        String discord = StatusMessageFormatter.discord(runtime);
+        String musicState = StatusMessageFormatter.music(music);
+        String commandState = StatusMessageFormatter.commands(commands);
 
         event.replyEmbeds(new EmbedBuilder()
                         .setTitle("🩺 Состояние Baskov Discord Bot")
