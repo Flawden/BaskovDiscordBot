@@ -32,6 +32,7 @@ import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
+import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferences;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
 
@@ -209,9 +210,12 @@ public class ModernInteractions extends ListenerAdapter {
         RuntimeHealthMonitor.Snapshot runtime = healthMonitor.snapshot();
         OperationalMetrics.Snapshot commands = operationalMetrics.snapshot();
         MusicRuntimeSnapshot music = playerManager.runtimeSnapshot();
+        VoiceDiagnosticSnapshot voice = playerManager.voiceDiagnosticsSnapshot(event.getGuild());
 
         String discord = StatusMessageFormatter.discord(runtime);
         String musicState = StatusMessageFormatter.music(music);
+        String voiceState = StatusMessageFormatter.voice(voice);
+        String voiceHistory = StatusMessageFormatter.voiceHistory(voice);
         String commandState = StatusMessageFormatter.commands(commands);
 
         event.replyEmbeds(new EmbedBuilder()
@@ -220,6 +224,8 @@ public class ModernInteractions extends ListenerAdapter {
                         .setColor("CONNECTED".equals(runtime.jdaStatus()) ? Color.GREEN : Color.ORANGE)
                         .addField("Discord gateway", discord, true)
                         .addField("Музыка", musicState, true)
+                        .addField("Voice transport", voiceState, true)
+                        .addField("Voice history", voiceHistory, false)
                         .addField("Команды с запуска", commandState, false)
                         .setFooter("Health heartbeat обновляется каждые 10 секунд")
                         .build())

@@ -41,7 +41,14 @@ jobs:
           BOT_IMAGE=ghcr.io/example/baskov-discord-bot:ci \
           BOT_CONTAINER_NAME=baskov-discord-bot-ci \
           DISCORD_BOT_TOKEN=ci-placeholder \
+          BOT_NETWORK_MODE=bridge \
             docker compose -f deploy/docker-compose.yml config >/dev/null
+          BOT_IMAGE=ghcr.io/example/baskov-discord-bot:ci \
+          BOT_CONTAINER_NAME=baskov-discord-bot-ci \
+          DISCORD_BOT_TOKEN=ci-placeholder \
+          BOT_NETWORK_MODE=host \
+            docker compose -f deploy/docker-compose.yml \
+              -f deploy/docker-compose.host-network.yml config >/dev/null
 
       - name: Run Maven verification
         run: ./mvnw --batch-mode --no-transfer-progress clean verify

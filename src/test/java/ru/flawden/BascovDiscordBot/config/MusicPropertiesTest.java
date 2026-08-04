@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class MusicPropertiesTest {
@@ -19,6 +20,7 @@ class MusicPropertiesTest {
         assertEquals(Duration.ofSeconds(15), properties.getVoiceConnectTimeout());
         assertEquals(Duration.ofSeconds(30), properties.getVoiceFailureCooldown());
         assertEquals(Duration.ofSeconds(5), properties.getVoiceDisconnectGrace());
+        assertFalse(properties.isVoiceWatchdogEnforce());
         assertEquals(100, properties.getDefaultVolume());
         assertEquals(150, properties.getMaxVolume());
     }

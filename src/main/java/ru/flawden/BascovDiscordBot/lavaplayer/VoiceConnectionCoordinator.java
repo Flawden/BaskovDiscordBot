@@ -8,6 +8,7 @@ import net.dv8tion.jda.api.managers.AudioManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
+import ru.flawden.BascovDiscordBot.operations.VoiceDiagnostics;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -39,16 +40,27 @@ public class VoiceConnectionCoordinator {
     private final Map<Long, Instant> cooldownUntil = new ConcurrentHashMap<>();
     private final ScheduledExecutorService scheduler;
     private final MusicProperties properties;
+    private final VoiceDiagnostics diagnostics;
     private final Clock clock;
     private final AtomicBoolean active = new AtomicBoolean(true);
 
     @Autowired
-    public VoiceConnectionCoordinator(MusicProperties properties) {
-        this(properties, Clock.systemUTC());
+    public VoiceConnectionCoordinator(
+            MusicProperties properties,
+            VoiceDiagnostics diagnostics) {
+        this(properties, diagnostics, Clock.systemUTC());
     }
 
     VoiceConnectionCoordinator(MusicProperties properties, Clock clock) {
+        this(properties, new VoiceDiagnostics("test", properties, clock), clock);
+    }
+
+    VoiceConnectionCoordinator(
+            MusicProperties properties,
+            VoiceDiagnostics diagnostics,
+            Clock clock) {
         this.properties = Objects.requireNonNull(properties, "properties");
+        this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable, "baskov-voice-connection");
@@ -88,6 +100,7 @@ public class VoiceConnectionCoordinator {
 
         AudioManager audioManager = guild.getAudioManager();
         if (isConnectedTo(guild, audioManager, target)) {
+            diagnostics.controlState(guildId, target.getIdLong(), "CONNECTED_REUSED");
             audioManager.setAutoReconnect(false);
             audioManager.setSendingHandler(sendHandler);
             return CompletableFuture.completedFuture(result(
@@ -116,6 +129,7 @@ public class VoiceConnectionCoordinator {
                     future,
                     clock.instant().plus(properties.getVoiceConnectTimeout()));
             attempts.put(guildId, attempt);
+            diagnostics.connectionRequested(guildId, target.getIdLong());
 
             try {
                 audioManager.setAutoReconnect(false);
@@ -155,6 +169,7 @@ public class VoiceConnectionCoordinator {
             attempt.cancelPoller();
             attempt.future().complete(result(VoiceConnectionResult.Status.FAILED, reason));
         }
+        diagnostics.voiceFailure(guildId, reason);
         safeClose(guild, guild.getAudioManager());
         log.error("Voice transport failure: guild={}, cooldown={}, reason={}",
                 guild.getId(), properties.getVoiceFailureCooldown(), reason);
@@ -167,6 +182,7 @@ public class VoiceConnectionCoordinator {
             attempt.future().complete(result(
                     VoiceConnectionResult.Status.FAILED,
                     "Voice connection attempt was cancelled"));
+            diagnostics.controlState(guild.getIdLong(), attempt.channelId(), "CANCELLED");
         }
     }
 
@@ -190,6 +206,10 @@ public class VoiceConnectionCoordinator {
         String state = state(audioManager);
         if (!state.equals(attempt.lastState())) {
             attempt.lastState(state);
+            diagnostics.controlState(
+                    attempt.guild().getIdLong(),
+                    attempt.channelId(),
+                    state);
             log.info("Voice connection state: guild={}, channel={}, state={}",
                     attempt.guild().getId(), attempt.target().getId(), state);
         }
@@ -213,6 +233,10 @@ public class VoiceConnectionCoordinator {
             return;
         }
         attempt.cancelPoller();
+        diagnostics.controlState(
+                attempt.guild().getIdLong(),
+                attempt.channelId(),
+                "CONNECTED");
         attempt.future().complete(result);
         log.info("Voice connection ready: guild={}, channel={}",
                 attempt.guild().getId(), attempt.target().getId());
@@ -230,6 +254,11 @@ public class VoiceConnectionCoordinator {
                     attempt.guild().getIdLong(),
                     clock.instant().plus(properties.getVoiceFailureCooldown()));
         }
+        diagnostics.voiceFailure(attempt.guild().getIdLong(), status + ": " + details);
+        diagnostics.controlState(
+                attempt.guild().getIdLong(),
+                attempt.channelId(),
+                status.name());
         safeClose(attempt.guild(), attempt.audioManager());
         attempt.future().complete(result(status, details));
         log.warn("Voice connection failed: guild={}, channel={}, status={}, details={}",

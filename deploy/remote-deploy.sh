@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 DEPLOY_DIR="${1:?Deployment directory is required}"
 COMPOSE_FILE="${DEPLOY_DIR}/docker-compose.yml"
+HOST_COMPOSE_FILE="${DEPLOY_DIR}/docker-compose.host-network.yml"
 INPUT_FILE="${DEPLOY_DIR}/.deploy-input"
 ENV_FILE="${DEPLOY_DIR}/.env"
 PREVIOUS_ENV_FILE="${DEPLOY_DIR}/.env.previous"
@@ -29,6 +30,9 @@ source "${INPUT_FILE}"
 : "${DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT_B64:?DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT_B64 is missing}"
 : "${DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN_B64:?DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN_B64 is missing}"
 : "${DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE_B64:?DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE_B64 is missing}"
+: "${DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE_B64:?DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE_B64 is missing}"
+: "${BOT_NETWORK_MODE_B64:?BOT_NETWORK_MODE_B64 is missing}"
+: "${DISCORD_BOT_VOICE_LOG_LEVEL_B64:?DISCORD_BOT_VOICE_LOG_LEVEL_B64 is missing}"
 : "${DISCORD_BOT_MUSIC_DEFAULT_VOLUME_B64:?DISCORD_BOT_MUSIC_DEFAULT_VOLUME_B64 is missing}"
 : "${DISCORD_BOT_MUSIC_MAX_VOLUME_B64:?DISCORD_BOT_MUSIC_MAX_VOLUME_B64 is missing}"
 
@@ -44,6 +48,9 @@ DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT="$(decode "${DISCORD_BOT_MUSIC_IDLE_DI
 DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT="$(decode "${DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT_B64}")"
 DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN="$(decode "${DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN_B64}")"
 DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE="$(decode "${DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE_B64}")"
+DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE="$(decode "${DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE_B64}")"
+BOT_NETWORK_MODE="$(decode "${BOT_NETWORK_MODE_B64}")"
+DISCORD_BOT_VOICE_LOG_LEVEL="$(decode "${DISCORD_BOT_VOICE_LOG_LEVEL_B64}")"
 DISCORD_BOT_MUSIC_DEFAULT_VOLUME="$(decode "${DISCORD_BOT_MUSIC_DEFAULT_VOLUME_B64}")"
 DISCORD_BOT_MUSIC_MAX_VOLUME="$(decode "${DISCORD_BOT_MUSIC_MAX_VOLUME_B64}")"
 
@@ -78,6 +85,22 @@ if [[ ! "${DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN}" =~ ^[0-9]+(ms|s|m)$ ]]; th
 fi
 if [[ ! "${DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE}" =~ ^[1-9][0-9]*(ms|s|m)$ ]]; then
   echo "Music voice disconnect grace must be a positive duration such as 5s" >&2
+  exit 1
+fi
+if [[ ! "${DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE}" =~ ^(true|false)$ ]]; then
+  echo "Voice watchdog enforce must be true or false" >&2
+  exit 1
+fi
+if [[ ! "${BOT_NETWORK_MODE}" =~ ^(bridge|host)$ ]]; then
+  echo "Bot network mode must be bridge or host" >&2
+  exit 1
+fi
+if [[ ! "${DISCORD_BOT_VOICE_LOG_LEVEL}" =~ ^(TRACE|DEBUG|INFO|WARN|ERROR|OFF)$ ]]; then
+  echo "Discord voice log level is invalid" >&2
+  exit 1
+fi
+if [[ "${BOT_NETWORK_MODE}" == "host" && ! -f "${HOST_COMPOSE_FILE}" ]]; then
+  echo "Host-network compose override is missing" >&2
   exit 1
 fi
 if [[ ! "${DISCORD_BOT_MUSIC_MAX_VOLUME}" =~ ^[0-9]+$ ]] \
@@ -124,11 +147,27 @@ write_env() {
     printf 'DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT=%s\n' "${DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT}"
     printf 'DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN=%s\n' "${DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN}"
     printf 'DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE=%s\n' "${DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE}"
+    printf 'DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE=%s\n' "${DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE}"
+    printf 'BOT_NETWORK_MODE=%s\n' "${BOT_NETWORK_MODE}"
+    printf 'DISCORD_BOT_VOICE_LOG_LEVEL=%s\n' "${DISCORD_BOT_VOICE_LOG_LEVEL}"
     printf 'DISCORD_BOT_MUSIC_DEFAULT_VOLUME=%s\n' "${DISCORD_BOT_MUSIC_DEFAULT_VOLUME}"
     printf 'DISCORD_BOT_MUSIC_MAX_VOLUME=%s\n' "${DISCORD_BOT_MUSIC_MAX_VOLUME}"
   } > "${temp_file}"
   chmod 600 "${temp_file}"
   mv "${temp_file}" "${ENV_FILE}"
+}
+
+
+compose_with_env() {
+  local env_file="$1"
+  shift
+  local mode
+  mode="$(awk -F= '$1 == "BOT_NETWORK_MODE" {print $2; exit}' "${env_file}")"
+  local args=(--env-file "${env_file}" -f "${COMPOSE_FILE}")
+  if [[ "${mode:-bridge}" == "host" ]]; then
+    args+=(-f "${HOST_COMPOSE_FILE}")
+  fi
+  docker compose "${args[@]}" "$@"
 }
 
 read_env_value() {
@@ -138,10 +177,12 @@ read_env_value() {
 
 verify_runtime() {
   local expected_image="$1"
-  local actual_image restart_count
+  local actual_image restart_count actual_network_mode expected_network_mode
 
   actual_image="$(docker inspect --format '{{.Config.Image}}' "${BOT_CONTAINER_NAME}")"
   restart_count="$(docker inspect --format '{{.RestartCount}}' "${BOT_CONTAINER_NAME}")"
+  actual_network_mode="$(docker inspect --format '{{.HostConfig.NetworkMode}}' "${BOT_CONTAINER_NAME}")"
+  expected_network_mode="$(read_env_value BOT_NETWORK_MODE)"
 
   if [[ "${actual_image}" != "${expected_image}" ]]; then
     echo "Container image mismatch: expected ${expected_image}, got ${actual_image}" >&2
@@ -151,12 +192,20 @@ verify_runtime() {
     echo "Container restarted during verification: count=${restart_count}" >&2
     return 1
   fi
+  if [[ "${expected_network_mode:-bridge}" == "host" && "${actual_network_mode}" != "host" ]]; then
+    echo "Container network mismatch: expected host, got ${actual_network_mode}" >&2
+    return 1
+  fi
+  if [[ "${expected_network_mode:-bridge}" == "bridge" && "${actual_network_mode}" == "host" ]]; then
+    echo "Container network mismatch: expected bridge, got host" >&2
+    return 1
+  fi
   if ! docker exec "${BOT_CONTAINER_NAME}" /app/healthcheck.sh; then
     echo "In-container heartbeat verification failed" >&2
     return 1
   fi
 
-  echo "Runtime verification passed: image=${actual_image}, restarts=${restart_count}"
+  echo "Runtime verification passed: image=${actual_image}, restarts=${restart_count}, network=${actual_network_mode}"
   docker exec "${BOT_CONTAINER_NAME}" cat /tmp/baskov-discord-bot.ready
 }
 
@@ -164,21 +213,21 @@ rollback() {
   echo "Deployment verification failed; attempting rollback" >&2
   if [[ ! -s "${PREVIOUS_ENV_FILE}" ]]; then
     echo "No previous deployment state is available" >&2
-    docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" logs --tail=200 bot || true
+    compose_with_env "${ENV_FILE}" logs --tail=200 bot || true
     return 1
   fi
 
   cp "${PREVIOUS_ENV_FILE}" "${ENV_FILE}"
   chmod 600 "${ENV_FILE}"
-  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" pull bot
+  compose_with_env "${ENV_FILE}" pull bot
 
   if [[ "${PREVIOUS_CONTAINER_RUNNING}" != "true" ]]; then
-    docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" stop bot || true
+    compose_with_env "${ENV_FILE}" stop bot || true
     echo "Rollback restored the previous environment and kept the bot stopped"
     return 0
   fi
 
-  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --remove-orphans bot
+  compose_with_env "${ENV_FILE}" up -d --remove-orphans bot
 
   for _ in {1..24}; do
     health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${BOT_CONTAINER_NAME}" 2>/dev/null || true)"
@@ -194,13 +243,13 @@ rollback() {
   done
 
   echo "Rollback did not become healthy" >&2
-  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" logs --tail=200 bot || true
+  compose_with_env "${ENV_FILE}" logs --tail=200 bot || true
   return 1
 }
 
 write_env "${BOT_IMAGE}" "${DISCORD_BOT_TOKEN}"
-docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" pull bot
-docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --remove-orphans bot
+compose_with_env "${ENV_FILE}" pull bot
+compose_with_env "${ENV_FILE}" up -d --remove-orphans bot
 
 for _ in {1..24}; do
   health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${BOT_CONTAINER_NAME}" 2>/dev/null || true)"

@@ -15,6 +15,15 @@ on:
           - development
           - production
         default: development
+      network_mode:
+        description: Docker network mode for this run
+        required: true
+        type: choice
+        options:
+          - environment
+          - bridge
+          - host
+        default: environment
 
 concurrency:
   group: delivery-${{ github.event_name == 'workflow_dispatch' && inputs.target || github.ref_name }}
@@ -106,7 +115,14 @@ jobs:
           BOT_IMAGE=ghcr.io/example/baskov-discord-bot:ci \
           BOT_CONTAINER_NAME=baskov-discord-bot-ci \
           DISCORD_BOT_TOKEN=ci-placeholder \
+          BOT_NETWORK_MODE=bridge \
             docker compose -f deploy/docker-compose.yml config >/dev/null
+          BOT_IMAGE=ghcr.io/example/baskov-discord-bot:ci \
+          BOT_CONTAINER_NAME=baskov-discord-bot-ci \
+          DISCORD_BOT_TOKEN=ci-placeholder \
+          BOT_NETWORK_MODE=host \
+            docker compose -f deploy/docker-compose.yml \
+              -f deploy/docker-compose.host-network.yml config >/dev/null
 
       - name: Run Maven verification
         run: ./mvnw --batch-mode --no-transfer-progress clean verify
@@ -212,7 +228,8 @@ jobs:
           ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "install -d -m 700 '${deploy_dir}'"
           scp -P "${DEPLOY_PORT:-22}" \
-            deploy/docker-compose.yml deploy/remote-deploy.sh \
+            deploy/docker-compose.yml deploy/docker-compose.host-network.yml \
+            deploy/remote-deploy.sh \
             "${DEPLOY_USER}@${DEPLOY_HOST}:${deploy_dir}/"
 
       - name: Transfer protected deployment input
@@ -232,6 +249,10 @@ jobs:
           BOT_MUSIC_VOICE_CONNECT_TIMEOUT: ${{ vars.DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT }}
           BOT_MUSIC_VOICE_FAILURE_COOLDOWN: ${{ vars.DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN }}
           BOT_MUSIC_VOICE_DISCONNECT_GRACE: ${{ vars.DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE }}
+          BOT_MUSIC_VOICE_WATCHDOG_ENFORCE: ${{ vars.DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE }}
+          BOT_NETWORK_MODE: ${{ vars.BOT_NETWORK_MODE }}
+          BOT_NETWORK_MODE_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && inputs.network_mode || '' }}
+          BOT_VOICE_LOG_LEVEL: ${{ vars.DISCORD_BOT_VOICE_LOG_LEVEL }}
           BOT_MUSIC_DEFAULT_VOLUME: ${{ vars.DISCORD_BOT_MUSIC_DEFAULT_VOLUME }}
           BOT_MUSIC_MAX_VOLUME: ${{ vars.DISCORD_BOT_MUSIC_MAX_VOLUME }}
         run: |
@@ -245,6 +266,12 @@ jobs:
           voice_connect_timeout="${BOT_MUSIC_VOICE_CONNECT_TIMEOUT:-15s}"
           voice_failure_cooldown="${BOT_MUSIC_VOICE_FAILURE_COOLDOWN:-30s}"
           voice_disconnect_grace="${BOT_MUSIC_VOICE_DISCONNECT_GRACE:-5s}"
+          voice_watchdog_enforce="${BOT_MUSIC_VOICE_WATCHDOG_ENFORCE:-false}"
+          network_mode="${BOT_NETWORK_MODE:-bridge}"
+          if [[ -n "${BOT_NETWORK_MODE_OVERRIDE}" && "${BOT_NETWORK_MODE_OVERRIDE}" != "environment" ]]; then
+            network_mode="${BOT_NETWORK_MODE_OVERRIDE}"
+          fi
+          voice_log_level="${BOT_VOICE_LOG_LEVEL:-DEBUG}"
           default_volume="${BOT_MUSIC_DEFAULT_VOLUME:-100}"
           max_volume="${BOT_MUSIC_MAX_VOLUME:-150}"
 
@@ -263,6 +290,9 @@ jobs:
             printf 'DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT_B64=%s\n' "$(encode "${voice_connect_timeout}")"
             printf 'DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN_B64=%s\n' "$(encode "${voice_failure_cooldown}")"
             printf 'DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE_B64=%s\n' "$(encode "${voice_disconnect_grace}")"
+            printf 'DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE_B64=%s\n' "$(encode "${voice_watchdog_enforce}")"
+            printf 'BOT_NETWORK_MODE_B64=%s\n' "$(encode "${network_mode}")"
+            printf 'DISCORD_BOT_VOICE_LOG_LEVEL_B64=%s\n' "$(encode "${voice_log_level}")"
             printf 'DISCORD_BOT_MUSIC_DEFAULT_VOLUME_B64=%s\n' "$(encode "${default_volume}")"
             printf 'DISCORD_BOT_MUSIC_MAX_VOLUME_B64=%s\n' "$(encode "${max_volume}")"
           } | ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" \

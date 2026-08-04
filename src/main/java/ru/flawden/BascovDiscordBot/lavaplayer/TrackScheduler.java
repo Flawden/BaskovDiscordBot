@@ -26,6 +26,7 @@ public class TrackScheduler extends AudioEventAdapter {
     private final long maxTrackDurationMillis;
     private final Runnable onActivity;
     private final Runnable onIdle;
+    private final Diagnostics diagnostics;
     private final Object mutationLock = new Object();
 
     private volatile TrackRequest currentRequest;
@@ -37,7 +38,14 @@ public class TrackScheduler extends AudioEventAdapter {
             Duration maxTrackDuration,
             Runnable onActivity,
             Runnable onIdle) {
-        this(audioPlayer, maxQueueSize, maxTrackDuration, RepeatMode.OFF, onActivity, onIdle);
+        this(
+                audioPlayer,
+                maxQueueSize,
+                maxTrackDuration,
+                RepeatMode.OFF,
+                onActivity,
+                onIdle,
+                Diagnostics.noop());
     }
 
     public TrackScheduler(
@@ -47,12 +55,31 @@ public class TrackScheduler extends AudioEventAdapter {
             RepeatMode initialRepeatMode,
             Runnable onActivity,
             Runnable onIdle) {
+        this(
+                audioPlayer,
+                maxQueueSize,
+                maxTrackDuration,
+                initialRepeatMode,
+                onActivity,
+                onIdle,
+                Diagnostics.noop());
+    }
+
+    public TrackScheduler(
+            AudioPlayer audioPlayer,
+            int maxQueueSize,
+            Duration maxTrackDuration,
+            RepeatMode initialRepeatMode,
+            Runnable onActivity,
+            Runnable onIdle,
+            Diagnostics diagnostics) {
         this.audioPlayer = Objects.requireNonNull(audioPlayer, "audioPlayer");
         this.queue = new LinkedBlockingQueue<>(maxQueueSize);
         this.maxTrackDurationMillis = Objects.requireNonNull(maxTrackDuration, "maxTrackDuration").toMillis();
         this.repeatMode = Objects.requireNonNull(initialRepeatMode, "initialRepeatMode");
         this.onActivity = Objects.requireNonNull(onActivity, "onActivity");
         this.onIdle = Objects.requireNonNull(onIdle, "onIdle");
+        this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
     }
 
     public QueueResult queue(AudioTrack track) {
@@ -81,6 +108,7 @@ public class TrackScheduler extends AudioEventAdapter {
         synchronized (mutationLock) {
             if (audioPlayer.startTrack(track, true)) {
                 currentRequest = request;
+                diagnostics.trackStarted(title(track));
                 log.info("Track started: {} (requested by {})",
                         track.getInfo().title, request.requester().displayName());
                 return new QueueResult(QueueStatus.STARTED, 0, 0L, request);
@@ -101,8 +129,14 @@ public class TrackScheduler extends AudioEventAdapter {
 
     @Override
     public void onTrackEnd(AudioPlayer player, AudioTrack track, AudioTrackEndReason endReason) {
+        if (!isCurrentTrack(track)) {
+            diagnostics.staleCallback("end:" + endReason, title(track));
+            log.warn("Ignoring stale track-end callback: track={}, reason={}", title(track), endReason);
+            return;
+        }
         log.info("Track ended: {} (reason: {})", track.getInfo().title, endReason);
         if (endReason == AudioTrackEndReason.CLEANUP) {
+            diagnostics.cleanup(title(track));
             log.warn("Track cleanup received for {}; keeping voice session alive and trying recovery",
                     track.getInfo().title);
             if (!startFallback(track, "cleanup")) {
@@ -151,6 +185,7 @@ public class TrackScheduler extends AudioEventAdapter {
             currentRequest = next;
             onActivity.run();
             audioPlayer.startTrack(next.track(), false);
+            diagnostics.trackStarted(title(next.track()));
             log.info("Playing next track: {}", next.track().getInfo().title);
             return next;
         }
@@ -262,6 +297,12 @@ public class TrackScheduler extends AudioEventAdapter {
 
     @Override
     public void onTrackException(AudioPlayer player, AudioTrack track, FriendlyException exception) {
+        if (!isCurrentTrack(track)) {
+            diagnostics.staleCallback("exception", title(track));
+            log.warn("Ignoring stale track-exception callback: track={}", title(track));
+            return;
+        }
+        diagnostics.sourceFailure(title(track), exception.getMessage());
         log.error("Track exception for {}: {}", track.getInfo().title, exception.getMessage(), exception);
         if (!startFallback(track, "playback exception")) {
             nextTrack();
@@ -270,6 +311,12 @@ public class TrackScheduler extends AudioEventAdapter {
 
     @Override
     public void onTrackStuck(AudioPlayer player, AudioTrack track, long thresholdMs) {
+        if (!isCurrentTrack(track)) {
+            diagnostics.staleCallback("stuck", title(track));
+            log.warn("Ignoring stale track-stuck callback: track={}", title(track));
+            return;
+        }
+        diagnostics.sourceFailure(title(track), "stuck for " + thresholdMs + "ms");
         log.error("Track stuck: {} (threshold: {}ms)", track.getInfo().title, thresholdMs);
         if (!startFallback(track, "stuck track")) {
             nextTrack();
@@ -289,6 +336,8 @@ public class TrackScheduler extends AudioEventAdapter {
             currentRequest = fallback;
             onActivity.run();
             audioPlayer.startTrack(fallback.track(), false);
+            diagnostics.fallback(title(failedTrack), title(fallback.track()));
+            diagnostics.trackStarted(title(fallback.track()));
             log.warn("Primary search result failed ({}); trying fallback: {} -> {}",
                     reason,
                     failedTrack.getInfo().title,
@@ -318,6 +367,54 @@ public class TrackScheduler extends AudioEventAdapter {
 
     private static long safeDuration(AudioTrack track) {
         return Math.max(0L, track.getDuration());
+    }
+
+    private boolean isCurrentTrack(AudioTrack track) {
+        TrackRequest current = currentRequest;
+        return current != null && current.track() == track;
+    }
+
+    private static String title(AudioTrack track) {
+        if (track == null || track.getInfo() == null || track.getInfo().title == null) {
+            return "unknown track";
+        }
+        return track.getInfo().title;
+    }
+
+    public interface Diagnostics {
+        void trackStarted(String title);
+
+        void sourceFailure(String title, String reason);
+
+        void cleanup(String title);
+
+        void fallback(String fromTitle, String toTitle);
+
+        void staleCallback(String callback, String title);
+
+        static Diagnostics noop() {
+            return new Diagnostics() {
+                @Override
+                public void trackStarted(String title) {
+                }
+
+                @Override
+                public void sourceFailure(String title, String reason) {
+                }
+
+                @Override
+                public void cleanup(String title) {
+                }
+
+                @Override
+                public void fallback(String fromTitle, String toTitle) {
+                }
+
+                @Override
+                public void staleCallback(String callback, String title) {
+                }
+            };
+        }
     }
 
     public enum QueueStatus {

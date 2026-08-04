@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.entities.Guild;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferences;
+import ru.flawden.BascovDiscordBot.operations.VoiceDiagnostics;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -31,7 +32,8 @@ public class GuildMusicManager {
             MusicProperties properties,
             GuildPreferences preferences,
             Runnable onActivity,
-            Runnable onIdle) {
+            Runnable onIdle,
+            VoiceDiagnostics diagnostics) {
         this.guild = Objects.requireNonNull(guild, "guild");
         this.onActivity = Objects.requireNonNull(onActivity, "onActivity");
         this.audioPlayer = Objects.requireNonNull(manager, "manager").createPlayer();
@@ -43,7 +45,33 @@ public class GuildMusicManager {
                 properties.getMaxTrackDuration(),
                 initialPreferences.repeatMode(),
                 this::markActivity,
-                onIdle);
+                onIdle,
+                new TrackScheduler.Diagnostics() {
+                    @Override
+                    public void trackStarted(String title) {
+                        diagnostics.trackStarted(guild.getIdLong(), title);
+                    }
+
+                    @Override
+                    public void sourceFailure(String title, String reason) {
+                        diagnostics.sourceFailure(guild.getIdLong(), title, reason);
+                    }
+
+                    @Override
+                    public void cleanup(String title) {
+                        diagnostics.cleanup(guild.getIdLong(), title);
+                    }
+
+                    @Override
+                    public void fallback(String fromTitle, String toTitle) {
+                        diagnostics.fallback(guild.getIdLong(), fromTitle, toTitle);
+                    }
+
+                    @Override
+                    public void staleCallback(String callback, String title) {
+                        diagnostics.staleCallback(guild.getIdLong(), callback, title);
+                    }
+                });
         this.audioPlayer.addListener(this.scheduler);
         this.sendHandler = new AudioPlayerSendHandler(this.audioPlayer);
         log.info("Music session created for guild {}", guild.getId());

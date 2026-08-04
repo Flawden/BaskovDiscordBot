@@ -4,11 +4,13 @@ import org.junit.jupiter.api.Test;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
+import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
 
 import java.time.Duration;
 import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class StatusMessageFormatterTest {
 
@@ -31,6 +33,42 @@ class StatusMessageFormatterTest {
                 Активных сессий: `2`
                 Сейчас играет: `1`
                 Треков в очередях: `7`""", StatusMessageFormatter.music(snapshot));
+    }
+
+    @Test
+    void formatsVoiceTransportAndHistorySeparately() {
+        VoiceDiagnosticSnapshot snapshot = new VoiceDiagnosticSnapshot(
+                "bridge",
+                "CONNECTED",
+                "99",
+                true,
+                true,
+                true,
+                "Brain Stew",
+                25L,
+                Duration.ofMillis(40),
+                1L,
+                1L,
+                0L,
+                1L,
+                0L,
+                1L,
+                2L,
+                1L,
+                "join",
+                "none",
+                "HTTP 404",
+                false);
+
+        assertEquals("""
+                Сеть: `bridge`
+                Control: `CONNECTED`
+                Self channel: `99`
+                AudioManager: `CONNECTED`
+                Frame polling: `25 calls, age=40ms`
+                Watchdog: `OBSERVE`""", StatusMessageFormatter.voice(snapshot));
+        assertTrue(StatusMessageFormatter.voiceHistory(snapshot).contains("HTTP 404"));
+        assertTrue(StatusMessageFormatter.voiceHistory(snapshot).contains("1/1/0"));
     }
 
     @Test

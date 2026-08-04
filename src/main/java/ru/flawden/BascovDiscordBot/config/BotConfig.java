@@ -16,6 +16,7 @@ import ru.flawden.BascovDiscordBot.config.eventconfig.BotEvents;
 import ru.flawden.BascovDiscordBot.config.eventconfig.CommandCooldowns;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.events.EventJoin;
+import ru.flawden.BascovDiscordBot.events.SelfVoiceStateEvents;
 import ru.flawden.BascovDiscordBot.interactions.ModernCommandCatalog;
 import ru.flawden.BascovDiscordBot.interactions.ModernInteractions;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
@@ -43,6 +44,7 @@ public class BotConfig {
     private final String token;
     private final String prefix;
     private final EventJoin eventJoin;
+    private final SelfVoiceStateEvents selfVoiceStateEvents;
     private final HelpEvent helpCommand;
     private final ModernInteractions modernInteractions;
     private final OperationalMetrics operationalMetrics;
@@ -52,6 +54,7 @@ public class BotConfig {
             List<Event> events,
             Environment env,
             EventJoin eventJoin,
+            SelfVoiceStateEvents selfVoiceStateEvents,
             HelpEvent helpCommand,
             ModernInteractions modernInteractions,
             OperationalMetrics operationalMetrics,
@@ -60,6 +63,7 @@ public class BotConfig {
         this.token = env.getProperty("discordBot.token", "");
         this.prefix = env.getProperty("discordBot.prefix", "!");
         this.eventJoin = eventJoin;
+        this.selfVoiceStateEvents = selfVoiceStateEvents;
         this.helpCommand = helpCommand;
         this.modernInteractions = modernInteractions;
         this.operationalMetrics = operationalMetrics;
@@ -91,7 +95,7 @@ public class BotConfig {
                     .enableCache(CacheFlag.VOICE_STATE)
                     .setActivity(Activity.watching("золотые чаши"))
                     .setStatus(OnlineStatus.ONLINE)
-                    .addEventListeners(eventJoin, botEvents, modernInteractions)
+                    .addEventListeners(eventJoin, selfVoiceStateEvents, botEvents, modernInteractions)
                     .build()
                     .awaitReady();
 

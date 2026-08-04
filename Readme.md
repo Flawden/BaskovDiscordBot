@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая стабильная версия: **v0.7.6**.
+Текущая стабильная версия: **v0.7.7**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA и LavaPlayer.
 
@@ -12,9 +12,11 @@
 - воспроизведение музыки, пауза, остановка и пропуск треков;
 - requester, ETA, repeat mode, shuffle, remove/move/clear и управление громкостью;
 - постоянные настройки громкости и повтора отдельно для каждого Discord-сервера;
-- команда `/status` с uptime, Discord gateway, музыкальными сессиями и агрегированными счётчиками команд;
+- команда `/status` с uptime, Discord gateway, музыкальными сессиями, voice transport snapshot и последними voice/source ошибками;
 - динамический Docker heartbeat, который подтверждает свежее подключение к Discord, а не только факт старта;
-- bounded voice connection: одна попытка, отключённый auto-reconnect, startup-grace и watchdog по реальному запросу аудиофреймов;
+- bounded voice connection: одна попытка, отключённый auto-reconnect, startup-grace и observe-only watchdog по реальному запросу аудиофреймов;
+- защита от stale LavaPlayer callbacks после запуска fallback;
+- переключаемый diagnostic network mode `bridge|host` для A/B-проверки Docker UDP/NAT;
 - ограничения CPU, памяти, PID и ротация Docker-логов;
 - управление музыкой только из общего voice channel с административным override;
 - bounded queue, лимит длительности и автоматическое отключение пустых сессий;
@@ -61,6 +63,9 @@ docker compose logs -f bot
 | `DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT` | `15s` | максимальное время одной попытки voice-подключения |
 | `DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN` | `30s` | пауза после неудачного подключения/transport failure |
 | `DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE` | `5s` | допустимый краткий разрыв во время воспроизведения |
+| `DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE` | `false` | `false` только наблюдает; `true` закрывает transport после подтверждённого timeout |
+| `BOT_NETWORK_MODE` | `bridge` | `bridge` production default или `host` для диагностического A/B-теста |
+| `DISCORD_BOT_VOICE_LOG_LEVEL` | `DEBUG` | узкий log level внутренних JDA audio-классов |
 | `DISCORD_BOT_MUSIC_DEFAULT_VOLUME` | `100` | громкость новой guild-сессии |
 | `DISCORD_BOT_MUSIC_MAX_VOLUME` | `150` | верхняя граница команды `/volume` |
 | `DISCORD_BOT_PERSISTENCE_FILE` | `data/guild-settings.properties` | файл постоянных guild-настроек; в Docker используется `/app/data/...` |
@@ -70,7 +75,8 @@ Live-потоки отключены. Подробные правила voice-д
 Очередь и новые команды управления описаны в [`docs/QUEUE-EXPERIENCE.md`](docs/QUEUE-EXPERIENCE.md).
 Постоянные guild-настройки описаны в [`docs/GUILD-SETTINGS.md`](docs/GUILD-SETTINGS.md).
 Operations и health-модель описаны в [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
-Voice connection state machine и диагностика описаны в [`docs/VOICE-CONNECTIONS.md`](docs/VOICE-CONNECTIONS.md).
+Voice connection state machine описана в [`docs/VOICE-CONNECTIONS.md`](docs/VOICE-CONNECTIONS.md).
+Root-cause voice diagnostics и bridge/host A/B-тест описаны в [`docs/VOICE-ROOT-CAUSE-DIAGNOSTICS.md`](docs/VOICE-ROOT-CAUSE-DIAGNOSTICS.md).
 Релиз с Android описан в [`docs/TERMUX-RELEASE.md`](docs/TERMUX-RELEASE.md).
 
 ## CI/CD
@@ -131,6 +137,9 @@ ghcr.io/<owner>/<repository>:dev|latest
 | `DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT` | `15s` | timeout одной voice-попытки |
 | `DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN` | `30s` | cooldown после voice failure |
 | `DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE` | `5s` | grace при разрыве активной сессии |
+| `DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE` | `false` | observe-only либо enforce watchdog |
+| `BOT_NETWORK_MODE` | `bridge` | Docker bridge или диагностический host network |
+| `DISCORD_BOT_VOICE_LOG_LEVEL` | `DEBUG` | уровень узкого JDA voice logger |
 | `DISCORD_BOT_MUSIC_DEFAULT_VOLUME` | `100` | начальная громкость |
 | `DISCORD_BOT_MUSIC_MAX_VOLUME` | `150` | максимальная громкость |
 

@@ -25,6 +25,7 @@ public class AudioPlayerSendHandler implements AudioSendHandler {
     private final MutableAudioFrame frame;
     private final LongSupplier nanoTime;
     private final AtomicLong lastFrameRequestNanos = new AtomicLong(Long.MIN_VALUE);
+    private final AtomicLong frameRequestCount = new AtomicLong();
 
     public AudioPlayerSendHandler(AudioPlayer audioPlayer) {
         this(audioPlayer, System::nanoTime);
@@ -41,6 +42,7 @@ public class AudioPlayerSendHandler implements AudioSendHandler {
     @Override
     public boolean canProvide() {
         lastFrameRequestNanos.set(nanoTime.getAsLong());
+        frameRequestCount.incrementAndGet();
         return audioPlayer.provide(frame);
     }
 
@@ -66,7 +68,21 @@ public class AudioPlayerSendHandler implements AudioSendHandler {
         return elapsed <= maxAge.toNanos();
     }
 
+    public long frameRequestCount() {
+        return frameRequestCount.get();
+    }
+
+    public Duration lastFrameRequestAge() {
+        long last = lastFrameRequestNanos.get();
+        if (last == Long.MIN_VALUE) {
+            return null;
+        }
+        long elapsed = Math.max(0L, nanoTime.getAsLong() - last);
+        return Duration.ofNanos(elapsed);
+    }
+
     public void resetFrameTelemetry() {
         lastFrameRequestNanos.set(Long.MIN_VALUE);
+        frameRequestCount.set(0L);
     }
 }

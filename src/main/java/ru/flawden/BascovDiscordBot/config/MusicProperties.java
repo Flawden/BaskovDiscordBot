@@ -18,6 +18,7 @@ public class MusicProperties {
     private Duration voiceConnectTimeout = Duration.ofSeconds(15);
     private Duration voiceFailureCooldown = Duration.ofSeconds(30);
     private Duration voiceDisconnectGrace = Duration.ofSeconds(5);
+    private boolean voiceWatchdogEnforce;
     private int defaultVolume = 100;
     private int maxVolume = 150;
 
@@ -85,6 +86,14 @@ public class MusicProperties {
                     "discord-bot.music.voiceDisconnectGrace must be between 1ms and 1m");
         }
         this.voiceDisconnectGrace = voiceDisconnectGrace;
+    }
+
+    public boolean isVoiceWatchdogEnforce() {
+        return voiceWatchdogEnforce;
+    }
+
+    public void setVoiceWatchdogEnforce(boolean voiceWatchdogEnforce) {
+        this.voiceWatchdogEnforce = voiceWatchdogEnforce;
     }
 
     public int getDefaultVolume() {

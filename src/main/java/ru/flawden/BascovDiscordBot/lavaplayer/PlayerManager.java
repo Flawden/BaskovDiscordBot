@@ -14,6 +14,8 @@ import net.dv8tion.jda.api.managers.AudioManager;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
+import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
+import ru.flawden.BascovDiscordBot.operations.VoiceDiagnostics;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferences;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
 
@@ -21,6 +23,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -41,19 +44,23 @@ public class PlayerManager {
     private final Map<Long, ScheduledFuture<?>> idleDisconnects = new ConcurrentHashMap<>();
     private final Map<Long, Instant> voiceFrameDemandMissingSince = new ConcurrentHashMap<>();
     private final Map<Long, Instant> voiceWatchdogNotBefore = new ConcurrentHashMap<>();
+    private final Set<Long> voiceWatchdogReported = ConcurrentHashMap.newKeySet();
     private final DefaultAudioPlayerManager audioPlayerManager;
     private final ScheduledExecutorService idleScheduler;
     private final MusicProperties properties;
     private final GuildPreferencesRepository preferencesRepository;
     private final VoiceConnectionCoordinator voiceConnections;
+    private final VoiceDiagnostics voiceDiagnostics;
 
     public PlayerManager(
             MusicProperties properties,
             GuildPreferencesRepository preferencesRepository,
-            VoiceConnectionCoordinator voiceConnections) {
+            VoiceConnectionCoordinator voiceConnections,
+            VoiceDiagnostics voiceDiagnostics) {
         this.properties = properties;
         this.preferencesRepository = preferencesRepository;
         this.voiceConnections = voiceConnections;
+        this.voiceDiagnostics = voiceDiagnostics;
         this.audioPlayerManager = new DefaultAudioPlayerManager();
         AudioSourceManagers.registerRemoteSources(this.audioPlayerManager);
         this.idleScheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -83,7 +90,8 @@ public class PlayerManager {
                     properties,
                     preferences,
                     () -> cancelIdleDisconnect(guildId),
-                    () -> scheduleIdleDisconnect(guild));
+                    () -> scheduleIdleDisconnect(guild),
+                    voiceDiagnostics);
             guild.getAudioManager().setSendingHandler(manager.getSendHandler());
             return manager;
         });
@@ -108,6 +116,7 @@ public class PlayerManager {
                     }
                     manager.getSendHandler().resetFrameTelemetry();
                     voiceFrameDemandMissingSince.remove(guild.getIdLong());
+                    voiceWatchdogReported.remove(guild.getIdLong());
                     voiceWatchdogNotBefore.put(
                             guild.getIdLong(),
                             Instant.now().plus(properties.getVoiceConnectTimeout()));
@@ -158,12 +167,17 @@ public class PlayerManager {
 
             @Override
             public void noMatches() {
+                voiceDiagnostics.sourceFailure(guild.getIdLong(), identifier, "no matches");
                 musicManager.getScheduler().scheduleDisconnectIfIdle();
                 resultConsumer.accept(MusicLoadResult.withoutTrack(MusicLoadResult.Status.NO_MATCHES));
             }
 
             @Override
             public void loadFailed(FriendlyException exception) {
+                voiceDiagnostics.sourceFailure(
+                        guild.getIdLong(),
+                        identifier,
+                        exception.getMessage());
                 log.warn("Media load failed in guild {}: {}", guild.getId(), exception.getMessage());
                 musicManager.getScheduler().scheduleDisconnectIfIdle();
                 resultConsumer.accept(MusicLoadResult.withoutTrack(MusicLoadResult.Status.LOAD_FAILED));
@@ -176,6 +190,7 @@ public class PlayerManager {
         cancelIdleDisconnect(guild.getIdLong());
         voiceFrameDemandMissingSince.remove(guild.getIdLong());
         voiceWatchdogNotBefore.remove(guild.getIdLong());
+        voiceWatchdogReported.remove(guild.getIdLong());
         voiceConnections.cancel(guild);
         safeCloseAudio(guild);
         if (manager != null) {
@@ -246,6 +261,7 @@ public class PlayerManager {
 
             if (decision == VoiceWatchdogPolicy.Decision.HEALTHY) {
                 voiceFrameDemandMissingSince.remove(guildId);
+                voiceWatchdogReported.remove(guildId);
                 continue;
             }
             if (decision == VoiceWatchdogPolicy.Decision.START_GRACE) {
@@ -259,11 +275,17 @@ public class PlayerManager {
             }
 
             Duration missingFor = Duration.between(missingSince, now);
-            log.error("Discord did not request audio frames for {}: guild={}",
-                    missingFor, guild.getId());
-            voiceConnections.recordTransportFailure(
-                    guild,
-                    "Discord did not request audio frames for " + missingFor.toSeconds() + " s");
+            String reason = "Discord did not request audio frames for "
+                    + missingFor.toSeconds() + " s";
+            if (voiceWatchdogReported.add(guildId)) {
+                voiceDiagnostics.watchdogWarning(guildId, reason);
+                log.error("{}: guild={}, enforce={}",
+                        reason, guild.getId(), properties.isVoiceWatchdogEnforce());
+            }
+            if (!properties.isVoiceWatchdogEnforce()) {
+                continue;
+            }
+            voiceConnections.recordTransportFailure(guild, reason);
             stopAndRelease(guild);
         }
     }
@@ -353,6 +375,10 @@ public class PlayerManager {
         }
     }
 
+    public VoiceDiagnosticSnapshot voiceDiagnosticsSnapshot(Guild guild) {
+        return voiceDiagnostics.snapshot(guild, musicManagers.get(guild.getIdLong()));
+    }
+
     public MusicRuntimeSnapshot runtimeSnapshot() {
         int activeSessions = 0;
         int playingSessions = 0;
@@ -388,6 +414,7 @@ public class PlayerManager {
         idleDisconnects.clear();
         voiceFrameDemandMissingSince.clear();
         voiceWatchdogNotBefore.clear();
+        voiceWatchdogReported.clear();
         idleScheduler.shutdownNow();
         audioPlayerManager.shutdown();
     }

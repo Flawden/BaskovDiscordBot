@@ -7,6 +7,37 @@
 ## [Unreleased]
 
 
+## [0.7.7] — 2026-08-04
+
+### Добавлено
+
+- `/status` теперь показывает отдельный voice transport snapshot: Docker network mode, control state, self voice channel, `AudioManager`, frame polling, текущий трек и watchdog mode.
+- Состояние последних voice/source ошибок сохраняется после уничтожения музыкальной сессии и остаётся доступным для диагностики.
+- Добавлен listener self voice join/move/leave событий и счётчики connection attempts, source failures, `CLEANUP`, fallback, stale callbacks и watchdog warnings.
+- Добавлен диагностический Docker override `deploy/docker-compose.host-network.yml` и environment variable `BOT_NETWORK_MODE=bridge|host` для воспроизводимого A/B-теста bridge против host network.
+- Добавлено узкое DEBUG-логирование `net.dv8tion.jda.internal.audio` с настраиваемым `DISCORD_BOT_VOICE_LOG_LEVEL`.
+- Добавлен документ `docs/VOICE-ROOT-CAUSE-DIAGNOSTICS.md`.
+
+### Исправлено
+
+- Watchdog по умолчанию переведён в observe-only режим и больше не закрывает voice-сессию во время диагностики. Принудительное поведение включается только через `DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE=true`.
+- Scheduler игнорирует поздние callbacks старого трека после запуска fallback, поэтому stale `onTrackEnd`, `onTrackException` или `onTrackStuck` больше не могут убить текущий replacement track.
+- Delivery проверяет фактический network mode контейнера вместе с immutable image, restart count и heartbeat.
+
+### Изменено
+
+- Maven-версия приложения повышена до `0.7.7`.
+- Bridge остаётся production default; host network доступен только как явный диагностический режим.
+- Voice transport anomaly теперь сначала оставляет доказательства в `/status` и логах, а не автоматически уничтожает сессию.
+
+### Тестирование
+
+- Добавлены unit-тесты persistent voice diagnostics, frame telemetry age/count, stale callback protection и format `/status`.
+- Добавлен architecture contract на observe-only watchdog и bridge/host deployment path.
+- Тестовый baseline повышен до 33 test classes / 97 `@Test` methods.
+
+
+
 ## [0.7.6] — 2026-08-04
 
 ### Исправлено
