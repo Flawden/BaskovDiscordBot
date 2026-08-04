@@ -10,9 +10,13 @@
 
 ```powershell
 .\mvnw.cmd clean verify
+.\mvnw.cmd dependency:tree `
+  -Dincludes=org.slf4j:*,ch.qos.logback:*,org.json:*,com.vaadin.external.google:*
 git diff --check
 git status
 ```
+
+Logging-зависимости должны оставаться согласованными через Spring Boot BOM, а `android-json` — отсутствовать в итоговом test classpath. Подробности: [`DEPENDENCY-HYGIENE.md`](DEPENDENCY-HYGIENE.md).
 
 ## Commit и production push
 

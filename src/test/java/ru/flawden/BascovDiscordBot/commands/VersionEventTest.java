@@ -14,20 +14,25 @@ class VersionEventTest {
 
     @Test
     void resolvesVersionFromMavenBuildInfo() {
-        ObjectProvider<BuildProperties> provider = mock(ObjectProvider.class);
+        ObjectProvider<BuildProperties> provider = mockBuildPropertiesProvider();
         VersionEvent event = new VersionEvent(provider);
         Properties properties = new Properties();
-        properties.setProperty("version", "0.4.0");
+        properties.setProperty("version", "0.4.3");
 
-        assertEquals("0.4.0", event.resolveVersion(new BuildProperties(properties)));
+        assertEquals("0.4.3", event.resolveVersion(new BuildProperties(properties)));
     }
 
     @Test
     void fallsBackToDevelopmentOutsidePackagedBuild() {
-        ObjectProvider<BuildProperties> provider = mock(ObjectProvider.class);
+        ObjectProvider<BuildProperties> provider = mockBuildPropertiesProvider();
         when(provider.getIfAvailable()).thenReturn(null);
         VersionEvent event = new VersionEvent(provider);
 
         assertEquals("development", event.resolveVersion(null));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ObjectProvider<BuildProperties> mockBuildPropertiesProvider() {
+        return (ObjectProvider<BuildProperties>) mock(ObjectProvider.class);
     }
 }

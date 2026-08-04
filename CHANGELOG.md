@@ -6,6 +6,27 @@
 
 ## [Unreleased]
 
+## [0.4.3] — 2026-08-04
+
+### Исправлено
+
+- Устранено рассогласование `logback-classic` 1.5.18 и `logback-core` 1.5.16: логирующий стек снова полностью управляется Spring Boot BOM.
+- Исключён тестовый `android-json`, дублировавший `org.json.JSONObject` на classpath и создававший предупреждение Spring Boot.
+- Убрано unchecked-предупреждение в `VersionEventTest` через локализованный типобезопасный helper с явным suppression.
+
+### Изменено
+
+- Удалены прямые версии `slf4j-api` и `logback-classic`; совместимые версии выбираются родительским `spring-boot-starter-parent`.
+- Удалено неиспользуемое свойство `discord4j-core.version`.
+- Тесты используют отдельный `logback-test.xml` без файлового appender и не создают `logs/bot.log` во время Maven verification.
+- Добавлен XML-контракт `DependencyHygieneContractTest`, защищающий правила dependency management от регрессии.
+- Добавлен Dependabot для ежемесячных Maven- и GitHub Actions-обновлений.
+- Maven-версия приложения повышена до `0.4.3`.
+
+### Документация
+
+- Добавлен `docs/DEPENDENCY-HYGIENE.md` с правилами управления logging- и test-зависимостями.
+
 ## [0.4.2] — 2026-08-03
 
 ### Исправлено
@@ -167,7 +188,9 @@
 - Immutable Docker images в GHCR.
 - Автоматический production-деплой на VPS с healthcheck и rollback.
 
-[Unreleased]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.2...v0.4.3
+[0.4.2]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Flawden/BaskovDiscordBot/compare/v0.2.0...v0.3.0

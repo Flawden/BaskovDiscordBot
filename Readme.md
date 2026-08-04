@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая стабильная версия: **v0.4.2**.
+Текущая стабильная версия: **v0.4.3**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA и LavaPlayer.
 
@@ -17,6 +17,8 @@
 - конфигурируемый префикс и cooldown для шумных команд;
 - команда `!version` с версией и метаданными сборки;
 - безопасная обработка ссылок SoundCloud/YouTube без сетевой проверки пользовательского URL;
+- согласованные версии SLF4J/Logback под управлением Spring Boot BOM;
+- автоматические ежемесячные проверки обновлений Maven и GitHub Actions;
 - контейнерный запуск;
 - CI, публикация immutable-образов в GHCR и автоматический деплой на VPS.
 
@@ -143,6 +145,7 @@ ssh-keyscan -p 22 your-server.example.com
 
 - [О проекте](https://github.com/Flawden/BaskovDiscordBot/wiki)
 - [Развёртывание и запуск](https://github.com/Flawden/BaskovDiscordBot/wiki/Развертывание-приложения)
+- [Гигиена зависимостей](docs/DEPENDENCY-HYGIENE.md)
 
 ## Лицензия
 
