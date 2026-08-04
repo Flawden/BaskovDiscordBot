@@ -9,12 +9,13 @@
     </parent>
     <groupId>ru.flawden</groupId>
     <artifactId>BascovDiscordBot</artifactId>
-    <version>0.9.3</version>
+    <version>0.9.4</version>
     <name>BaskovDiscordBot</name>
     <description>Bot kissing hands and loving tea from golden cups</description>
     <properties>
         <java.version>17</java.version>
-        <project.build.outputTimestamp>2026-08-04T15:56:08Z</project.build.outputTimestamp>
+        <libdave-jvm.version>0.1.3</libdave-jvm.version>
+        <project.build.outputTimestamp>2026-08-04T16:53:39Z</project.build.outputTimestamp>
     </properties>
 
     <repositories>
@@ -60,6 +61,16 @@
             <artifactId>JDA</artifactId>
             <version>6.5.0</version>
         </dependency>
+        <dependency>
+            <groupId>moe.kyokobot.libdave</groupId>
+            <artifactId>adapter-jda</artifactId>
+            <version>${libdave-jvm.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>moe.kyokobot.libdave</groupId>
+            <artifactId>impl-jni</artifactId>
+            <version>${libdave-jvm.version}</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -98,5 +109,42 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>libdave-linux-x86-64</id>
+            <activation>
+                <os>
+                    <name>Linux</name>
+                    <arch>amd64</arch>
+                </os>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>moe.kyokobot.libdave</groupId>
+                    <artifactId>natives-linux-x86-64</artifactId>
+                    <version>${libdave-jvm.version}</version>
+                    <scope>runtime</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>libdave-windows-x86-64</id>
+            <activation>
+                <os>
+                    <family>Windows</family>
+                    <arch>amd64</arch>
+                </os>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>moe.kyokobot.libdave</groupId>
+                    <artifactId>natives-win-x86-64</artifactId>
+                    <version>${libdave-jvm.version}</version>
+                    <scope>runtime</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
 
 </project>

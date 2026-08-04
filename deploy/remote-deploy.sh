@@ -184,7 +184,8 @@ read_env_value() {
 
 verify_runtime() {
   local expected_image="$1"
-  local actual_image restart_count actual_network_mode expected_network_mode
+  local require_native_dave="${2:-true}"
+  local actual_image restart_count actual_network_mode expected_network_mode container_logs
 
   actual_image="$(docker inspect --format '{{.Config.Image}}' "${BOT_CONTAINER_NAME}")"
   restart_count="$(docker inspect --format '{{.RestartCount}}' "${BOT_CONTAINER_NAME}")"
@@ -211,8 +212,15 @@ verify_runtime() {
     echo "In-container heartbeat verification failed" >&2
     return 1
   fi
+  if [[ "${require_native_dave}" == "true" ]]; then
+    container_logs="$(docker logs "${BOT_CONTAINER_NAME}" 2>&1)"
+    if ! grep -Fq "Native libDAVE ready:" <<< "${container_logs}"; then
+      echo "Native libDAVE startup marker is missing" >&2
+      return 1
+    fi
+  fi
 
-  echo "Runtime verification passed: image=${actual_image}, restarts=${restart_count}, network=${actual_network_mode}"
+  echo "Runtime verification passed: image=${actual_image}, restarts=${restart_count}, network=${actual_network_mode}, dave_required=${require_native_dave}"
   docker exec "${BOT_CONTAINER_NAME}" cat /tmp/baskov-discord-bot.ready
 }
 
@@ -240,7 +248,7 @@ rollback() {
     health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${BOT_CONTAINER_NAME}" 2>/dev/null || true)"
     if [[ "${health}" == "healthy" ]]; then
       rollback_image="$(read_env_value BOT_IMAGE)"
-      if verify_runtime "${rollback_image}"; then
+      if verify_runtime "${rollback_image}" false; then
         echo "Rollback succeeded"
         return 0
       fi
@@ -262,7 +270,7 @@ for _ in {1..24}; do
   health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${BOT_CONTAINER_NAME}" 2>/dev/null || true)"
   case "${health}" in
     healthy)
-      if verify_runtime "${BOT_IMAGE}"; then
+      if verify_runtime "${BOT_IMAGE}" true; then
         echo "Deployment is healthy: ${BOT_IMAGE}"
         docker image prune -f --filter 'until=168h' >/dev/null 2>&1 || true
         exit 0

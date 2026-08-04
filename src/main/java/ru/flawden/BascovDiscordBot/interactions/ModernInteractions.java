@@ -22,6 +22,7 @@ import ru.flawden.BascovDiscordBot.commands.music.MediaQueryResolver;
 import ru.flawden.BascovDiscordBot.commands.music.MusicControlPolicy;
 import ru.flawden.BascovDiscordBot.commands.music.MusicEmbeds;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
+import ru.flawden.BascovDiscordBot.dave.DaveRuntimeInfo;
 import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.MusicLoadResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
@@ -59,6 +60,7 @@ public class ModernInteractions extends ListenerAdapter {
     private final GuildPreferencesRepository preferencesRepository;
     private final OperationalMetrics operationalMetrics;
     private final RuntimeHealthMonitor healthMonitor;
+    private final DaveRuntimeInfo daveRuntimeInfo;
 
     public ModernInteractions(
             PlayerManager playerManager,
@@ -69,7 +71,8 @@ public class ModernInteractions extends ListenerAdapter {
             VersionEvent versionEvent,
             GuildPreferencesRepository preferencesRepository,
             OperationalMetrics operationalMetrics,
-            RuntimeHealthMonitor healthMonitor) {
+            RuntimeHealthMonitor healthMonitor,
+            DaveRuntimeInfo daveRuntimeInfo) {
         this.playerManager = playerManager;
         this.controlPolicy = controlPolicy;
         this.queryResolver = queryResolver;
@@ -79,6 +82,7 @@ public class ModernInteractions extends ListenerAdapter {
         this.preferencesRepository = preferencesRepository;
         this.operationalMetrics = operationalMetrics;
         this.healthMonitor = healthMonitor;
+        this.daveRuntimeInfo = daveRuntimeInfo;
     }
 
     @Override
@@ -215,6 +219,7 @@ public class ModernInteractions extends ListenerAdapter {
         VoiceDiagnosticSnapshot voice = playerManager.voiceDiagnosticsSnapshot(event.getGuild());
 
         String discord = StatusMessageFormatter.discord(runtime, JdaRuntimeInfo.version());
+        String daveState = StatusMessageFormatter.dave(daveRuntimeInfo.snapshot());
         String musicState = StatusMessageFormatter.music(music);
         String voiceState = StatusMessageFormatter.voice(voice);
         String voiceHistory = StatusMessageFormatter.voiceHistory(voice);
@@ -225,6 +230,7 @@ public class ModernInteractions extends ListenerAdapter {
                         .setDescription("Uptime: `" + formatDuration(commands.uptime()) + "`")
                         .setColor("CONNECTED".equals(runtime.jdaStatus()) ? Color.GREEN : Color.ORANGE)
                         .addField("Discord gateway", discord, true)
+                        .addField("DAVE / E2EE", daveState, true)
                         .addField("Музыка", musicState, true)
                         .addField("Voice transport", voiceState, true)
                         .addField("Voice history", voiceHistory, false)

@@ -1,5 +1,6 @@
 package ru.flawden.BascovDiscordBot.interactions;
 
+import ru.flawden.BascovDiscordBot.dave.DaveRuntimeInfo;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
@@ -22,6 +23,17 @@ final class StatusMessageFormatter {
                 "JDA: `" + (jdaVersion == null ? "unknown" : jdaVersion) + "`",
                 "Серверов: `" + runtime.guildCount() + "`",
                 "Slash-команд: `" + runtime.registeredSlashCommands() + "`");
+    }
+
+    static String dave(DaveRuntimeInfo.Snapshot dave) {
+        Objects.requireNonNull(dave, "dave");
+        return String.join("\n",
+                "Статус: `" + dave.status() + "`",
+                "Реализация: `" + dave.implementation() + " "
+                        + dave.implementationVersion() + "`",
+                "Max protocol: `" + dave.maxProtocolVersion() + "`",
+                "Native: `" + dave.platform() + "`",
+                "Ошибка: " + inline(dave.error()));
     }
 
     static String music(MusicRuntimeSnapshot music) {

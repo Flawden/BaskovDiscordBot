@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.OnlineStatus;
+import net.dv8tion.jda.api.audio.AudioModuleConfig;
 import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.cache.CacheFlag;
@@ -17,6 +18,8 @@ import ru.flawden.BascovDiscordBot.config.eventconfig.CommandCooldowns;
 import ru.flawden.BascovDiscordBot.config.eventconfig.Event;
 import ru.flawden.BascovDiscordBot.events.EventJoin;
 import ru.flawden.BascovDiscordBot.events.SelfVoiceStateEvents;
+import ru.flawden.BascovDiscordBot.dave.DaveRuntimeInfo;
+import ru.flawden.BascovDiscordBot.dave.NativeDaveBootstrap;
 import ru.flawden.BascovDiscordBot.interactions.ModernCommandCatalog;
 import ru.flawden.BascovDiscordBot.interactions.ModernInteractions;
 import ru.flawden.BascovDiscordBot.operations.JdaRuntimeInfo;
@@ -50,6 +53,7 @@ public class BotConfig {
     private final ModernInteractions modernInteractions;
     private final OperationalMetrics operationalMetrics;
     private final RuntimeHealthMonitor healthMonitor;
+    private final DaveRuntimeInfo daveRuntimeInfo;
 
     public BotConfig(
             List<Event> events,
@@ -59,7 +63,8 @@ public class BotConfig {
             HelpEvent helpCommand,
             ModernInteractions modernInteractions,
             OperationalMetrics operationalMetrics,
-            RuntimeHealthMonitor healthMonitor) {
+            RuntimeHealthMonitor healthMonitor,
+            DaveRuntimeInfo daveRuntimeInfo) {
         this.events = List.copyOf(events);
         this.token = env.getProperty("discordBot.token", "");
         this.prefix = env.getProperty("discordBot.prefix", "!");
@@ -69,6 +74,7 @@ public class BotConfig {
         this.modernInteractions = modernInteractions;
         this.operationalMetrics = operationalMetrics;
         this.healthMonitor = healthMonitor;
+        this.daveRuntimeInfo = daveRuntimeInfo;
         log.info("BotConfig initialized: token={}, prefix='{}', commands={}",
                 token.isBlank() ? "missing" : "present", prefix, events.size());
     }
@@ -92,7 +98,11 @@ public class BotConfig {
                 throw new IllegalStateException("DISCORD_BOT_TOKEN is not configured");
             }
 
+            AudioModuleConfig audioModuleConfig =
+                    NativeDaveBootstrap.createAudioModuleConfig(daveRuntimeInfo);
+
             JDA jda = JDABuilder.create(token, REQUIRED_INTENTS)
+                    .setAudioModuleConfig(audioModuleConfig)
                     .enableCache(CacheFlag.VOICE_STATE)
                     .setActivity(Activity.watching("золотые чаши"))
                     .setStatus(OnlineStatus.ONLINE)

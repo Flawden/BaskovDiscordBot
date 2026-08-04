@@ -1,6 +1,7 @@
 package ru.flawden.BascovDiscordBot.interactions;
 
 import org.junit.jupiter.api.Test;
+import ru.flawden.BascovDiscordBot.dave.DaveRuntimeInfo;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
@@ -24,6 +25,19 @@ class StatusMessageFormatterTest {
                 JDA: `6.5.0`
                 Серверов: `3`
                 Slash-команд: `18`""", StatusMessageFormatter.discord(snapshot, "6.5.0"));
+    }
+
+    @Test
+    void formatsNativeDaveSection() {
+        DaveRuntimeInfo info = new DaveRuntimeInfo();
+        info.ready(1);
+
+        String rendered = StatusMessageFormatter.dave(info.snapshot());
+
+        assertTrue(rendered.contains("Статус: `READY`"));
+        assertTrue(rendered.contains("Реализация: `libdave-jvm 0.1.3`"));
+        assertTrue(rendered.contains("Max protocol: `1`"));
+        assertTrue(rendered.contains("Ошибка: `none`"));
     }
 
     @Test

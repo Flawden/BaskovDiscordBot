@@ -7,6 +7,34 @@
 ## [Unreleased]
 
 
+## [0.9.4] — 2026-08-04
+
+### Исправлено
+
+- Устранена подтверждённая причина Discord close code `4017`: JDA 6 больше не использует `PassthroughDaveSessionFactory` с maximum protocol version `0`.
+- Подключена настоящая JNI-реализация Discord DAVE/E2EE через `libdave-jvm 0.1.3`.
+- Startup становится fail-fast, если native-библиотека не загрузилась или объявила неположительную DAVE protocol version.
+
+### Добавлено
+
+- Зависимости `adapter-jda`, `impl-jni`, production native `natives-linux-x86-64` и developer native `natives-win-x86-64`.
+- `NativeDaveBootstrap`, передающий `LDJDADaveSessionFactory` в `AudioModuleConfig`.
+- `/status` показывает DAVE implementation, version, maximum protocol и native platform.
+- Реальный JNI smoke-test на Linux/Windows x86-64 и source-contract, запрещающий возврат passthrough DAVE.
+- Документ `docs/NATIVE-DAVE.md`.
+
+### Сохранено
+
+- Java 17, Spring Boot 3.4.3, JDA 6.5.0 и LavaPlayer 2.2.3.
+- Docker bridge production mode, playback readiness по первому media frame poll и весь voice diagnostics flow.
+
+### Тестирование
+
+- Тестовый baseline повышен до 38 test classes / 119 `@Test` methods.
+- `NativeDaveRuntimeTest` реально загружает JNI runtime на Linux/Windows x86-64 и проверяет положительную protocol version.
+- Deployment gate требует startup marker native libDAVE, но rollback сохраняет совместимость с предыдущим зелёным образом.
+
+
 ## [0.9.3] — 2026-08-04
 
 ### Исправлено

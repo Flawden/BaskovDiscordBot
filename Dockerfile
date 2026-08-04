@@ -17,7 +17,7 @@ ARG APP_VERSION=development
 WORKDIR /app
 
 LABEL org.opencontainers.image.title="Baskov Discord Bot" \
-      org.opencontainers.image.description="Музыкальный Discord-бот на Java, Spring Boot, JDA и LavaPlayer" \
+      org.opencontainers.image.description="Музыкальный Discord-бот на Java, Spring Boot, JDA, LavaPlayer и native libDAVE" \
       org.opencontainers.image.version="${APP_VERSION}"
 
 RUN groupadd --gid 10001 app \

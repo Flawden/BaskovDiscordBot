@@ -69,3 +69,7 @@ Major-переходы вроде Spring Boot `3 → 4` или будущий JD
 - GitHub Actions обновляются по тому же правилу: major-теги меняются отдельно и только после проверки синтаксиса workflow и реального CI-прогона.
 
 Dependabot настроен игнорировать автоматические major-обновления Maven и GitHub Actions. Minor/patch PR остаются доступными, но не объединяются автоматически.
+
+## Native libDAVE pin
+
+Voice encryption uses the isolated `libdave-jvm 0.1.3` line (`adapter-jda`, `impl-jni` and platform natives). It must be upgraded only in a dedicated voice migration release because Java adapter, JNI binding and native binaries have to stay on exactly the same version.
