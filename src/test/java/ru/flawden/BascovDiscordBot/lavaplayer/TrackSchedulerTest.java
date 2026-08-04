@@ -160,6 +160,28 @@ class TrackSchedulerTest {
         assertEquals(0, activity.get());
     }
 
+
+    @Test
+    void playbackFailureTriesNextSearchResultBeforeLeavingQueue() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        TrackScheduler scheduler = new TrackScheduler(
+                player, 10, Duration.ofHours(4), () -> { }, () -> { });
+        AudioTrack primary = track("Broken result", Duration.ofMinutes(3));
+        AudioTrack fallback = track("Working result", Duration.ofMinutes(3));
+        when(player.startTrack(primary, true)).thenReturn(true);
+        scheduler.queue(primary, TrackRequester.unknown(), List.of(fallback));
+
+        com.sedmelluq.discord.lavaplayer.tools.FriendlyException exception =
+                mock(com.sedmelluq.discord.lavaplayer.tools.FriendlyException.class);
+        when(exception.getMessage()).thenReturn("404");
+
+        scheduler.onTrackException(player, primary, exception);
+
+        verify(player).startTrack(fallback, false);
+        assertSame(fallback, scheduler.getCurrentRequest().track());
+        assertEquals(0, scheduler.getCurrentRequest().fallbackTracks().size());
+    }
+
     private static AudioTrack track(String title, Duration duration) {
         AudioTrack track = mock(AudioTrack.class);
         AudioTrackInfo info = mock(AudioTrackInfo.class);

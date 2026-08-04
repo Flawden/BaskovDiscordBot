@@ -73,6 +73,13 @@ public class TrackScheduler extends AudioEventAdapter {
     }
 
     public QueueResult queue(AudioTrack track, TrackRequester requester) {
+        return queue(track, requester, List.of());
+    }
+
+    public QueueResult queue(
+            AudioTrack track,
+            TrackRequester requester,
+            List<AudioTrack> fallbackTracks) {
         Objects.requireNonNull(track, "track");
 
         if (track.getInfo().isStream) {
@@ -82,7 +89,7 @@ public class TrackScheduler extends AudioEventAdapter {
             return new QueueResult(QueueStatus.TRACK_TOO_LONG, queue.size(), 0L, null);
         }
 
-        TrackRequest request = TrackRequest.create(track, requester);
+        TrackRequest request = TrackRequest.create(track, requester, fallbackTracks);
         onActivity.run();
         synchronized (mutationLock) {
             if (audioPlayer.startTrack(track, true)) {
@@ -269,13 +276,38 @@ public class TrackScheduler extends AudioEventAdapter {
     @Override
     public void onTrackException(AudioPlayer player, AudioTrack track, FriendlyException exception) {
         log.error("Track exception for {}: {}", track.getInfo().title, exception.getMessage(), exception);
-        nextTrack();
+        if (!startFallback(track, "playback exception")) {
+            nextTrack();
+        }
     }
 
     @Override
     public void onTrackStuck(AudioPlayer player, AudioTrack track, long thresholdMs) {
         log.error("Track stuck: {} (threshold: {}ms)", track.getInfo().title, thresholdMs);
-        nextTrack();
+        if (!startFallback(track, "stuck track")) {
+            nextTrack();
+        }
+    }
+
+    private boolean startFallback(AudioTrack failedTrack, String reason) {
+        synchronized (mutationLock) {
+            TrackRequest failed = currentRequest;
+            if (failed == null || failed.track() != failedTrack) {
+                return false;
+            }
+            TrackRequest fallback = failed.advanceToFallback();
+            if (fallback == null) {
+                return false;
+            }
+            currentRequest = fallback;
+            onActivity.run();
+            audioPlayer.startTrack(fallback.track(), false);
+            log.warn("Primary search result failed ({}); trying fallback: {} -> {}",
+                    reason,
+                    failedTrack.getInfo().title,
+                    fallback.track().getInfo().title);
+            return true;
+        }
     }
 
     private long estimatedWaitMillisLocked() {

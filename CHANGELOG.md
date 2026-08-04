@@ -7,6 +7,31 @@
 ## [Unreleased]
 
 
+## [0.7.5] — 2026-08-04
+
+### Исправлено
+
+- Исправлен ложный voice watchdog из `v0.7.4`: сразу после успешного входа `AudioManager.isConnected()` кратковременно возвращал `false`, из-за чего бот сам закрывал рабочую сессию через 5 секунд.
+- Watchdog больше не использует нестабильный boolean JDA как единственный источник истины; он отслеживает реальные вызовы `AudioSendHandler#canProvide()` — то есть запрос Discord на очередной 20-мс аудиофрейм.
+- После подтверждённого подключения действует startup-grace, равный voice connect timeout, поэтому transport успевает завершить внутренний handshake до начала аварийного контроля.
+- При `404`/playback exception первого SoundCloud search result scheduler автоматически пробует до четырёх следующих результатов того же запроса, не добавляя их в видимую очередь.
+
+### Диагностика
+
+- Production evidence `baskov-v074-voice-exit.log` разделил две независимые причины: ложное принудительное закрытие watchdog и настоящий SoundCloud stream `404`.
+- Новые логи различают отсутствие audio frame demand и ошибку конкретного media source.
+
+### Изменено
+
+- Maven-версия приложения повышена до `0.7.5`.
+- Ограниченный connect/cooldown, отключённый JDA auto-reconnect, Docker healthcheck и rollback semantics сохранены.
+
+### Тестирование
+
+- Добавлены unit-тесты frame-demand telemetry, startup-grace/watchdog policy и fallback после playback exception.
+- Тестовый baseline повышен до 31 test classes / 89 `@Test` methods.
+
+
 ## [0.7.4] — 2026-08-04
 
 ### Исправлено

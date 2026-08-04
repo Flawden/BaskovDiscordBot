@@ -19,6 +19,7 @@ import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,7 +40,8 @@ public class PlayerManager {
 
     private final Map<Long, GuildMusicManager> musicManagers = new ConcurrentHashMap<>();
     private final Map<Long, ScheduledFuture<?>> idleDisconnects = new ConcurrentHashMap<>();
-    private final Map<Long, Instant> voiceDisconnectedSince = new ConcurrentHashMap<>();
+    private final Map<Long, Instant> voiceFrameDemandMissingSince = new ConcurrentHashMap<>();
+    private final Map<Long, Instant> voiceWatchdogNotBefore = new ConcurrentHashMap<>();
     private final DefaultAudioPlayerManager audioPlayerManager;
     private final ScheduledExecutorService idleScheduler;
     private final MusicProperties properties;
@@ -104,7 +106,13 @@ public class PlayerManager {
                 .thenApply(result -> {
                     if (!result.connected()) {
                         stopAndRelease(guild);
+                        return result;
                     }
+                    manager.getSendHandler().resetFrameTelemetry();
+                    voiceFrameDemandMissingSince.remove(guild.getIdLong());
+                    voiceWatchdogNotBefore.put(
+                            guild.getIdLong(),
+                            Instant.now().plus(properties.getVoiceConnectTimeout()));
                     return result;
                 });
     }
@@ -128,7 +136,8 @@ public class PlayerManager {
         audioPlayerManager.loadItemOrdered(musicManager, identifier, new AudioLoadResultHandler() {
             @Override
             public void trackLoaded(AudioTrack track) {
-                deliverQueueResult(guild, musicManager, track, requester, resultConsumer);
+                deliverQueueResult(
+                        guild, musicManager, track, requester, List.of(), resultConsumer);
             }
 
             @Override
@@ -144,7 +153,9 @@ public class PlayerManager {
                     return;
                 }
 
-                deliverQueueResult(guild, musicManager, selected, requester, resultConsumer);
+                List<AudioTrack> fallbacks = searchFallbacks(identifier, playlist, selected);
+                deliverQueueResult(
+                        guild, musicManager, selected, requester, fallbacks, resultConsumer);
             }
 
             @Override
@@ -165,7 +176,8 @@ public class PlayerManager {
     public void stopAndRelease(Guild guild) {
         GuildMusicManager manager = musicManagers.remove(guild.getIdLong());
         cancelIdleDisconnect(guild.getIdLong());
-        voiceDisconnectedSince.remove(guild.getIdLong());
+        voiceFrameDemandMissingSince.remove(guild.getIdLong());
+        voiceWatchdogNotBefore.remove(guild.getIdLong());
         voiceConnections.cancel(guild);
         safeCloseAudio(guild);
         if (manager != null) {
@@ -178,6 +190,7 @@ public class PlayerManager {
             GuildMusicManager musicManager,
             AudioTrack track,
             TrackRequester requester,
+            List<AudioTrack> fallbackTracks,
             Consumer<MusicLoadResult> resultConsumer) {
         if (!musicManager.isActive()) {
             log.info("Ignoring completed media load for closed guild session {}", guild.getId());
@@ -185,7 +198,8 @@ public class PlayerManager {
             return;
         }
 
-        TrackScheduler.QueueResult queueResult = musicManager.getScheduler().queue(track, requester);
+        TrackScheduler.QueueResult queueResult = musicManager.getScheduler().queue(
+                track, requester, fallbackTracks);
         MusicLoadResult.Status status = switch (queueResult.status()) {
             case STARTED -> MusicLoadResult.Status.STARTED;
             case QUEUED -> MusicLoadResult.Status.QUEUED;
@@ -219,36 +233,62 @@ public class PlayerManager {
             long guildId = guild.getIdLong();
             boolean playbackExpected = manager.getAudioPlayer().getPlayingTrack() != null
                     || manager.getScheduler().getCurrentRequest() != null;
-            try {
-                if (!playbackExpected || guild.getAudioManager().isConnected()) {
-                    voiceDisconnectedSince.remove(guildId);
-                    continue;
-                }
-            } catch (RuntimeException exception) {
-                log.debug("Voice watchdog skipped unavailable guild {}: {}",
-                        guild.getId(), exception.getMessage());
+            Instant notBefore = voiceWatchdogNotBefore.getOrDefault(guildId, Instant.EPOCH);
+            boolean recentFrameRequest = manager.getSendHandler()
+                    .hasRecentFrameRequest(properties.getVoiceDisconnectGrace());
+            Instant missingSince = voiceFrameDemandMissingSince.get(guildId);
+
+            VoiceWatchdogPolicy.Decision decision = VoiceWatchdogPolicy.evaluate(
+                    now,
+                    notBefore,
+                    missingSince,
+                    playbackExpected,
+                    recentFrameRequest,
+                    properties.getVoiceDisconnectGrace());
+
+            if (decision == VoiceWatchdogPolicy.Decision.HEALTHY) {
+                voiceFrameDemandMissingSince.remove(guildId);
                 continue;
             }
-
-            Instant disconnectedAt = voiceDisconnectedSince.putIfAbsent(guildId, now);
-            if (disconnectedAt == null) {
-                log.warn("Voice transport became disconnected while playback was expected: guild={}",
+            if (decision == VoiceWatchdogPolicy.Decision.START_GRACE) {
+                voiceFrameDemandMissingSince.putIfAbsent(guildId, now);
+                log.warn("Discord stopped requesting audio frames while playback was expected: guild={}",
                         guild.getId());
                 continue;
             }
-
-            Duration disconnectedFor = Duration.between(disconnectedAt, now);
-            if (disconnectedFor.compareTo(properties.getVoiceDisconnectGrace()) < 0) {
+            if (decision == VoiceWatchdogPolicy.Decision.WAIT) {
                 continue;
             }
 
-            log.error("Voice transport did not recover within {}: guild={}",
-                    properties.getVoiceDisconnectGrace(), guild.getId());
+            Duration missingFor = Duration.between(missingSince, now);
+            log.error("Discord did not request audio frames for {}: guild={}",
+                    missingFor, guild.getId());
             voiceConnections.recordTransportFailure(
                     guild,
-                    "Discord voice transport was disconnected for " + disconnectedFor.toSeconds() + " s");
+                    "Discord did not request audio frames for " + missingFor.toSeconds() + " s");
             stopAndRelease(guild);
         }
+    }
+
+    private List<AudioTrack> searchFallbacks(
+            String identifier,
+            AudioPlaylist playlist,
+            AudioTrack selected) {
+        if (!identifier.startsWith("scsearch:")) {
+            return List.of();
+        }
+        return playlist.getTracks().stream()
+                .filter(candidate -> candidate != selected)
+                .filter(this::isPlayableCandidate)
+                .limit(4)
+                .toList();
+    }
+
+    private boolean isPlayableCandidate(AudioTrack track) {
+        return track != null
+                && !track.getInfo().isStream
+                && track.getDuration() > 0L
+                && track.getDuration() <= properties.getMaxTrackDuration().toMillis();
     }
 
     private void submitPlaybackCleanup(Guild guild) {
@@ -365,7 +405,8 @@ public class PlayerManager {
         musicManagers.clear();
         idleDisconnects.values().forEach(future -> future.cancel(false));
         idleDisconnects.clear();
-        voiceDisconnectedSince.clear();
+        voiceFrameDemandMissingSince.clear();
+        voiceWatchdogNotBefore.clear();
         idleScheduler.shutdownNow();
         audioPlayerManager.shutdown();
     }

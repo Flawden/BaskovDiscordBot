@@ -55,6 +55,9 @@ class VoiceConnectionStabilityContractTest {
         assertTrue(scheduler.contains("onPlaybackCleanup.run()"));
         assertTrue(player.contains("recordTransportFailure"));
         assertTrue(player.contains("safeCloseAudio"));
+        assertTrue(player.contains("hasRecentFrameRequest"));
+        assertTrue(player.contains("voiceWatchdogNotBefore"));
+        assertFalse(player.contains("!playbackExpected || guild.getAudioManager().isConnected()"));
     }
 
     @Test

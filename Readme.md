@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая стабильная версия: **v0.7.4**.
+Текущая стабильная версия: **v0.7.5**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA и LavaPlayer.
 
@@ -14,14 +14,14 @@
 - постоянные настройки громкости и повтора отдельно для каждого Discord-сервера;
 - команда `/status` с uptime, Discord gateway, музыкальными сессиями и агрегированными счётчиками команд;
 - динамический Docker heartbeat, который подтверждает свежее подключение к Discord, а не только факт старта;
-- bounded voice connection: одна попытка, отключённый auto-reconnect, timeout/cooldown и watchdog сорванной аудиосессии;
+- bounded voice connection: одна попытка, отключённый auto-reconnect, startup-grace и watchdog по реальному запросу аудиофреймов;
 - ограничения CPU, памяти, PID и ротация Docker-логов;
 - управление музыкой только из общего voice channel с административным override;
 - bounded queue, лимит длительности и автоматическое отключение пустых сессий;
 - stateless-ядро команд с case-insensitive реестром и защитой от дубликатов;
 - конфигурируемый префикс и cooldown для шумных команд;
 - команда `!version` с версией и метаданными сборки;
-- безопасная обработка ссылок SoundCloud/YouTube без сетевой проверки пользовательского URL;
+- безопасная обработка ссылок SoundCloud/YouTube без сетевой проверки пользовательского URL; SoundCloud search пробует резервные результаты при playback error;
 - согласованные версии SLF4J/Logback под управлением Spring Boot BOM;
 - автоматические ежемесячные проверки обновлений Maven и GitHub Actions;
 - major-обновления Spring Boot, JDA и GitHub Actions блокируются Dependabot и выполняются только отдельными migration-релизами;
