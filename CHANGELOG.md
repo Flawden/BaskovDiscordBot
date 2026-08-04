@@ -7,6 +7,26 @@
 ## [Unreleased]
 
 
+## [0.9.0] — 2026-08-04
+
+### Исправлено
+
+- Выполнена полноценная source-миграция JDA `5.6.1 → 6.5.0` после production close code `4017 E2EE/DAVE protocol required` и повторного `VOICE_LEFT` на всей линии JDA 5.
+- Музыкальные кнопки переведены с удалённых пакетов JDA 5 `net.dv8tion.jda.api.interactions.components.*` на JDA 6 `net.dv8tion.jda.api.components.*`.
+- Сообщение transport failure больше не называет текущую JDA «старой» и направляет диагностику к фактическому DAVE/E2EE close code и runtime-версии.
+
+### Сохранено
+
+- Spring Boot остаётся `3.4.3`, Java — `17`, LavaPlayer — `2.2.3`, Lombok — `1.18.36`, Maven Compiler Plugin — `3.13.0`.
+- Playback success по-прежнему подтверждается только после нового вызова `AudioSendHandler#canProvide()`, а не по факту локального старта декодера.
+- `/status`, persistent voice diagnostics, observe-only watchdog, stale callback protection и `bridge|host` A/B path сохранены.
+
+### Тестирование
+
+- Добавлен `JdaSixSourceMigrationContractTest` на новые component packages, отсутствие framework drift и сохранение frame-polling readiness gate.
+- Dependency compatibility contract теперь фиксирует JDA `6.5.0` как единственную разрешённую production-линию.
+- Тестовый baseline повышен до 36 test classes / 108 `@Test` methods.
+
 ## [0.8.1] — 2026-08-04
 
 ### Исправлено

@@ -1,8 +1,8 @@
 package ru.flawden.BascovDiscordBot.interactions;
 
-import net.dv8tion.jda.api.interactions.components.ActionRow;
-import net.dv8tion.jda.api.interactions.components.LayoutComponent;
-import net.dv8tion.jda.api.interactions.components.buttons.Button;
+import net.dv8tion.jda.api.components.ActionRow;
+import net.dv8tion.jda.api.components.LayoutComponent;
+import net.dv8tion.jda.api.components.buttons.Button;
 
 import java.util.List;
 

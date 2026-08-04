@@ -98,7 +98,7 @@ public final class MusicEmbeds {
                 ? PlaybackReadinessResult.Status.FRAME_TIMEOUT
                 : readiness.status()) {
             case VOICE_LEFT -> "Discord завершил voice handshake до первого аудиофрейма. "
-                    + "На старой JDA это соответствовало close code 4017: E2EE/DAVE required.";
+                    + "Проверь DAVE/E2EE close code в узком JDA voice-логе и версию runtime.";
             case FRAME_TIMEOUT -> "Voice control подключился, но media transport не начал polling аудио.";
             case SESSION_CLOSED -> "Сессия была остановлена другой командой или во время перезапуска.";
             case TRACK_REPLACED -> "Трек был заменён до завершения проверки транспорта.";

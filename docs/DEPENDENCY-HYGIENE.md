@@ -52,13 +52,13 @@ Dependabot ежемесячно проверяет Maven dependencies и GitHub 
 Текущая production-линия зафиксирована на совместимом наборе:
 
 - Spring Boot `3.4.3`;
-- JDA `5.6.1` (pinned DAVE migration candidate);
+- JDA `6.5.0` (isolated DAVE/E2EE voice migration line);
 - LavaPlayer `2.2.3`;
 - Lombok `1.18.36`;
 - Maven Compiler Plugin `3.13.0`;
 - Java `17`.
 
-Major-переходы вроде Spring Boot `3 → 4` или JDA `5 → 6` не являются обычным обновлением версии. Они могут менять Java API, package names, lifecycle, тестовую инфраструктуру и требования к runtime. Такие переходы выполняются только отдельным migration-релизом с адаптацией исходников, тестов и deployment-контрактов.
+Major-переходы вроде Spring Boot `3 → 4` или будущий JDA `6 → 7` не являются обычным обновлением версии. Они могут менять Java API, package names, lifecycle, тестовую инфраструктуру и требования к runtime. Такие переходы выполняются только отдельным migration-релизом с адаптацией исходников, тестов и deployment-контрактов.
 
 ## Правило обновлений
 

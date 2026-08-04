@@ -21,9 +21,9 @@ class StatusMessageFormatterTest {
 
         assertEquals("""
                 Статус: `CONNECTED`
-                JDA: `5.6.1`
+                JDA: `6.5.0`
                 Серверов: `3`
-                Slash-команд: `18`""", StatusMessageFormatter.discord(snapshot, "5.6.1"));
+                Slash-команд: `18`""", StatusMessageFormatter.discord(snapshot, "6.5.0"));
     }
 
     @Test

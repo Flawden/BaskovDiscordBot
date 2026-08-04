@@ -11,10 +11,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class DaveVoiceMigrationContractTest {
 
     @Test
-    void jdaMovesToPinnedDaveCapableFiveLineWithoutFrameworkDrift() throws Exception {
+    void jdaMovesToPinnedSixLineWithoutFrameworkDrift() throws Exception {
         String pom = Files.readString(Path.of("pom.xml"));
 
-        assertTrue(pom.contains("<version>5.6.1</version>"));
+        assertTrue(pom.contains("<version>6.5.0</version>"));
+        assertFalse(pom.contains("<version>5.6.1</version>"));
         assertFalse(pom.contains("<version>5.3.0</version>"));
         assertTrue(pom.contains("<version>3.4.3</version>"),
                 "Spring Boot must not move during the DAVE migration");

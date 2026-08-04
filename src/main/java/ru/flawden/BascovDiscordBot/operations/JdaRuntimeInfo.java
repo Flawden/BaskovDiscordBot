@@ -7,7 +7,7 @@ import net.dv8tion.jda.api.JDA;
  */
 public final class JdaRuntimeInfo {
 
-    public static final String VOICE_MIGRATION_BASELINE = "5.6.1";
+    public static final String VOICE_MIGRATION_BASELINE = "6.5.0";
 
     private JdaRuntimeInfo() {
     }

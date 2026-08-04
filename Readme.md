@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая стабильная версия: **v0.8.1**.
+Текущая стабильная версия: **v0.9.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA и LavaPlayer.
 
@@ -14,7 +14,7 @@
 - постоянные настройки громкости и повтора отдельно для каждого Discord-сервера;
 - команда `/status` с uptime, Discord gateway, музыкальными сессиями, voice transport snapshot и последними voice/source ошибками;
 - динамический Docker heartbeat, который подтверждает свежее подключение к Discord, а не только факт старта;
-- JDA 5.6.1 DAVE migration candidate и подтверждение playback только после реального запроса аудиофрейма Discord media transport;
+- JDA 6.5.0 с современным DAVE/E2EE voice stack и подтверждение playback только после реального запроса аудиофрейма Discord media transport;
 - bounded voice connection: одна попытка, отключённый auto-reconnect, startup-grace и observe-only watchdog по реальному запросу аудиофреймов;
 - защита от stale LavaPlayer callbacks после запуска fallback;
 - переключаемый diagnostic network mode `bridge|host` для A/B-проверки Docker UDP/NAT;
@@ -79,7 +79,7 @@ Live-потоки отключены. Подробные правила voice-д
 Operations и health-модель описаны в [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 Voice connection state machine описана в [`docs/VOICE-CONNECTIONS.md`](docs/VOICE-CONNECTIONS.md).
 Root-cause voice diagnostics и bridge/host A/B-тест описаны в [`docs/VOICE-ROOT-CAUSE-DIAGNOSTICS.md`](docs/VOICE-ROOT-CAUSE-DIAGNOSTICS.md).
-DAVE voice migration описана в [`docs/DAVE-VOICE-MIGRATION.md`](docs/DAVE-VOICE-MIGRATION.md).
+DAVE voice migration и переход JDA 5 → 6 описаны в [`docs/DAVE-VOICE-MIGRATION.md`](docs/DAVE-VOICE-MIGRATION.md).
 Релиз с Android описан в [`docs/TERMUX-RELEASE.md`](docs/TERMUX-RELEASE.md).
 
 ## CI/CD
