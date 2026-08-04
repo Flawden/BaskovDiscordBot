@@ -7,6 +7,24 @@
 ## [Unreleased]
 
 
+## [0.9.3] — 2026-08-04
+
+### Исправлено
+
+- `VoiceDiagnosticsTest` использует фактический JDA 6 тип `SelfMember`, возвращаемый `Guild#getSelfMember()`, вместо общего `Member`.
+- Устранён второй обнаруженный `testCompile` blocker JDA 6 migration после успешного исправления `VoiceConnectionCoordinatorTest`.
+- `JdaSixSourceMigrationContractTest` теперь сканирует все Mockito-fixture с `Guild#getSelfMember()` и запрещает несовместимый `mock(Member.class)` во всём тестовом дереве.
+
+### Изменено
+
+- Maven-версия приложения повышена до `0.9.3`.
+- Runtime DAVE/E2EE migration, JDA `6.5.0`, Spring Boot `3.4.3`, Java 17, LavaPlayer `2.2.3`, Docker и deployment не менялись.
+
+### Тестирование
+
+- Тестовый baseline остаётся 35 test classes / 109 `@Test` methods.
+- Hotfix предназначен для продолжения полного `clean verify` после успешной компиляции production-кода и первого исправленного JDA 6 fixture.
+
 ## [0.9.2] — 2026-08-04
 
 ### Исправлено

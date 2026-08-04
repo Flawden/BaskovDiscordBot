@@ -2,7 +2,7 @@ package ru.flawden.BascovDiscordBot.operations;
 
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.GuildVoiceState;
-import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.SelfMember;
 import net.dv8tion.jda.api.managers.AudioManager;
 import org.junit.jupiter.api.Test;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
@@ -61,7 +61,7 @@ class VoiceDiagnosticsTest {
 
     private static Guild guild(boolean audioConnected) {
         Guild guild = mock(Guild.class);
-        Member self = mock(Member.class);
+        SelfMember self = mock(SelfMember.class);
         GuildVoiceState voiceState = mock(GuildVoiceState.class);
         AudioManager audioManager = mock(AudioManager.class);
         when(guild.getIdLong()).thenReturn(42L);

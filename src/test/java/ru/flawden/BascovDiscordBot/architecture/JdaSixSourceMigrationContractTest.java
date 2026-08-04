@@ -41,15 +41,31 @@ class JdaSixSourceMigrationContractTest {
     }
 
     @Test
-    void voiceCoordinatorFixtureUsesJdaSixSelfMemberType() throws Exception {
-        String testSource = Files.readString(Path.of(
-                "src/test/java/ru/flawden/BascovDiscordBot/lavaplayer/VoiceConnectionCoordinatorTest.java"));
+    void allSelfMemberFixturesUseTheJdaSixSelfMemberType() throws Exception {
+        try (var sources = Files.walk(Path.of("src/test/java"))) {
+            var fixtures = sources
+                    .filter(path -> path.toString().endsWith(".java"))
+                    .filter(path -> {
+                        try {
+                            return Files.readString(path).contains("getSelfMember())" + ".thenReturn(");
+                        } catch (Exception exception) {
+                            throw new IllegalStateException("Cannot inspect " + path, exception);
+                        }
+                    })
+                    .toList();
 
-        assertTrue(testSource.contains("import net.dv8tion.jda.api.entities.SelfMember;"));
-        assertTrue(compact(testSource).contains(
-                "SelfMemberselfMember=mock(SelfMember.class);"));
-        assertFalse(testSource.contains("import net.dv8tion.jda.api.entities.Member;"),
-                "Guild#getSelfMember returns SelfMember in JDA 6");
+            assertFalse(fixtures.isEmpty(), "At least one getSelfMember Mockito fixture must exist");
+
+            for (Path fixture : fixtures) {
+                String source = Files.readString(fixture);
+                assertTrue(source.contains("import net.dv8tion.jda.api.entities.SelfMember;"),
+                        () -> fixture + " must import SelfMember for Guild#getSelfMember()");
+                assertTrue(compact(source).contains("mock(SelfMember.class)"),
+                        () -> fixture + " must mock SelfMember instead of Member");
+                assertFalse(compact(source).contains("mock(Member.class)"),
+                        () -> fixture + " must not return a general Member from Guild#getSelfMember()");
+            }
+        }
     }
 
     @Test
