@@ -25,10 +25,12 @@ import ru.flawden.BascovDiscordBot.config.MusicProperties;
 import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.MusicLoadResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
+import ru.flawden.BascovDiscordBot.lavaplayer.PlaybackReadinessResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.RepeatMode;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
 import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
+import ru.flawden.BascovDiscordBot.operations.JdaRuntimeInfo;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
@@ -212,7 +214,7 @@ public class ModernInteractions extends ListenerAdapter {
         MusicRuntimeSnapshot music = playerManager.runtimeSnapshot();
         VoiceDiagnosticSnapshot voice = playerManager.voiceDiagnosticsSnapshot(event.getGuild());
 
-        String discord = StatusMessageFormatter.discord(runtime);
+        String discord = StatusMessageFormatter.discord(runtime, JdaRuntimeInfo.version());
         String musicState = StatusMessageFormatter.music(music);
         String voiceState = StatusMessageFormatter.voice(voice);
         String voiceHistory = StatusMessageFormatter.voiceHistory(voice);
@@ -290,7 +292,7 @@ public class ModernInteractions extends ListenerAdapter {
                             guild,
                             identifier,
                             requester,
-                            result -> editLoadResult(hook, result));
+                            result -> editLoadResult(hook, guild, result));
                 }));
     }
 
@@ -298,13 +300,45 @@ public class ModernInteractions extends ListenerAdapter {
         hook.editOriginalEmbeds(MusicEmbeds.voiceConnectionFailure(result)).queue();
     }
 
-    private void editLoadResult(InteractionHook hook, MusicLoadResult result) {
+    private void editLoadResult(InteractionHook hook, Guild guild, MusicLoadResult result) {
         var action = hook.editOriginalEmbeds(MusicEmbeds.loadResult(result, musicProperties));
         if (result.status() == MusicLoadResult.Status.STARTED
                 || result.status() == MusicLoadResult.Status.QUEUED) {
             action.setComponents(MusicControls.rows());
         }
         action.queue();
+
+        if (result.status() != MusicLoadResult.Status.STARTED || result.track() == null) {
+            return;
+        }
+
+        playerManager.awaitPlaybackReady(guild, result.track())
+                .whenComplete((readiness, failure) -> {
+                    if (failure != null) {
+                        log.error("Playback readiness future failed in guild {}", guild.getId(), failure);
+                        hook.editOriginalEmbeds(MusicEmbeds.error(
+                                        "❌ Не удалось подтвердить воспроизведение",
+                                        "Внутренняя ошибка проверки Discord media transport."))
+                                .setComponents(java.util.List.of())
+                                .queue();
+                        playerManager.stopAndRelease(guild);
+                        return;
+                    }
+                    if (readiness.ready()) {
+                        hook.editOriginalEmbeds(MusicEmbeds.playbackConfirmed(result))
+                                .setComponents(MusicControls.rows())
+                                .queue();
+                        return;
+                    }
+                    hook.editOriginalEmbeds(MusicEmbeds.playbackReadinessFailure(
+                                    readiness,
+                                    JdaRuntimeInfo.version()))
+                            .setComponents(java.util.List.of())
+                            .queue();
+                    if (readiness.status() != PlaybackReadinessResult.Status.SESSION_CLOSED) {
+                        playerManager.stopAndRelease(guild);
+                    }
+                });
     }
 
     private void pause(SlashCommandInteractionEvent event, boolean paused) {

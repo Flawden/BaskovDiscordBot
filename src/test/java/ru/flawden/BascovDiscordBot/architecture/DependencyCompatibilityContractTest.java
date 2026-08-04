@@ -27,8 +27,8 @@ class DependencyCompatibilityContractTest {
 
         assertEquals("3.4.3", directChildText(parent, "version"),
                 "Spring Boot 4 requires an explicit migration release");
-        assertEquals("5.3.0", dependencyVersion(project, "net.dv8tion", "JDA"),
-                "JDA 6 requires source migration for the components API");
+        assertEquals("5.6.1", dependencyVersion(project, "net.dv8tion", "JDA"),
+                "JDA 5.6.1 is the pinned DAVE migration candidate; JDA 6 remains a separate source migration");
         assertEquals("2.2.3", dependencyVersion(project, "dev.arbjerg", "lavaplayer"));
         assertEquals("1.18.36", dependencyVersion(project, "org.projectlombok", "lombok"));
         assertEquals("3.13.0", pluginVersion(project,

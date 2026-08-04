@@ -16,6 +16,7 @@ public class MusicProperties {
     private Duration maxTrackDuration = Duration.ofHours(4);
     private Duration idleDisconnectTimeout = Duration.ofMinutes(5);
     private Duration voiceConnectTimeout = Duration.ofSeconds(15);
+    private Duration playbackReadyTimeout = Duration.ofSeconds(10);
     private Duration voiceFailureCooldown = Duration.ofSeconds(30);
     private Duration voiceDisconnectGrace = Duration.ofSeconds(5);
     private boolean voiceWatchdogEnforce;
@@ -57,6 +58,22 @@ public class MusicProperties {
                     "discord-bot.music.voiceConnectTimeout must be between 1ms and 2m");
         }
         this.voiceConnectTimeout = voiceConnectTimeout;
+    }
+
+
+    public Duration getPlaybackReadyTimeout() {
+        return playbackReadyTimeout;
+    }
+
+    public void setPlaybackReadyTimeout(Duration playbackReadyTimeout) {
+        if (playbackReadyTimeout == null
+                || playbackReadyTimeout.isNegative()
+                || playbackReadyTimeout.isZero()
+                || playbackReadyTimeout.compareTo(Duration.ofMinutes(1)) > 0) {
+            throw new IllegalArgumentException(
+                    "discord-bot.music.playbackReadyTimeout must be between 1ms and 1m");
+        }
+        this.playbackReadyTimeout = playbackReadyTimeout;
     }
 
     public Duration getVoiceFailureCooldown() {

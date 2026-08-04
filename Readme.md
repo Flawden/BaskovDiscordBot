@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая стабильная версия: **v0.7.7**.
+Текущая стабильная версия: **v0.8.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA и LavaPlayer.
 
@@ -14,6 +14,7 @@
 - постоянные настройки громкости и повтора отдельно для каждого Discord-сервера;
 - команда `/status` с uptime, Discord gateway, музыкальными сессиями, voice transport snapshot и последними voice/source ошибками;
 - динамический Docker heartbeat, который подтверждает свежее подключение к Discord, а не только факт старта;
+- JDA 5.6.1 DAVE migration candidate и подтверждение playback только после реального запроса аудиофрейма Discord media transport;
 - bounded voice connection: одна попытка, отключённый auto-reconnect, startup-grace и observe-only watchdog по реальному запросу аудиофреймов;
 - защита от stale LavaPlayer callbacks после запуска fallback;
 - переключаемый diagnostic network mode `bridge|host` для A/B-проверки Docker UDP/NAT;
@@ -61,6 +62,7 @@ docker compose logs -f bot
 | `DISCORD_BOT_MUSIC_MAX_TRACK_DURATION` | `4h` | максимальная длительность одного трека |
 | `DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT` | `5m` | отключение после опустошения очереди |
 | `DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT` | `15s` | максимальное время одной попытки voice-подключения |
+| `DISCORD_BOT_MUSIC_PLAYBACK_READY_TIMEOUT` | `10s` | ожидание первого аудиофрейма после запуска трека |
 | `DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN` | `30s` | пауза после неудачного подключения/transport failure |
 | `DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE` | `5s` | допустимый краткий разрыв во время воспроизведения |
 | `DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE` | `false` | `false` только наблюдает; `true` закрывает transport после подтверждённого timeout |
@@ -77,6 +79,7 @@ Live-потоки отключены. Подробные правила voice-д
 Operations и health-модель описаны в [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 Voice connection state machine описана в [`docs/VOICE-CONNECTIONS.md`](docs/VOICE-CONNECTIONS.md).
 Root-cause voice diagnostics и bridge/host A/B-тест описаны в [`docs/VOICE-ROOT-CAUSE-DIAGNOSTICS.md`](docs/VOICE-ROOT-CAUSE-DIAGNOSTICS.md).
+DAVE voice migration описана в [`docs/DAVE-VOICE-MIGRATION.md`](docs/DAVE-VOICE-MIGRATION.md).
 Релиз с Android описан в [`docs/TERMUX-RELEASE.md`](docs/TERMUX-RELEASE.md).
 
 ## CI/CD
@@ -135,6 +138,7 @@ ghcr.io/<owner>/<repository>:dev|latest
 | `DISCORD_BOT_MUSIC_MAX_TRACK_DURATION` | `4h` | максимальная длительность трека |
 | `DISCORD_BOT_MUSIC_IDLE_DISCONNECT_TIMEOUT` | `5m` | таймаут отключения пустой сессии |
 | `DISCORD_BOT_MUSIC_VOICE_CONNECT_TIMEOUT` | `15s` | timeout одной voice-попытки |
+| `DISCORD_BOT_MUSIC_PLAYBACK_READY_TIMEOUT` | `10s` | timeout подтверждения первого media frame poll |
 | `DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN` | `30s` | cooldown после voice failure |
 | `DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE` | `5s` | grace при разрыве активной сессии |
 | `DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE` | `false` | observe-only либо enforce watchdog |

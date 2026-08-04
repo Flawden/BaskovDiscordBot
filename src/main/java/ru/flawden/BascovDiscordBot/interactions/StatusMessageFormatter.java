@@ -15,10 +15,11 @@ final class StatusMessageFormatter {
     private StatusMessageFormatter() {
     }
 
-    static String discord(RuntimeHealthMonitor.Snapshot runtime) {
+    static String discord(RuntimeHealthMonitor.Snapshot runtime, String jdaVersion) {
         Objects.requireNonNull(runtime, "runtime");
         return String.join("\n",
                 "Статус: `" + runtime.jdaStatus() + "`",
+                "JDA: `" + (jdaVersion == null ? "unknown" : jdaVersion) + "`",
                 "Серверов: `" + runtime.guildCount() + "`",
                 "Slash-команд: `" + runtime.registeredSlashCommands() + "`");
     }

@@ -19,6 +19,7 @@ import ru.flawden.BascovDiscordBot.events.EventJoin;
 import ru.flawden.BascovDiscordBot.events.SelfVoiceStateEvents;
 import ru.flawden.BascovDiscordBot.interactions.ModernCommandCatalog;
 import ru.flawden.BascovDiscordBot.interactions.ModernInteractions;
+import ru.flawden.BascovDiscordBot.operations.JdaRuntimeInfo;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
 
@@ -104,8 +105,11 @@ public class BotConfig {
                     .complete()
                     .size();
             healthMonitor.start(jda, registeredCommands);
-            log.info("JDA is ready: status={}, guilds={}, slashCommands={}",
-                    jda.getStatus(), jda.getGuilds().size(), registeredCommands);
+            log.info("JDA is ready: version={}, status={}, guilds={}, slashCommands={}",
+                    JdaRuntimeInfo.version(),
+                    jda.getStatus(),
+                    jda.getGuilds().size(),
+                    registeredCommands);
             return jda;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();

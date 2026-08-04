@@ -52,7 +52,7 @@ Dependabot ежемесячно проверяет Maven dependencies и GitHub 
 Текущая production-линия зафиксирована на совместимом наборе:
 
 - Spring Boot `3.4.3`;
-- JDA `5.3.0`;
+- JDA `5.6.1` (pinned DAVE migration candidate);
 - LavaPlayer `2.2.3`;
 - Lombok `1.18.36`;
 - Maven Compiler Plugin `3.13.0`;

@@ -7,6 +7,7 @@ import net.dv8tion.jda.api.entities.MessageEmbed;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
 import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.MusicLoadResult;
+import ru.flawden.BascovDiscordBot.lavaplayer.PlaybackReadinessResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
 import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
@@ -30,9 +31,11 @@ public final class MusicEmbeds {
 
         switch (result.status()) {
             case STARTED -> embed
-                    .setTitle("▶️ Воспроизведение началось")
+                    .setColor(Color.ORANGE)
+                    .setTitle("⏳ Трек загружен")
                     .setDescription(formatTrack(track)
-                            + "\n**Заказал:** " + requester);
+                            + "\n**Заказал:** " + requester
+                            + "\nПроверяю, что Discord DAVE/media transport реально запрашивает аудиофреймы...");
             case QUEUED -> embed
                     .setTitle("🎶 Добавлено в очередь")
                     .setDescription(formatTrack(track)
@@ -68,6 +71,49 @@ public final class MusicEmbeds {
                     .setDescription("Трек загрузился после остановки музыкальной сессии и был проигнорирован.");
         }
         return embed.build();
+    }
+
+
+    public static MessageEmbed playbackConfirmed(MusicLoadResult result) {
+        return new EmbedBuilder()
+                .setColor(Color.GREEN)
+                .setTitle("▶️ Воспроизведение подтверждено")
+                .setDescription(formatTrack(result.track())
+                        + "\n**Заказал:** " + requesterLabel(result.requester())
+                        + "\nDiscord начал принимать аудиофреймы.")
+                .build();
+    }
+
+    public static MessageEmbed playbackReadinessFailure(
+            PlaybackReadinessResult readiness,
+            String jdaVersion) {
+        String details = readiness == null || readiness.details() == null
+                ? "Не удалось подтвердить Discord media transport."
+                : readiness.details();
+        String diagnosis = readiness == null
+                ? "UNKNOWN"
+                : readiness.status().name();
+
+        String hint = switch (readiness == null
+                ? PlaybackReadinessResult.Status.FRAME_TIMEOUT
+                : readiness.status()) {
+            case VOICE_LEFT -> "Discord завершил voice handshake до первого аудиофрейма. "
+                    + "На старой JDA это соответствовало close code 4017: E2EE/DAVE required.";
+            case FRAME_TIMEOUT -> "Voice control подключился, но media transport не начал polling аудио.";
+            case SESSION_CLOSED -> "Сессия была остановлена другой командой или во время перезапуска.";
+            case TRACK_REPLACED -> "Трек был заменён до завершения проверки транспорта.";
+            case READY -> "Discord media transport работает.";
+        };
+
+        return new EmbedBuilder()
+                .setColor(Color.RED)
+                .setTitle("🔐 Discord voice transport не подтвердился")
+                .setDescription(details
+                        + "\n**Диагноз:** `" + diagnosis + "`"
+                        + "\n**JDA:** `" + (jdaVersion == null ? "unknown" : jdaVersion) + "`"
+                        + "\n" + hint
+                        + "\nБот не будет показывать ложное сообщение о начале воспроизведения.")
+                .build();
     }
 
     public static MessageEmbed voiceConnectionFailure(VoiceConnectionResult result) {

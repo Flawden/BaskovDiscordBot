@@ -7,6 +7,36 @@
 ## [Unreleased]
 
 
+## [0.8.0] — 2026-08-04
+
+### Исправлено
+
+- Корневая причина voice-disconnect подтверждена production-логом: Discord закрывал Audio WebSocket с close code `4017` и причиной `E2EE/DAVE protocol required`, после чего старая JDA пыталась resume и получала `4006 Session is no longer valid`.
+- JDA обновлена с `5.3.0` до зафиксированной линии `5.6.1`, предложенной Dependabot в репозитории; Spring Boot `3.4.3`, Java 17 и LavaPlayer `2.2.3` не менялись.
+- `/play` и legacy `!search` больше не показывают ложное «Воспроизведение началось» только по факту запуска декодера LavaPlayer.
+- Успех воспроизведения подтверждается только после первого нового вызова `AudioSendHandler#canProvide()` — фактического запроса аудиофрейма Discord media transport.
+- При выходе из voice до первого фрейма или timeout polling пользователь получает отдельный диагноз, загруженная сессия закрывается и не остаётся «играющей» только локально.
+
+### Добавлено
+
+- `PlaybackReadinessPolicy` и асинхронный readiness gate с отдельным timeout `DISCORD_BOT_MUSIC_PLAYBACK_READY_TIMEOUT` (по умолчанию `10s`).
+- `/status` и startup-log теперь показывают фактически загруженную версию JDA.
+- Отдельные состояния подтверждения: `READY`, `VOICE_LEFT`, `FRAME_TIMEOUT`, `SESSION_CLOSED`, `TRACK_REPLACED`.
+- Документ `docs/DAVE-VOICE-MIGRATION.md` с production evidence, границами миграции и smoke-проверкой.
+
+### Изменено
+
+- Maven-версия приложения повышена до `0.8.0`.
+- Production network mode возвращается к `bridge`; host-network остаётся только диагностическим override.
+- Сообщение о загруженном треке сначала показывает проверку DAVE/media transport, а затем обновляется на подтверждённый успех или точную ошибку.
+
+### Тестирование
+
+- Добавлены unit-тесты readiness policy: первый frame poll, ранний LEAVE, timeout, закрытая сессия и replacement track.
+- Добавлен architecture contract на JDA `5.6.1`, отсутствие framework drift и запрет ложного playback success.
+
+
+
 ## [0.7.7] — 2026-08-04
 
 ### Добавлено

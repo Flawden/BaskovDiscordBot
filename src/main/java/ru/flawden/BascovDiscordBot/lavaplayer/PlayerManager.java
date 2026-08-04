@@ -31,6 +31,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -47,6 +48,7 @@ public class PlayerManager {
     private final Set<Long> voiceWatchdogReported = ConcurrentHashMap.newKeySet();
     private final DefaultAudioPlayerManager audioPlayerManager;
     private final ScheduledExecutorService idleScheduler;
+    private final ScheduledExecutorService playbackReadinessScheduler;
     private final MusicProperties properties;
     private final GuildPreferencesRepository preferencesRepository;
     private final VoiceConnectionCoordinator voiceConnections;
@@ -68,15 +70,22 @@ public class PlayerManager {
             thread.setDaemon(true);
             return thread;
         });
+        this.playbackReadinessScheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "baskov-playback-readiness");
+            thread.setDaemon(true);
+            return thread;
+        });
         this.idleScheduler.scheduleWithFixedDelay(
                 this::monitorVoiceConnections,
                 1L,
                 1L,
                 TimeUnit.SECONDS);
-        log.info("PlayerManager initialized: maxQueue={}, maxTrack={}, idleTimeout={}, volume={}/{}",
+        log.info("PlayerManager initialized: maxQueue={}, maxTrack={}, idleTimeout={}, "
+                        + "playbackReadyTimeout={}, volume={}/{}",
                 properties.getMaxQueueSize(),
                 properties.getMaxTrackDuration(),
                 properties.getIdleDisconnectTimeout(),
+                properties.getPlaybackReadyTimeout(),
                 properties.getDefaultVolume(),
                 properties.getMaxVolume());
     }
@@ -183,6 +192,94 @@ public class PlayerManager {
                 resultConsumer.accept(MusicLoadResult.withoutTrack(MusicLoadResult.Status.LOAD_FAILED));
             }
         });
+    }
+
+    public CompletableFuture<PlaybackReadinessResult> awaitPlaybackReady(
+            Guild guild,
+            AudioTrack expectedTrack) {
+        GuildMusicManager initialManager = musicManagers.get(guild.getIdLong());
+        if (initialManager == null || !initialManager.isActive()) {
+            return CompletableFuture.completedFuture(PlaybackReadinessResult.failure(
+                    PlaybackReadinessResult.Status.SESSION_CLOSED,
+                    "Музыкальная сессия была закрыта до подтверждения воспроизведения."));
+        }
+
+        long baselineFrameRequests = initialManager.getSendHandler().frameRequestCount();
+        Instant deadline = Instant.now().plus(properties.getPlaybackReadyTimeout());
+        CompletableFuture<PlaybackReadinessResult> result = new CompletableFuture<>();
+        AtomicReference<ScheduledFuture<?>> taskReference = new AtomicReference<>();
+
+        Runnable probe = () -> {
+            if (result.isDone()) {
+                return;
+            }
+
+            GuildMusicManager currentManager = musicManagers.get(guild.getIdLong());
+            boolean sessionActive = currentManager != null && currentManager.isActive();
+            boolean expectedTrackIsCurrent = sessionActive
+                    && currentManager.getAudioPlayer().getPlayingTrack() == expectedTrack;
+            boolean selfInVoiceChannel = guild.getSelfMember().getVoiceState() != null
+                    && guild.getSelfMember().getVoiceState().getChannel() != null;
+            long currentFrameRequests = sessionActive
+                    ? currentManager.getSendHandler().frameRequestCount()
+                    : baselineFrameRequests;
+
+            PlaybackReadinessPolicy.Decision decision = PlaybackReadinessPolicy.evaluate(
+                    sessionActive,
+                    expectedTrackIsCurrent,
+                    selfInVoiceChannel,
+                    baselineFrameRequests,
+                    currentFrameRequests,
+                    Instant.now(),
+                    deadline);
+
+            PlaybackReadinessResult readiness = switch (decision) {
+                case WAIT -> null;
+                case READY -> PlaybackReadinessResult.readyResult();
+                case VOICE_LEFT -> PlaybackReadinessResult.failure(
+                        PlaybackReadinessResult.Status.VOICE_LEFT,
+                        "Discord завершил voice-сессию до первого аудиофрейма.");
+                case FRAME_TIMEOUT -> PlaybackReadinessResult.failure(
+                        PlaybackReadinessResult.Status.FRAME_TIMEOUT,
+                        "Discord не запросил ни одного аудиофрейма за "
+                                + properties.getPlaybackReadyTimeout().toSeconds() + " секунд.");
+                case SESSION_CLOSED -> PlaybackReadinessResult.failure(
+                        PlaybackReadinessResult.Status.SESSION_CLOSED,
+                        "Музыкальная сессия была закрыта до подтверждения воспроизведения.");
+                case TRACK_REPLACED -> PlaybackReadinessResult.failure(
+                        PlaybackReadinessResult.Status.TRACK_REPLACED,
+                        "Трек был заменён до подтверждения media transport.");
+            };
+
+            if (readiness == null || !result.complete(readiness)) {
+                return;
+            }
+            if (readiness.ready()) {
+                log.info("Playback confirmed by Discord frame polling: guild={}, track={}",
+                        guild.getId(),
+                        expectedTrack.getInfo() == null ? "unknown" : expectedTrack.getInfo().title);
+            } else {
+                voiceDiagnostics.voiceFailure(
+                        guild.getIdLong(),
+                        "PLAYBACK_CONFIRMATION_" + readiness.status() + ": " + readiness.details());
+                log.error("Playback confirmation failed: guild={}, status={}, details={}",
+                        guild.getId(), readiness.status(), readiness.details());
+            }
+        };
+
+        ScheduledFuture<?> task = playbackReadinessScheduler.scheduleAtFixedRate(
+                probe,
+                0L,
+                100L,
+                TimeUnit.MILLISECONDS);
+        taskReference.set(task);
+        result.whenComplete((ignored, failure) -> {
+            ScheduledFuture<?> scheduled = taskReference.get();
+            if (scheduled != null) {
+                scheduled.cancel(false);
+            }
+        });
+        return result;
     }
 
     public void stopAndRelease(Guild guild) {
@@ -416,6 +513,7 @@ public class PlayerManager {
         voiceWatchdogNotBefore.clear();
         voiceWatchdogReported.clear();
         idleScheduler.shutdownNow();
+        playbackReadinessScheduler.shutdownNow();
         audioPlayerManager.shutdown();
     }
 }

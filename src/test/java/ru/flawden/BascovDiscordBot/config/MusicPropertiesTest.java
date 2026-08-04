@@ -18,6 +18,7 @@ class MusicPropertiesTest {
         assertEquals(Duration.ofHours(4), properties.getMaxTrackDuration());
         assertEquals(Duration.ofMinutes(5), properties.getIdleDisconnectTimeout());
         assertEquals(Duration.ofSeconds(15), properties.getVoiceConnectTimeout());
+        assertEquals(Duration.ofSeconds(10), properties.getPlaybackReadyTimeout());
         assertEquals(Duration.ofSeconds(30), properties.getVoiceFailureCooldown());
         assertEquals(Duration.ofSeconds(5), properties.getVoiceDisconnectGrace());
         assertFalse(properties.isVoiceWatchdogEnforce());
@@ -39,6 +40,10 @@ class MusicPropertiesTest {
                 () -> properties.setVoiceConnectTimeout(Duration.ZERO));
         assertThrows(IllegalArgumentException.class,
                 () -> properties.setVoiceConnectTimeout(Duration.ofMinutes(3)));
+        assertThrows(IllegalArgumentException.class,
+                () -> properties.setPlaybackReadyTimeout(Duration.ZERO));
+        assertThrows(IllegalArgumentException.class,
+                () -> properties.setPlaybackReadyTimeout(Duration.ofMinutes(2)));
         assertThrows(IllegalArgumentException.class,
                 () -> properties.setVoiceFailureCooldown(Duration.ofSeconds(-1)));
         assertThrows(IllegalArgumentException.class,

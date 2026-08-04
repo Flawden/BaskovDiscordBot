@@ -10,8 +10,10 @@ import ru.flawden.BascovDiscordBot.interactions.MusicControls;
 import ru.flawden.BascovDiscordBot.interactions.RecentSearchHistory;
 import ru.flawden.BascovDiscordBot.lavaplayer.MusicLoadResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
+import ru.flawden.BascovDiscordBot.lavaplayer.PlaybackReadinessResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
 import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
+import ru.flawden.BascovDiscordBot.operations.JdaRuntimeInfo;
 
 import java.awt.Color;
 import java.time.Duration;
@@ -106,12 +108,51 @@ public class SearchEvent implements Event {
                                     action.setComponents(MusicControls.rows());
                                 }
                                 action.queue(
-                                        ignored -> { },
+                                        message -> confirmPrefixPlayback(event, message, result),
                                         sendFailure -> log.warn(
                                                 "Failed to send music response to channel {}: {}",
                                                 event.getTextChannel().getId(),
                                                 sendFailure.getMessage()));
                             });
+                });
+    }
+
+
+    private void confirmPrefixPlayback(
+            EventArgs event,
+            net.dv8tion.jda.api.entities.Message message,
+            MusicLoadResult result) {
+        if (result.status() != MusicLoadResult.Status.STARTED || result.track() == null) {
+            return;
+        }
+
+        playerManager.awaitPlaybackReady(event.getGuild(), result.track())
+                .whenComplete((readiness, failure) -> {
+                    if (failure != null) {
+                        log.error("Playback readiness future failed in guild {}",
+                                event.getGuild().getId(), failure);
+                        message.editMessageEmbeds(MusicEmbeds.error(
+                                        "❌ Не удалось подтвердить воспроизведение",
+                                        "Внутренняя ошибка проверки Discord media transport."))
+                                .setComponents(java.util.List.of())
+                                .queue();
+                        playerManager.stopAndRelease(event.getGuild());
+                        return;
+                    }
+                    if (readiness.ready()) {
+                        message.editMessageEmbeds(MusicEmbeds.playbackConfirmed(result))
+                                .setComponents(MusicControls.rows())
+                                .queue();
+                        return;
+                    }
+                    message.editMessageEmbeds(MusicEmbeds.playbackReadinessFailure(
+                                    readiness,
+                                    JdaRuntimeInfo.version()))
+                            .setComponents(java.util.List.of())
+                            .queue();
+                    if (readiness.status() != PlaybackReadinessResult.Status.SESSION_CLOSED) {
+                        playerManager.stopAndRelease(event.getGuild());
+                    }
                 });
     }
 
