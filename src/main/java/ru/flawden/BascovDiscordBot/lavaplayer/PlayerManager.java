@@ -23,6 +23,7 @@ import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -207,6 +208,76 @@ public class PlayerManager {
                 resultConsumer.accept(MusicLoadResult.withoutTrack(MusicLoadResult.Status.LOAD_FAILED));
             }
         });
+    }
+
+    /**
+     * Выполняет поиск без автоматического запуска. Возвращает до указанного
+     * количества уникальных воспроизводимых кандидатов.
+     */
+    public void search(
+            Guild guild,
+            String identifier,
+            int maxResults,
+            Consumer<MusicSearchResult> resultConsumer) {
+        if (maxResults < 1) {
+            throw new IllegalArgumentException("maxResults must be positive");
+        }
+        log.info("Searching media for guild {}: {}", guild.getId(), identifier);
+        String orderingKey = "search:" + guild.getIdLong();
+        audioPlayerManager.loadItemOrdered(orderingKey, identifier, new AudioLoadResultHandler() {
+            @Override
+            public void trackLoaded(AudioTrack track) {
+                List<AudioTrack> candidates = isPlayableCandidate(track)
+                        ? List.of(track)
+                        : List.of();
+                resultConsumer.accept(candidates.isEmpty()
+                        ? MusicSearchResult.empty(MusicSearchResult.Status.NO_MATCHES, identifier)
+                        : MusicSearchResult.found(identifier, candidates));
+            }
+
+            @Override
+            public void playlistLoaded(AudioPlaylist playlist) {
+                List<AudioTrack> candidates = searchCandidates(playlist, maxResults);
+                resultConsumer.accept(candidates.isEmpty()
+                        ? MusicSearchResult.empty(MusicSearchResult.Status.NO_MATCHES, identifier)
+                        : MusicSearchResult.found(identifier, candidates));
+            }
+
+            @Override
+            public void noMatches() {
+                voiceDiagnostics.sourceFailure(guild.getIdLong(), identifier, "search: no matches");
+                resultConsumer.accept(MusicSearchResult.empty(
+                        MusicSearchResult.Status.NO_MATCHES, identifier));
+            }
+
+            @Override
+            public void loadFailed(FriendlyException exception) {
+                String reason = SourceFailureFormatter.describe(identifier, exception);
+                voiceDiagnostics.sourceFailure(guild.getIdLong(), identifier, "search: " + reason);
+                log.warn("Media search failed in guild {}: {}", guild.getId(), reason);
+                resultConsumer.accept(MusicSearchResult.empty(
+                        MusicSearchResult.Status.LOAD_FAILED, identifier));
+            }
+        });
+    }
+
+    /**
+     * Добавляет уже загруженный результат /search в текущую музыкальную сессию.
+     */
+    public void queueLoadedTrack(
+            Guild guild,
+            AudioTrack track,
+            TrackRequester requester,
+            Consumer<MusicLoadResult> resultConsumer) {
+        GuildMusicManager musicManager = getMusicManager(guild);
+        musicManager.markActivity();
+        deliverQueueResult(
+                guild,
+                musicManager,
+                track,
+                requester,
+                List.of(),
+                resultConsumer);
     }
 
     public CompletableFuture<PlaybackReadinessResult> awaitPlaybackReady(
@@ -400,6 +471,21 @@ public class PlayerManager {
             voiceConnections.recordTransportFailure(guild, reason);
             stopAndRelease(guild);
         }
+    }
+
+    private List<AudioTrack> searchCandidates(AudioPlaylist playlist, int maxResults) {
+        List<AudioTrack> ordered = new ArrayList<>();
+        if (playlist.getSelectedTrack() != null) {
+            ordered.add(playlist.getSelectedTrack());
+        }
+        ordered.addAll(playlist.getTracks());
+
+        Set<String> seen = ConcurrentHashMap.newKeySet();
+        return ordered.stream()
+                .filter(this::isPlayableCandidate)
+                .filter(candidate -> seen.add(trackKey(candidate)))
+                .limit(maxResults)
+                .toList();
     }
 
     private List<AudioTrack> searchFallbacks(

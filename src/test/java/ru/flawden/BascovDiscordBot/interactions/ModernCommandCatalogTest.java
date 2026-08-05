@@ -21,21 +21,18 @@ class ModernCommandCatalogTest {
 
         assertEquals(commands.size(), names.size());
         assertEquals(Set.of(
-                "help", "version", "status", "play", "pause", "resume",
+                "help", "version", "status", "play", "search", "pause", "resume",
                 "previous", "skip", "stop", "queue", "now", "seek",
                 "volume", "repeat", "shuffle", "remove", "move", "clear", "settings"), names);
     }
 
     @Test
-    void playCommandEnablesAutocomplete() {
-        CommandData playCommand = ModernCommandCatalog.commands().stream()
-                .filter(command -> command.getName().equals("play"))
-                .findFirst()
-                .orElseThrow();
-        SlashCommandData play = assertInstanceOf(SlashCommandData.class, playCommand);
-
-        assertTrue(play.getOptions().stream()
-                .anyMatch(option -> option.getName().equals("query") && option.isAutoComplete()));
+    void playAndSearchCommandsEnableAutocomplete() {
+        for (String name : List.of("play", "search")) {
+            SlashCommandData command = command(name);
+            assertTrue(command.getOptions().stream()
+                    .anyMatch(option -> option.getName().equals("query") && option.isAutoComplete()));
+        }
     }
 
     @Test

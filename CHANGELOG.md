@@ -7,6 +7,42 @@
 ## [Unreleased]
 
 
+## [0.12.0] — 2026-08-05
+
+### Добавлено
+
+- Новая slash-команда `/search query`, показывающая до пяти результатов modern YouTube source до подключения к voice.
+- Ephemeral-карточка выбора с названием, автором, длительностью, провайдером и кнопками `1–5`.
+- Короткоживущая owner-bound search session: Discord guild ID + user ID, пятиминутный TTL, максимум пять кандидатов и одноразовый atomic claim.
+- Кнопка отмены, закрывающая результаты без создания музыкальной сессии.
+- Autocomplete недавних запросов теперь работает и для `/search`, и для `/play`.
+
+### Изменено
+
+- `/play` остаётся быстрым one-tap сценарием с первым результатом, а `/search` позволяет выбрать официальную запись, live, кавер или нужную длительность.
+- Выбранный `AudioTrack` передаётся в `TrackScheduler` через `queueLoadedTrack(...)` без второго YouTube lookup, поэтому показанный и добавленный результаты совпадают.
+- Voice connection и `MusicControlPolicy` проверяются только после выбора; сам поиск не подключает бота к каналу.
+- Search component ID содержит только случайный token и номер позиции — URL, название и внутренний identifier в Discord payload не попадают.
+
+### Безопасность и отказоустойчивость
+
+- Чужой пользователь не может выбрать или отменить результаты поиска.
+- Повторное или конкурентное нажатие одной кнопки не добавляет трек дважды.
+- Истёкшие, повреждённые и уже использованные component ID очищают кнопки и предлагают повторить `/search`.
+- Активные search sessions ограничены и очищаются opportunistic cleanup; они намеренно не переживают restart контейнера.
+
+### Сохранено
+
+- Java 17, Spring Boot 3.4.3, JDA 6.5.0, LavaPlayer core 2.2.3, `youtube-source 1.18.2`, native libDAVE `ce725965e` и Docker bridge не меняются.
+- `/play`, очередь, previous, seek, repeat, shuffle, source recovery и real frame polling остаются совместимыми.
+
+### Тестирование
+
+- Добавлены unit-тесты component ID, owner binding, single-use claim, cancel, bounded candidate list и immutable search result.
+- Добавлен architecture contract `SearchTrackSelectionContractTest`.
+- Тестовый baseline повышен до 54 test source files / 186 `@Test` methods.
+
+
 ## [0.11.4] — 2026-08-05
 
 ### Исправлено

@@ -15,6 +15,7 @@ import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
 
 import java.awt.Color;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -149,6 +150,42 @@ public final class MusicEmbeds {
                     "🔌 Голосовое соединение установлено",
                     details);
         };
+    }
+
+    public static MessageEmbed searchResults(
+            String query,
+            List<AudioTrack> candidates,
+            Instant expiresAt) {
+        if (candidates == null || candidates.isEmpty()) {
+            return error("🔎 Ничего не найдено", "Проверь запрос и попробуй снова.");
+        }
+
+        StringBuilder description = new StringBuilder()
+                .append("**Запрос:** `")
+                .append(shortText(query, 120))
+                .append("`\n\n");
+        for (int index = 0; index < candidates.size(); index++) {
+            AudioTrack track = candidates.get(index);
+            description.append("**").append(index + 1).append(". ")
+                    .append(shortText(track.getInfo().title, 90)).append("**\n")
+                    .append(shortText(track.getInfo().author, 70))
+                    .append(" • `").append(formatTime(track.getDuration())).append("`")
+                    .append(" • `").append(providerLabel(track)).append("`\n\n");
+        }
+        description.append("Нажми кнопку с номером нужного результата.");
+        if (expiresAt != null) {
+            description.append(" Выбор истечёт <t:")
+                    .append(expiresAt.getEpochSecond())
+                    .append(":R>.");
+        }
+
+        String footer = "Результаты доступны только автору поиска";
+        return new EmbedBuilder()
+                .setTitle("🔎 Выбери трек")
+                .setDescription(description.toString())
+                .setColor(Color.CYAN)
+                .setFooter(footer)
+                .build();
     }
 
     public static MessageEmbed nowPlaying(GuildMusicManager musicManager) {
@@ -315,6 +352,15 @@ public final class MusicEmbeds {
 
     private static String requesterLabel(TrackRequester requester) {
         return requester == null ? "Неизвестно" : requester.discordLabel();
+    }
+
+    private static String shortText(String value, int maxLength) {
+        if (value == null || value.isBlank()) {
+            return "Неизвестно";
+        }
+        return value.length() > maxLength
+                ? value.substring(0, Math.max(1, maxLength - 3)) + "..."
+                : value;
     }
 
     private static String shorten(String value) {

@@ -28,6 +28,13 @@ public final class ModernCommandCatalog {
                                 "Название песни (поиск YouTube) или ссылка SoundCloud/YouTube",
                                 true)
                                 .setAutoComplete(true)),
+                Commands.slash("search", "Показывает несколько результатов YouTube на выбор")
+                        .addOptions(new OptionData(
+                                OptionType.STRING,
+                                "query",
+                                "Название песни для поиска на YouTube",
+                                true)
+                                .setAutoComplete(true)),
                 Commands.slash("pause", "Приостанавливает текущую песню"),
                 Commands.slash("resume", "Продолжает воспроизведение"),
                 Commands.slash("previous", "Возвращает предыдущую песню"),

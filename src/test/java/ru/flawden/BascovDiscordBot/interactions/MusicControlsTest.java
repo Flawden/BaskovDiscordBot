@@ -45,4 +45,26 @@ class MusicControlsTest {
     void pageIdsRejectNonPositiveNumbers() {
         assertThrows(IllegalArgumentException.class, () -> MusicControls.queuePageId(0));
     }
+    @Test
+    void searchSelectionIdsRoundTripAndAreBounded() {
+        var rows = MusicControls.searchRows("abcdef1234567890", 5);
+        var action = MusicControls.searchAction("baskov:search:pick:abcdef1234567890:3").orElseThrow();
+
+        assertEquals(2, rows.size());
+        assertEquals(MusicControls.SearchActionType.PICK, action.type());
+        assertEquals("abcdef1234567890", action.token());
+        assertEquals(3, action.oneBasedIndex());
+        assertTrue(MusicControls.supports("baskov:search:cancel:abcdef1234567890"));
+        assertThrows(IllegalArgumentException.class, () -> MusicControls.searchRows("short", 1));
+        assertThrows(IllegalArgumentException.class, () -> MusicControls.searchRows("abcdef1234567890", 6));
+    }
+
+    @Test
+    void malformedSearchSelectionIdsAreIgnored() {
+        assertFalse(MusicControls.searchAction("baskov:search:pick:short:1").isPresent());
+        assertFalse(MusicControls.searchAction("baskov:search:pick:abcdef1234567890:0").isPresent());
+        assertFalse(MusicControls.searchAction("baskov:search:pick:abcdef1234567890:nope").isPresent());
+        assertFalse(MusicControls.searchAction("baskov:search:cancel:bad token").isPresent());
+    }
+
 }

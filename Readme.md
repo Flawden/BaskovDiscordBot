@@ -1,13 +1,13 @@
 # 🎤 Baskov Discord Bot
 
-Текущая стабильная версия: **v0.11.4**.
+Текущая стабильная версия: **v0.12.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
 ## Возможности
 
 - slash-команды воспроизведения и полноценного управления очередью;
-- autocomplete последних поисковых запросов и интерактивные кнопки управления;
+- `/search` с пятью результатами YouTube, одноразовыми кнопками выбора и пятиминутной owner-bound сессией; autocomplete последних запросов работает в `/play` и `/search`;
 - legacy `!`-команды как compatibility layer;
 - воспроизведение музыки, пауза, остановка, пропуск и возврат к предыдущим трекам;
 - requester, ETA для каждой позиции, постраничная очередь с кнопками навигации, bounded history, previous, repeat mode, shuffle, seek, remove/move/clear и управление громкостью;
@@ -74,6 +74,7 @@ docker compose logs -f bot
 
 Live-потоки отключены. Подробные правила voice-доступа и lifecycle находятся в [`docs/MUSIC-SESSIONS.md`](docs/MUSIC-SESSIONS.md).
 Современный Discord-интерфейс описан в [`docs/MODERN-COMMANDS.md`](docs/MODERN-COMMANDS.md).
+Интерактивный поиск и безопасный выбор трека описаны в [`docs/SEARCH-TRACK-SELECTION.md`](docs/SEARCH-TRACK-SELECTION.md).
 Очередь и новые команды управления описаны в [`docs/QUEUE-EXPERIENCE.md`](docs/QUEUE-EXPERIENCE.md).
 Расширенный пульт, история и `/previous` описаны в [`docs/ADVANCED-PLAYBACK-CONTROLS.md`](docs/ADVANCED-PLAYBACK-CONTROLS.md).
 Маршрутизация источников и переход на YouTube primary описаны в [`docs/YOUTUBE-PRIMARY-PROVIDER.md`](docs/YOUTUBE-PRIMARY-PROVIDER.md).

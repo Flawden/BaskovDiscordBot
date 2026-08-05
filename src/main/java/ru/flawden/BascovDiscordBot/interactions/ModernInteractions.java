@@ -25,6 +25,7 @@ import ru.flawden.BascovDiscordBot.config.MusicProperties;
 import ru.flawden.BascovDiscordBot.dave.DaveRuntimeInfo;
 import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.MusicLoadResult;
+import ru.flawden.BascovDiscordBot.lavaplayer.MusicSearchResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlaybackReadinessResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.RepeatMode;
@@ -58,6 +59,7 @@ public class ModernInteractions extends ListenerAdapter {
     private final MediaQueryResolver queryResolver;
     private final MusicProperties musicProperties;
     private final RecentSearchHistory searchHistory;
+    private final SearchSelectionStore searchSelections;
     private final VersionEvent versionEvent;
     private final GuildPreferencesRepository preferencesRepository;
     private final OperationalMetrics operationalMetrics;
@@ -70,6 +72,7 @@ public class ModernInteractions extends ListenerAdapter {
             MediaQueryResolver queryResolver,
             MusicProperties musicProperties,
             RecentSearchHistory searchHistory,
+            SearchSelectionStore searchSelections,
             VersionEvent versionEvent,
             GuildPreferencesRepository preferencesRepository,
             OperationalMetrics operationalMetrics,
@@ -80,6 +83,7 @@ public class ModernInteractions extends ListenerAdapter {
         this.queryResolver = queryResolver;
         this.musicProperties = musicProperties;
         this.searchHistory = searchHistory;
+        this.searchSelections = searchSelections;
         this.versionEvent = versionEvent;
         this.preferencesRepository = preferencesRepository;
         this.operationalMetrics = operationalMetrics;
@@ -104,6 +108,7 @@ public class ModernInteractions extends ListenerAdapter {
                 case "version" -> event.replyEmbeds(versionEvent.buildEmbed()).setEphemeral(true).queue();
                 case "status" -> status(event);
                 case "play" -> play(event);
+                case "search" -> search(event);
                 case "pause" -> pause(event, true);
                 case "resume" -> pause(event, false);
                 case "previous" -> previous(event);
@@ -148,7 +153,8 @@ public class ModernInteractions extends ListenerAdapter {
 
     @Override
     public void onCommandAutoCompleteInteraction(@NotNull CommandAutoCompleteInteractionEvent event) {
-        if (!"play".equals(event.getName()) || !"query".equals(event.getFocusedOption().getName())) {
+        boolean supportedCommand = "play".equals(event.getName()) || "search".equals(event.getName());
+        if (!supportedCommand || !"query".equals(event.getFocusedOption().getName())) {
             return;
         }
 
@@ -218,6 +224,12 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
+        var searchAction = MusicControls.searchAction(event.getComponentId());
+        if (searchAction.isPresent()) {
+            handleSearchButton(event, guild, member, searchAction.get());
+            return;
+        }
+
         if (MusicControls.QUEUE.equals(event.getComponentId())) {
             GuildMusicManager manager = playerManager.findMusicManager(guild).orElse(null);
             MusicEmbeds.QueueView view = MusicEmbeds.queueView(manager, 1);
@@ -261,6 +273,103 @@ public class ModernInteractions extends ListenerAdapter {
         }
     }
 
+    private void handleSearchButton(
+            ButtonInteractionEvent event,
+            Guild guild,
+            Member member,
+            MusicControls.SearchAction action) {
+        if (action.type() == MusicControls.SearchActionType.CANCEL) {
+            SearchSelectionStore.ClaimStatus status = searchSelections.cancel(
+                    action.token(),
+                    guild.getIdLong(),
+                    event.getUser().getIdLong());
+            if (status == SearchSelectionStore.ClaimStatus.FORBIDDEN) {
+                event.replyEmbeds(MusicEmbeds.error(
+                                "🔐 Это не твой поиск",
+                                "Выбрать или отменить результат может только пользователь, вызвавший `/search`."))
+                        .setEphemeral(true)
+                        .queue();
+                return;
+            }
+            String description = status == SearchSelectionStore.ClaimStatus.CANCELLED
+                    ? "Результаты удалены. Запусти `/search` снова, когда понадобится."
+                    : "Эта поисковая сессия уже завершилась или истекла.";
+            event.editMessageEmbeds(MusicEmbeds.success("🛑 Поиск закрыт", description))
+                    .setComponents(List.of())
+                    .queue();
+            return;
+        }
+
+        MusicControlPolicy.Decision decision = controlPolicy.canStartOrQueue(
+                member,
+                member.getVoiceState(),
+                guild.getSelfMember().getVoiceState());
+        if (!decision.allowed()) {
+            event.replyEmbeds(MusicEmbeds.error("🎧 Управление недоступно", decision.message()))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        var botChannel = guild.getSelfMember().getVoiceState().getChannel();
+        var targetChannel = botChannel != null ? botChannel : member.getVoiceState().getChannel();
+        if (targetChannel == null) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🔍 Голосовой канал потерян",
+                            "Войди в голосовой канал и повтори выбор."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        SearchSelectionStore.ClaimResult claim = searchSelections.claim(
+                action.token(),
+                action.oneBasedIndex(),
+                guild.getIdLong(),
+                event.getUser().getIdLong());
+        if (!claim.claimed()) {
+            if (claim.status() == SearchSelectionStore.ClaimStatus.FORBIDDEN) {
+                event.replyEmbeds(MusicEmbeds.error(
+                                "🔐 Это не твой поиск",
+                                "Выбрать результат может только пользователь, вызвавший `/search`."))
+                        .setEphemeral(true)
+                        .queue();
+                return;
+            }
+            event.editMessageEmbeds(MusicEmbeds.error(
+                            "⌛ Результаты устарели",
+                            "Выбор уже использован или прошло больше пяти минут. Запусти `/search` снова."))
+                    .setComponents(List.of())
+                    .queue();
+            return;
+        }
+
+        TrackRequester requester = new TrackRequester(
+                event.getUser().getIdLong(),
+                member.getEffectiveName());
+        event.deferEdit().queue(hook -> playerManager
+                .ensureVoiceConnection(guild, targetChannel)
+                .whenComplete((connection, failure) -> {
+                    if (failure != null) {
+                        log.error("Voice connection future failed after search selection in guild {}",
+                                guild.getId(), failure);
+                        editVoiceFailure(hook, new VoiceConnectionResult(
+                                VoiceConnectionResult.Status.FAILED,
+                                "Внутренняя ошибка голосового подключения."));
+                        return;
+                    }
+                    if (!connection.connected()) {
+                        editVoiceFailure(hook, connection);
+                        return;
+                    }
+                    playerManager.queueLoadedTrack(
+                            guild,
+                            claim.track(),
+                            requester,
+                            result -> editLoadResult(hook, guild, result));
+                }));
+    }
+
     private void status(SlashCommandInteractionEvent event) {
         RuntimeHealthMonitor.Snapshot runtime = healthMonitor.snapshot();
         OperationalMetrics.Snapshot commands = operationalMetrics.snapshot();
@@ -290,6 +399,73 @@ public class ModernInteractions extends ListenerAdapter {
                         .setFooter("Health heartbeat обновляется каждые 10 секунд")
                         .build())
                 .setEphemeral(true)
+                .queue();
+    }
+
+    private void search(SlashCommandInteractionEvent event) {
+        String rawQuery = event.getOption("query", "", OptionMapping::getAsString).trim();
+        String identifier;
+        try {
+            identifier = queryResolver.resolve(rawQuery);
+        } catch (IllegalArgumentException exception) {
+            event.replyEmbeds(MusicEmbeds.error("🔒 Запрос отклонён", exception.getMessage()))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        if (!identifier.startsWith(MediaQueryResolver.YOUTUBE_SEARCH_PREFIX)) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🔎 Для ссылок используй /play",
+                            "`/search` показывает варианты только для текстового поиска YouTube. "
+                                    + "Прямую ссылку можно сразу добавить через `/play`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        searchHistory.remember(event.getUser().getIdLong(), rawQuery);
+        event.deferReply(true).queue(hook -> playerManager.search(
+                event.getGuild(),
+                identifier,
+                SearchSelectionStore.MAX_CANDIDATES,
+                result -> editSearchResult(hook, event, rawQuery, result)));
+    }
+
+    private void editSearchResult(
+            InteractionHook hook,
+            SlashCommandInteractionEvent event,
+            String rawQuery,
+            MusicSearchResult result) {
+        if (result.status() == MusicSearchResult.Status.NO_MATCHES) {
+            hook.editOriginalEmbeds(MusicEmbeds.error(
+                            "🔎 Ничего не найдено",
+                            "YouTube не вернул подходящих треков. Измени запрос и попробуй снова."))
+                    .setComponents(List.of())
+                    .queue();
+            return;
+        }
+        if (result.status() == MusicSearchResult.Status.LOAD_FAILED) {
+            hook.editOriginalEmbeds(MusicEmbeds.error(
+                            "❌ Поиск временно недоступен",
+                            "YouTube source не смог выполнить поиск. Проверь `/status` и повтори чуть позже."))
+                    .setComponents(List.of())
+                    .queue();
+            return;
+        }
+
+        SearchSelectionStore.SearchSession session = searchSelections.create(
+                event.getGuild().getIdLong(),
+                event.getUser().getIdLong(),
+                rawQuery,
+                result.tracks());
+        hook.editOriginalEmbeds(MusicEmbeds.searchResults(
+                        rawQuery,
+                        session.candidates(),
+                        session.expiresAt()))
+                .setComponents(MusicControls.searchRows(
+                        session.token(),
+                        session.candidates().size()))
                 .queue();
     }
 
@@ -1026,13 +1202,14 @@ public class ModernInteractions extends ListenerAdapter {
                 .setTitle("🎤 Современные команды Баскова")
                 .setDescription("Slash-команды — основной интерфейс. Старые `!`-команды пока продолжают работать.")
                 .setColor(Color.CYAN)
-                .addField("▶️ Воспроизведение", "`/play` `/pause` `/resume` `/previous` `/skip` `/stop` `/seek`", false)
+                .addField("▶️ Воспроизведение", "`/play` `/search` `/pause` `/resume` `/previous` `/skip` `/stop` `/seek`", false)
                 .addField("📋 Очередь", "`/queue` `/remove` `/move` `/shuffle` `/clear`", false)
                 .addField("🎚️ Режимы", "`/volume` `/repeat` `/now`", false)
                 .addField("⚙️ Настройки", "`/settings show` `/settings volume` `/settings repeat` `/settings reset`", false)
                 .addField("ℹ️ Сервис", "`/version` `/status` `/help`", false)
                 .addField("🖱️ Кнопки", "Под `/now` доступны предыдущий трек, ±15 секунд, пауза, следующий трек, shuffle, repeat, очередь и stop.", false)
-                .addField("💡 Autocomplete", "`/play` предлагает твои недавние поисковые запросы.", false)
+                .addField("🔎 Выбор трека", "`/search` показывает до пяти результатов YouTube с кнопками выбора. Результаты живут пять минут и доступны только автору.", false)
+                .addField("💡 Autocomplete", "`/play` и `/search` предлагают твои недавние поисковые запросы.", false)
                 .build();
     }
 }
