@@ -45,6 +45,14 @@ class SearchTrackSelectionContractTest {
     }
 
     @Test
+    void searchButtonsUseJdaSixCollectionOverload() throws IOException {
+        String controls = source("interactions/MusicControls.java");
+
+        assertTrue(controls.contains("ActionRow.of(choices)"));
+        assertTrue(!controls.contains("choices.toArray(Button[]::new)"));
+    }
+
+    @Test
     void searchAutocompleteSharesRecentHistoryWithPlay() throws IOException {
         String interactions = source("interactions/ModernInteractions.java");
 

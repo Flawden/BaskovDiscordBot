@@ -2,6 +2,7 @@ package ru.flawden.BascovDiscordBot.lavaplayer;
 
 import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
 import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
+import com.sedmelluq.discord.lavaplayer.source.AudioSourceManager;
 import com.sedmelluq.discord.lavaplayer.source.AudioSourceManagers;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
@@ -72,7 +73,7 @@ public class PlayerManager {
         this.audioPlayerManager.registerSourceManager(youtubeSourceManager);
         AudioSourceManagers.registerRemoteSources(
                 this.audioPlayerManager,
-                com.sedmelluq.discord.lavaplayer.source.youtube.YoutubeAudioSourceManager.class);
+                legacyYoutubeSourceClass());
 
         log.info("{} engine={} version={} clients={} legacyLavaplayerYoutube=disabled "
                         + "defaultSearchProvider=YOUTUBE directUrlProviders=YouTube|SoundCloud",
@@ -146,6 +147,19 @@ public class PlayerManager {
                             Instant.now().plus(properties.getVoiceConnectTimeout()));
                     return result;
                 });
+    }
+
+
+    private static Class<? extends AudioSourceManager> legacyYoutubeSourceClass() {
+        try {
+            return Class.forName(
+                            "com.sedmelluq.discord.lavaplayer.source.youtube.YoutubeAudioSourceManager")
+                    .asSubclass(AudioSourceManager.class);
+        } catch (ClassNotFoundException exception) {
+            throw new IllegalStateException(
+                    "Embedded LavaPlayer YouTube source is missing; cannot exclude the legacy extractor",
+                    exception);
+        }
     }
 
     /**

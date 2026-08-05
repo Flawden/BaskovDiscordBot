@@ -94,7 +94,7 @@ public final class MusicControls {
             choices.add(Button.primary(searchPickId(token, index), String.valueOf(index)));
         }
         return List.of(
-                ActionRow.of(choices.toArray(Button[]::new)),
+                ActionRow.of(choices),
                 ActionRow.of(Button.danger(searchCancelId(token), "Отмена")));
     }
 

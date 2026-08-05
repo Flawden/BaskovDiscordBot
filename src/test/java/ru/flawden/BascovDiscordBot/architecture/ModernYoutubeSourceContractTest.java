@@ -37,10 +37,29 @@ class ModernYoutubeSourceContractTest {
         assertTrue(modernRegistration >= 0);
         assertTrue(remainingSources > modernRegistration,
                 "Modern YouTube source must be registered before the remaining remote sources");
+        assertTrue(manager.contains("legacyYoutubeSourceClass()"));
+        assertTrue(manager.contains("Class.forName("));
+        assertTrue(manager.contains("Class<? extends AudioSourceManager> legacyYoutubeSourceClass()"));
+        assertTrue(manager.contains(".asSubclass(AudioSourceManager.class)"));
         assertTrue(manager.contains(
+                "com.sedmelluq.discord.lavaplayer.source.youtube.YoutubeAudioSourceManager"));
+        assertFalse(manager.contains(
                 "com.sedmelluq.discord.lavaplayer.source.youtube.YoutubeAudioSourceManager.class"));
         assertFalse(manager.contains(
                 "AudioSourceManagers.registerRemoteSources(this.audioPlayerManager);"));
+    }
+
+    @Test
+    void legacyYoutubeExclusionKeepsTheVarargsElementType() throws Exception {
+        String manager = Files.readString(ROOT.resolve(
+                "src/main/java/ru/flawden/BascovDiscordBot/lavaplayer/PlayerManager.java"));
+
+        assertTrue(manager.contains(
+                "import com.sedmelluq.discord.lavaplayer.source.AudioSourceManager;"));
+        assertTrue(manager.contains(
+                "Class<? extends AudioSourceManager> legacyYoutubeSourceClass()"));
+        assertTrue(manager.contains(".asSubclass(AudioSourceManager.class)"));
+        assertFalse(manager.contains("private static Class<?> legacyYoutubeSourceClass()"));
     }
 
     @Test

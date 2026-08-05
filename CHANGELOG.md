@@ -7,6 +7,35 @@
 ## [Unreleased]
 
 
+## [0.12.2] — 2026-08-05
+
+### Исправлено
+
+- Исправлен второй compile blocker миграции `/search`: reflection-helper `legacyYoutubeSourceClass()` теперь возвращает `Class<? extends AudioSourceManager>`, совместимый с varargs-сигнатурой `AudioSourceManagers.registerRemoteSources(...)`.
+- Разрешённый через `Class.forName(...)` legacy YouTube-класс приводится безопасно через `Class#asSubclass(AudioSourceManager.class)`, поэтому deprecated class literal по-прежнему не используется.
+- README синхронизирован с фактической стабильной версией.
+
+### Сохранено
+
+- Modern `youtube-source 1.18.2` остаётся единственным YouTube-движком; встроенный extractor LavaPlayer исключается из auto-registration.
+- `/search`, JDA 6.5.0, LavaPlayer core 2.2.3, native libDAVE `ce725965e`, Docker bridge и runtime-логика воспроизведения не меняются.
+- Тестовый baseline повышен до 188 `@Test` methods.
+
+
+## [0.12.1] — 2026-08-05
+
+### Исправлено
+
+- Исправлена несовместимость JDA 6 в `/search`: `ActionRow.of(...)` теперь получает `Collection<Button>` вместо массива `Button[]`, который не соответствует сигнатуре JDA 6.
+- Удалена compile-time ссылка на deprecated встроенный `YoutubeAudioSourceManager` LavaPlayer. Legacy extractor по-прежнему исключается из автоматической регистрации через безопасное разрешение класса по имени.
+- Добавлены статические контракты, запрещающие возврат к массивному overload `ActionRow.of(...)` и прямому deprecated class literal.
+
+### Сохранено
+
+- Логика `/search`, owner-bound одноразовые сессии, modern `youtube-source 1.18.2`, JDA 6.5.0, native libDAVE и Docker bridge не меняются.
+- Тестовый baseline повышен до 187 `@Test` methods.
+
+
 ## [0.12.0] — 2026-08-05
 
 ### Добавлено
