@@ -25,7 +25,7 @@ public final class ModernCommandCatalog {
                         .addOptions(new OptionData(
                                 OptionType.STRING,
                                 "query",
-                                "Название песни или ссылка SoundCloud/YouTube",
+                                "Название песни (поиск YouTube) или ссылка SoundCloud/YouTube",
                                 true)
                                 .setAutoComplete(true)),
                 Commands.slash("pause", "Приостанавливает текущую песню"),

@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая стабильная версия: **v0.11.2**.
+Текущая стабильная версия: **v0.11.3**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -16,7 +16,7 @@
 - динамический Docker heartbeat, который подтверждает свежее подключение к Discord, а не только факт старта;
 - JDA 6.5.0 с настоящей JNI libDAVE `ce725965e`, положительной protocol version и подтверждением playback только после реального запроса аудиофрейма Discord media transport;
 - bounded voice connection: одна попытка, отключённый auto-reconnect, startup-grace и observe-only watchdog по реальному запросу аудиофреймов;
-- recovery обрезанных 30-секундных SoundCloud preview, увеличенный дедуплицированный fallback pool и защита root source error от stale callbacks;
+- YouTube как основной провайдер текстового поиска; SoundCloud остаётся только для прямых ссылок и совместимости;
 - переключаемый diagnostic network mode `bridge|host` для A/B-проверки Docker UDP/NAT;
 - ограничения CPU, памяти, PID и ротация Docker-логов;
 - управление музыкой только из общего voice channel с административным override;
@@ -24,7 +24,7 @@
 - stateless-ядро команд с case-insensitive реестром и защитой от дубликатов;
 - конфигурируемый префикс и cooldown для шумных команд;
 - команда `!version` с версией и метаданными сборки;
-- безопасная обработка ссылок SoundCloud/YouTube без сетевой проверки пользовательского URL; SoundCloud search пробует резервные результаты при playback error;
+- безопасная обработка ссылок SoundCloud/YouTube без сетевой проверки пользовательского URL; текстовый поиск использует `ytsearch:` и сохраняет резервные результаты того же провайдера;
 - согласованные версии SLF4J/Logback под управлением Spring Boot BOM;
 - автоматические ежемесячные проверки обновлений Maven и GitHub Actions;
 - major-обновления Spring Boot, JDA и GitHub Actions блокируются Dependabot и выполняются только отдельными migration-релизами;
@@ -76,6 +76,7 @@ Live-потоки отключены. Подробные правила voice-д
 Современный Discord-интерфейс описан в [`docs/MODERN-COMMANDS.md`](docs/MODERN-COMMANDS.md).
 Очередь и новые команды управления описаны в [`docs/QUEUE-EXPERIENCE.md`](docs/QUEUE-EXPERIENCE.md).
 Расширенный пульт, история и `/previous` описаны в [`docs/ADVANCED-PLAYBACK-CONTROLS.md`](docs/ADVANCED-PLAYBACK-CONTROLS.md).
+Маршрутизация источников и переход на YouTube primary описаны в [`docs/YOUTUBE-PRIMARY-PROVIDER.md`](docs/YOUTUBE-PRIMARY-PROVIDER.md).
 Подробности recovery обрезанных preview и SoundCloud `404` описаны в [`docs/SOURCE-STREAMING-STABILITY.md`](docs/SOURCE-STREAMING-STABILITY.md).
 Постоянные guild-настройки описаны в [`docs/GUILD-SETTINGS.md`](docs/GUILD-SETTINGS.md).
 Operations и health-модель описаны в [`docs/OPERATIONS.md`](docs/OPERATIONS.md).

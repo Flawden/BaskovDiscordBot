@@ -12,6 +12,7 @@ import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
 import net.dv8tion.jda.api.managers.AudioManager;
 import org.springframework.stereotype.Component;
+import ru.flawden.BascovDiscordBot.commands.music.MediaQueryResolver;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
@@ -65,6 +66,8 @@ public class PlayerManager {
         this.voiceDiagnostics = voiceDiagnostics;
         this.audioPlayerManager = new DefaultAudioPlayerManager();
         AudioSourceManagers.registerRemoteSources(this.audioPlayerManager);
+        log.info("Remote media sources registered: defaultSearchProvider=YOUTUBE, "
+                + "directUrlProviders=YouTube|SoundCloud");
         this.idleScheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable, "baskov-music-lifecycle");
             thread.setDaemon(true);
@@ -392,7 +395,9 @@ public class PlayerManager {
             String identifier,
             AudioPlaylist playlist,
             AudioTrack selected) {
-        if (!identifier.startsWith("scsearch:")) {
+        boolean supportedSearch = identifier.startsWith(MediaQueryResolver.YOUTUBE_SEARCH_PREFIX)
+                || identifier.startsWith(MediaQueryResolver.SOUNDCLOUD_SEARCH_PREFIX);
+        if (!supportedSearch) {
             return List.of();
         }
         Set<String> seen = ConcurrentHashMap.newKeySet();

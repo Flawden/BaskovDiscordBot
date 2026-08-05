@@ -7,6 +7,28 @@
 ## [Unreleased]
 
 
+## [0.11.3] — 2026-08-05
+
+### Изменено
+
+- Обычные текстовые запросы `/play` и legacy `!search` теперь преобразуются в `ytsearch:`; YouTube снова является основным музыкальным провайдером.
+- Прямые ссылки YouTube и SoundCloud по-прежнему принимаются без сетевого запроса на этапе разбора команды.
+- Скрытый дедуплицированный fallback pool до девяти кандидатов применяется к YouTube и legacy SoundCloud search results.
+- В подтверждении загрузки, `/now` и `/queue` показывается фактический источник трека: YouTube, SoundCloud, HTTP или неизвестный.
+- Startup-лог и `/status` явно фиксируют YouTube как основной search provider.
+
+### Сохранено
+
+- SoundCloud preview/404 diagnostics и premature-finish recovery остаются для прямых SoundCloud ссылок и старых совместимых запросов.
+- Java 17, Spring Boot 3.4.3, JDA 6.5.0, LavaPlayer 2.2.3, native libDAVE `ce725965e` и Docker bridge не меняются.
+
+### Тестирование
+
+- Добавлены unit-тесты маршрутизации YouTube/SoundCloud и распознавания provider по identifier/URI.
+- Добавлен architecture contract, запрещающий возврат plain-text поиска на `scsearch:`.
+- Тестовый baseline повышен до 49 test source files / 168 `@Test` methods.
+
+
 ## [0.11.2] — 2026-08-05
 
 ### Исправлено

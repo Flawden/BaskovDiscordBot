@@ -42,6 +42,7 @@ final class StatusMessageFormatter {
     static String music(MusicRuntimeSnapshot music) {
         Objects.requireNonNull(music, "music");
         return String.join("\n",
+                "Основной поиск: `YouTube`",
                 "Активных сессий: `" + music.activeSessions() + "`",
                 "Сейчас играет: `" + music.playingSessions() + "`",
                 "Треков в очередях: `" + music.queuedTracks() + "`");

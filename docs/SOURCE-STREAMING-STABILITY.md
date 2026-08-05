@@ -18,7 +18,7 @@ For non-live tracks with advertised duration of at least 90 seconds, a `FINISHED
 
 A premature finish is recorded as a source failure and advances to the next hidden search fallback. It is not written into playback history and does not trigger repeat mode.
 
-SoundCloud text searches retain up to nine deduplicated hidden fallbacks in addition to the selected result. The visible queue still contains only the user's requested item.
+YouTube and legacy SoundCloud text searches retain up to nine deduplicated hidden fallbacks in addition to the selected result. New plain-text requests use YouTube; the SoundCloud branch remains only for compatibility and direct-source recovery. The visible queue still contains only the user's requested item.
 
 ## Diagnostics
 
@@ -32,4 +32,4 @@ Fallback and stale callback events must not overwrite the root source error.
 
 ## Limitations
 
-This release improves recovery inside the existing SoundCloud source. It cannot make a removed or unavailable media stream playable when every search result returns `404`. In that case the bot exhausts the hidden recovery pool, advances to the next visible queue item, and starts the normal idle-disconnect timer only when no playable items remain.
+The SoundCloud recovery path cannot make a removed or unavailable media stream playable when every result returns `404`. New plain-text requests no longer start from SoundCloud and therefore avoid its 30-second preview/expired HLS failure mode by default. In that case the bot exhausts the hidden recovery pool, advances to the next visible queue item, and starts the normal idle-disconnect timer only when no playable items remain.

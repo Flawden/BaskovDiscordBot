@@ -10,8 +10,8 @@ class MediaQueryResolverTest {
     private final MediaQueryResolver resolver = new MediaQueryResolver();
 
     @Test
-    void convertsPlainTextToSoundCloudSearch() {
-        assertEquals("scsearch:Sabaton Heart of Iron",
+    void convertsPlainTextToYoutubeSearch() {
+        assertEquals("ytsearch:Sabaton Heart of Iron",
                 resolver.resolve("  Sabaton Heart of Iron  "));
     }
 
@@ -23,6 +23,20 @@ class MediaQueryResolverTest {
         assertEquals(
                 "https://youtu.be/example",
                 resolver.resolve("https://youtu.be/example"));
+        assertEquals(
+                "https://music.youtube.com/watch?v=example",
+                resolver.resolve("https://music.youtube.com/watch?v=example"));
+        assertEquals(
+                "https://www.youtube-nocookie.com/embed/example",
+                resolver.resolve("https://www.youtube-nocookie.com/embed/example"));
+    }
+
+    @Test
+    void reportsProviderForSearchAndDirectUrls() {
+        assertEquals(MediaProvider.YOUTUBE, resolver.provider("ytsearch:Green Day Holiday"));
+        assertEquals(MediaProvider.YOUTUBE, resolver.provider("https://youtu.be/example"));
+        assertEquals(MediaProvider.SOUNDCLOUD,
+                resolver.provider("https://soundcloud.com/example/track"));
     }
 
     @Test
@@ -33,5 +47,10 @@ class MediaQueryResolverTest {
                 () -> resolver.resolve("http://127.0.0.1:8080/admin"));
         assertThrows(IllegalArgumentException.class,
                 () -> resolver.resolve("https://user:password@soundcloud.com/track"));
+    }
+
+    @Test
+    void rejectsEmptySearch() {
+        assertThrows(IllegalArgumentException.class, () -> resolver.resolve("   "));
     }
 }

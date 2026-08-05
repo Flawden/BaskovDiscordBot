@@ -52,6 +52,7 @@ class StatusMessageFormatterTest {
         MusicRuntimeSnapshot snapshot = new MusicRuntimeSnapshot(2, 1, 7);
 
         assertEquals("""
+                Основной поиск: `YouTube`
                 Активных сессий: `2`
                 Сейчас играет: `1`
                 Треков в очередях: `7`""", StatusMessageFormatter.music(snapshot));

@@ -35,11 +35,13 @@ public final class MusicEmbeds {
                     .setColor(Color.ORANGE)
                     .setTitle("⏳ Трек загружен")
                     .setDescription(formatTrack(track)
+                            + "\n**Источник:** `" + providerLabel(track) + "`"
                             + "\n**Заказал:** " + requester
                             + "\nПроверяю, что Discord DAVE/media transport реально запрашивает аудиофреймы...");
             case QUEUED -> embed
                     .setTitle("🎶 Добавлено в очередь")
                     .setDescription(formatTrack(track)
+                            + "\n**Источник:** `" + providerLabel(track) + "`"
                             + "\n**Заказал:** " + requester
                             + "\n**Позиция:** `" + result.queuePosition() + "`"
                             + "\n**Примерно начнётся через:** `"
@@ -80,6 +82,7 @@ public final class MusicEmbeds {
                 .setColor(Color.GREEN)
                 .setTitle("▶️ Воспроизведение подтверждено")
                 .setDescription(formatTrack(result.track())
+                        + "\n**Источник:** `" + providerLabel(result.track()) + "`"
                         + "\n**Заказал:** " + requesterLabel(result.requester())
                         + "\nDiscord начал принимать аудиофреймы.")
                 .build();
@@ -168,6 +171,7 @@ public final class MusicEmbeds {
                 .setColor(Color.CYAN)
                 .setDescription("**Название:** `" + shorten(currentTrack.getInfo().title) + "`\n"
                         + "**Автор:** `" + shorten(currentTrack.getInfo().author) + "`\n"
+                        + "**Источник:** `" + providerLabel(currentTrack) + "`\n"
                         + "**Заказал:** " + requesterLabel(request == null ? null : request.requester()) + "\n\n"
                         + "`" + progressBar(position, duration, 16) + "` `" + progressPercent + "%`\n"
                         + "**Позиция:** `" + formatTime(position) + " / "
@@ -209,6 +213,7 @@ public final class MusicEmbeds {
             description.append("**Текущая песня:**\n")
                     .append('`').append(shorten(playingTrack.getInfo().title)).append("` — ")
                     .append(shorten(playingTrack.getInfo().author)).append('\n')
+                    .append("**Источник:** `").append(providerLabel(playingTrack)).append("`\n")
                     .append("`").append(progressBar(position, duration, 12)).append("` ")
                     .append('`').append(formatTime(position)).append(" / ")
                     .append(formatTime(duration)).append("`\n")
@@ -233,6 +238,7 @@ public final class MusicEmbeds {
                 description.append(globalPosition).append(". `")
                         .append(shorten(track.getInfo().title)).append("` — ")
                         .append(formatTime(track.getDuration()))
+                        .append(" • ").append(providerLabel(track))
                         .append(" • ").append(requesterLabel(request.requester()))
                         .append(" • через `").append(humanMillis(queueEta)).append("`\n");
                 queueEta += safeDuration(track);
@@ -294,6 +300,17 @@ public final class MusicEmbeds {
         }
         return "**" + shorten(track.getInfo().title) + "** — " + shorten(track.getInfo().author)
                 + " (`" + formatTime(track.getDuration()) + "`)";
+    }
+
+    private static String providerLabel(AudioTrack track) {
+        if (track == null || track.getInfo() == null) {
+            return MediaProvider.UNKNOWN.label();
+        }
+        MediaProvider provider = MediaProvider.fromUri(track.getInfo().uri);
+        if (provider == MediaProvider.UNKNOWN) {
+            provider = MediaProvider.fromIdentifier(track.getInfo().identifier);
+        }
+        return provider.label();
     }
 
     private static String requesterLabel(TrackRequester requester) {

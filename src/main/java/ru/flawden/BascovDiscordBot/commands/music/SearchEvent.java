@@ -93,9 +93,9 @@ public class SearchEvent implements Event {
                         return;
                     }
 
-                    log.info("Loading media query in guild {} after voice readiness: type={}",
+                    log.info("Loading media query in guild {} after voice readiness: provider={}",
                             event.getGuild().getId(),
-                            query.startsWith("scsearch:") ? "search" : "url");
+                            queryResolver.provider(query).name());
                     playerManager.loadAndPlay(
                             event.getGuild(),
                             query,
@@ -177,7 +177,7 @@ public class SearchEvent implements Event {
 
     @Override
     public String helpMessage() {
-        return "Ищет песню по названию или принимает ссылку SoundCloud/YouTube";
+        return "Ищет песню на YouTube или принимает ссылку SoundCloud/YouTube";
     }
 
     @Override

@@ -13,11 +13,15 @@ import java.util.Set;
 @Component
 public class MediaQueryResolver {
 
+    public static final String YOUTUBE_SEARCH_PREFIX = "ytsearch:";
+    public static final String SOUNDCLOUD_SEARCH_PREFIX = "scsearch:";
+
     private static final Set<String> ALLOWED_HOSTS = Set.of(
             "soundcloud.com",
             "on.soundcloud.com",
             "youtube.com",
-            "youtu.be"
+            "youtu.be",
+            "youtube-nocookie.com"
     );
 
     public String resolve(String input) {
@@ -27,7 +31,7 @@ public class MediaQueryResolver {
 
         String trimmed = input.trim();
         if (!looksLikeUrl(trimmed)) {
-            return "scsearch:" + trimmed;
+            return YOUTUBE_SEARCH_PREFIX + trimmed;
         }
 
         URI uri = parseUri(trimmed);
@@ -42,6 +46,10 @@ public class MediaQueryResolver {
         }
 
         return uri.toASCIIString();
+    }
+
+    public MediaProvider provider(String identifier) {
+        return MediaProvider.fromIdentifier(identifier);
     }
 
     private static URI parseUri(String value) {

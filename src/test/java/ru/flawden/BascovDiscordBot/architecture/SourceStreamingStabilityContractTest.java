@@ -37,9 +37,11 @@ class SourceStreamingStabilityContractTest {
     }
 
     @Test
-    void soundCloudSearchHasLargerDeduplicatedRecoveryPool() throws IOException {
+    void providerSearchHasLargerDeduplicatedRecoveryPool() throws IOException {
         String manager = read("lavaplayer/PlayerManager.java");
 
+        assertTrue(manager.contains("MediaQueryResolver.YOUTUBE_SEARCH_PREFIX"));
+        assertTrue(manager.contains("MediaQueryResolver.SOUNDCLOUD_SEARCH_PREFIX"));
         assertTrue(manager.contains("Set<String> seen = ConcurrentHashMap.newKeySet()"));
         assertTrue(manager.contains("seen.add(trackKey(candidate))"));
         assertTrue(manager.contains(".limit(9)"));
