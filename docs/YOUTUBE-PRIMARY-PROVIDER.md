@@ -31,7 +31,7 @@ Search result playlists keep up to nine deduplicated hidden candidates. The visi
 Load confirmations, `/now`, and `/queue` show the detected source provider. Startup logs contain:
 
 ```text
-Remote media sources registered: defaultSearchProvider=YOUTUBE
+Modern YouTube source ready: engine=lavalink-devs/youtube-source version=1.18.2
 ```
 
 This makes it possible to distinguish Discord voice transport failures from provider/extractor failures.
@@ -46,4 +46,6 @@ This makes it possible to distinguish Discord voice transport failures from prov
 - LavaPlayer 2.2.3;
 - native libDAVE `ce725965e`.
 
-The release reactivates the YouTube source already registered through LavaPlayer remote sources. A future isolated source-engine migration is required only if production logs show that the embedded YouTube extractor itself is no longer compatible with YouTube.
+Production proved that LavaPlayer's embedded extractor returns HTTP `400` for `ytsearch:`.
+`v0.11.4` therefore replaces it with `dev.lavalink.youtube:v2:1.18.2`; see
+[`MODERN-YOUTUBE-SOURCE.md`](MODERN-YOUTUBE-SOURCE.md).

@@ -157,7 +157,33 @@ public class ModernInteractions extends ListenerAdapter {
                 .stream()
                 .map(query -> new Command.Choice(query, query))
                 .toList();
-        event.replyChoices(choices).queue();
+        event.replyChoices(choices).queue(
+                ignored -> { },
+                exception -> {
+                    if (isExpiredAutocomplete(exception)) {
+                        log.debug("Autocomplete interaction expired before reply: user={}, query={}",
+                                event.getUser().getId(),
+                                event.getFocusedOption().getValue());
+                        return;
+                    }
+                    log.warn("Autocomplete reply failed: user={}, query={}",
+                            event.getUser().getId(),
+                            event.getFocusedOption().getValue(),
+                            exception);
+                });
+    }
+
+    private static boolean isExpiredAutocomplete(Throwable exception) {
+        Throwable current = exception;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null
+                    && (message.contains("10062") || message.contains("Unknown interaction"))) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     @Override

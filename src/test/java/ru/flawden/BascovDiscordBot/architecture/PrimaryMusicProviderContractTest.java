@@ -52,5 +52,6 @@ class PrimaryMusicProviderContractTest {
         assertTrue(embeds.contains("providerLabel"));
         assertTrue(commands.contains("поиск YouTube"));
         assertTrue(status.contains("Основной поиск: `YouTube`"));
+        assertTrue(status.contains("YoutubeSourceRuntimeInfo.statusLabel()"));
     }
 }

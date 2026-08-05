@@ -4,6 +4,7 @@ import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import ru.flawden.BascovDiscordBot.dave.DaveRuntimeInfo;
 import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
+import ru.flawden.BascovDiscordBot.lavaplayer.YoutubeSourceRuntimeInfo;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
@@ -43,6 +44,7 @@ final class StatusMessageFormatter {
         Objects.requireNonNull(music, "music");
         return String.join("\n",
                 "Основной поиск: `YouTube`",
+                "YouTube engine: `" + YoutubeSourceRuntimeInfo.statusLabel() + "`",
                 "Активных сессий: `" + music.activeSessions() + "`",
                 "Сейчас играет: `" + music.playingSessions() + "`",
                 "Треков в очередях: `" + music.queuedTracks() + "`");

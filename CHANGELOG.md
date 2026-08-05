@@ -7,6 +7,34 @@
 ## [Unreleased]
 
 
+## [0.11.4] — 2026-08-05
+
+### Исправлено
+
+- Устранён production blocker `v0.11.3`: встроенный deprecated `YoutubeSearchProvider` LavaPlayer `2.2.3` отвечал `Invalid status code for search response: 400` ещё до выбора трека.
+- Подключён отдельный modern YouTube engine `dev.lavalink.youtube:v2:1.18.2` из release-репозитория Lavalink.
+- Legacy `com.sedmelluq.discord.lavaplayer.source.youtube.YoutubeAudioSourceManager` исключён из автоматической регистрации remote sources.
+- Ошибка Discord autocomplete `10062 Unknown interaction` обрабатывается явным failure callback и больше не создаёт большой production stack trace.
+
+### Добавлено
+
+- Startup marker с engine, version, default multi-client order и подтверждением отключённого legacy extractor.
+- Deployment gate требует modern YouTube marker вместе с native libDAVE marker.
+- `/status` показывает `YouTube engine: youtube-source 1.18.2`.
+- Документ `docs/MODERN-YOUTUBE-SOURCE.md`.
+
+### Сохранено
+
+- Plain text по-прежнему маршрутизируется через `ytsearch:`, SoundCloud доступен только по прямым ссылкам.
+- Java 17, Spring Boot 3.4.3, JDA 6.5.0, LavaPlayer core 2.2.3, native libDAVE `ce725965e` и Docker bridge не меняются.
+- OAuth, poToken и новые секреты не добавляются.
+
+### Тестирование
+
+- Добавлены unit-тесты runtime identity и architecture contract регистрации/версии/deployment/autocomplete.
+- Тестовый baseline повышен до 51 test source files / 175 `@Test` methods.
+
+
 ## [0.11.3] — 2026-08-05
 
 ### Изменено

@@ -6,6 +6,7 @@ import com.sedmelluq.discord.lavaplayer.source.AudioSourceManagers;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
+import dev.lavalink.youtube.YoutubeAudioSourceManager;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.entities.Guild;
@@ -65,9 +66,19 @@ public class PlayerManager {
         this.voiceConnections = voiceConnections;
         this.voiceDiagnostics = voiceDiagnostics;
         this.audioPlayerManager = new DefaultAudioPlayerManager();
-        AudioSourceManagers.registerRemoteSources(this.audioPlayerManager);
-        log.info("Remote media sources registered: defaultSearchProvider=YOUTUBE, "
-                + "directUrlProviders=YouTube|SoundCloud");
+
+        YoutubeAudioSourceManager youtubeSourceManager = new YoutubeAudioSourceManager();
+        this.audioPlayerManager.registerSourceManager(youtubeSourceManager);
+        AudioSourceManagers.registerRemoteSources(
+                this.audioPlayerManager,
+                com.sedmelluq.discord.lavaplayer.source.youtube.YoutubeAudioSourceManager.class);
+
+        log.info("{} engine={} version={} clients={} legacyLavaplayerYoutube=disabled "
+                        + "defaultSearchProvider=YOUTUBE directUrlProviders=YouTube|SoundCloud",
+                YoutubeSourceRuntimeInfo.STARTUP_MARKER,
+                YoutubeSourceRuntimeInfo.ENGINE,
+                YoutubeSourceRuntimeInfo.VERSION,
+                YoutubeSourceRuntimeInfo.CLIENTS);
         this.idleScheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable, "baskov-music-lifecycle");
             thread.setDaemon(true);

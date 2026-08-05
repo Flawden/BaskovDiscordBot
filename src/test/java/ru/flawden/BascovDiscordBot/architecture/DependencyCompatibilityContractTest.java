@@ -30,6 +30,8 @@ class DependencyCompatibilityContractTest {
         assertEquals("6.5.0", dependencyVersion(project, "net.dv8tion", "JDA"),
                 "JDA 6.5.0 is the isolated DAVE voice migration line");
         assertEquals("2.2.3", dependencyVersion(project, "dev.arbjerg", "lavaplayer"));
+        assertEquals("${youtube-source.version}", dependencyVersion(
+                project, "dev.lavalink.youtube", "v2"));
         assertEquals("${libdave-jvm.version}", dependencyVersion(
                 project, "moe.kyokobot.libdave", "adapter-jda"));
         assertEquals("${libdave-jvm.version}", dependencyVersion(

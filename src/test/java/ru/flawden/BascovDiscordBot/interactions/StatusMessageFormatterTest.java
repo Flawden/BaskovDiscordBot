@@ -53,6 +53,7 @@ class StatusMessageFormatterTest {
 
         assertEquals("""
                 Основной поиск: `YouTube`
+                YouTube engine: `youtube-source 1.18.2`
                 Активных сессий: `2`
                 Сейчас играет: `1`
                 Треков в очередях: `7`""", StatusMessageFormatter.music(snapshot));

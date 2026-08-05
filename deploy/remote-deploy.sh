@@ -218,6 +218,10 @@ verify_runtime() {
       echo "Native libDAVE startup marker is missing" >&2
       return 1
     fi
+    if ! grep -Fq "Modern YouTube source ready:" <<< "${container_logs}"; then
+      echo "Modern YouTube source startup marker is missing" >&2
+      return 1
+    fi
   fi
 
   echo "Runtime verification passed: image=${actual_image}, restarts=${restart_count}, network=${actual_network_mode}, dave_required=${require_native_dave}"
