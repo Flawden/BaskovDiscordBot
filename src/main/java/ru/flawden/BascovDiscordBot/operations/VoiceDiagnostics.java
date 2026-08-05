@@ -154,6 +154,8 @@ public class VoiceDiagnostics {
         private String lastVoiceEvent = "none";
         private String lastVoiceError = "none";
         private String lastSourceError = "none";
+        private String lastRecoveryEvent = "none";
+        private String lastStaleCallback = "none";
         private String lastTrack = "none";
 
         synchronized void connectionRequested(long channelId, Instant now) {
@@ -209,12 +211,12 @@ public class VoiceDiagnostics {
 
         synchronized void fallback(String fromTitle, String toTitle, Instant now) {
             fallbackAttempts++;
-            lastSourceError = timestamp(now) + " fallback: " + fromTitle + " -> " + toTitle;
+            lastRecoveryEvent = timestamp(now) + " fallback: " + fromTitle + " -> " + toTitle;
         }
 
         synchronized void staleCallback(String callback, String title, Instant now) {
             staleCallbacks++;
-            lastSourceError = timestamp(now) + " stale " + callback + ": " + title;
+            lastStaleCallback = timestamp(now) + " stale " + callback + ": " + title;
         }
 
         synchronized VoiceDiagnosticSnapshot snapshot(
@@ -248,6 +250,8 @@ public class VoiceDiagnostics {
                     lastVoiceEvent,
                     lastVoiceError,
                     lastSourceError,
+                    lastRecoveryEvent,
+                    lastStaleCallback,
                     watchdogEnforced);
         }
 

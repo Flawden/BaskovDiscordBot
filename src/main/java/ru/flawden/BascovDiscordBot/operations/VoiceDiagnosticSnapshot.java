@@ -26,5 +26,7 @@ public record VoiceDiagnosticSnapshot(
         String lastVoiceEvent,
         String lastVoiceError,
         String lastSourceError,
+        String lastRecoveryEvent,
+        String lastStaleCallback,
         boolean watchdogEnforced) {
 }

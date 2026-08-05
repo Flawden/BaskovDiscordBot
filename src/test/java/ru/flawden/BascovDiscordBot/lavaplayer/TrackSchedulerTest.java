@@ -110,6 +110,7 @@ class TrackSchedulerTest {
         AudioTrack original = track("Golden Cup", Duration.ofMinutes(3));
         AudioTrack clone = track("Golden Cup", Duration.ofMinutes(3));
         when(player.startTrack(original, true)).thenReturn(true);
+        when(original.getPosition()).thenReturn(Duration.ofMinutes(3).toMillis());
         when(original.makeClone()).thenReturn(clone);
         scheduler.queue(original, new TrackRequester(7L, "Requester"));
         scheduler.setRepeatMode(RepeatMode.TRACK);
@@ -121,6 +122,43 @@ class TrackSchedulerTest {
         assertEquals(RepeatMode.TRACK, scheduler.getRepeatMode());
     }
 
+
+
+    @Test
+    void prematureFinishedPreviewUsesFallbackInsteadOfAdvancingVisibleQueue() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        TrackScheduler scheduler = new TrackScheduler(
+                player, 10, Duration.ofHours(4), () -> { }, () -> { });
+        AudioTrack preview = track("Preview", Duration.ofMinutes(3));
+        AudioTrack fallback = track("Full version", Duration.ofMinutes(3));
+        when(preview.getPosition()).thenReturn(30_000L);
+        when(player.startTrack(preview, true)).thenReturn(true);
+        scheduler.queue(preview, TrackRequester.unknown(), List.of(fallback));
+
+        scheduler.onTrackEnd(player, preview, AudioTrackEndReason.FINISHED);
+
+        verify(player).startTrack(fallback, false);
+        assertSame(fallback, scheduler.getCurrentRequest().track());
+        assertEquals(0, scheduler.historySize());
+    }
+
+    @Test
+    void prematureFinishedPreviewWithoutFallbackDoesNotEnterHistory() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        AtomicInteger idle = new AtomicInteger();
+        TrackScheduler scheduler = new TrackScheduler(
+                player, 10, Duration.ofHours(4), () -> { }, idle::incrementAndGet);
+        AudioTrack preview = track("Preview", Duration.ofMinutes(3));
+        when(preview.getPosition()).thenReturn(30_000L);
+        when(player.startTrack(preview, true)).thenReturn(true);
+        scheduler.queue(preview);
+
+        scheduler.onTrackEnd(player, preview, AudioTrackEndReason.FINISHED);
+
+        assertEquals(null, scheduler.getCurrentRequest());
+        assertEquals(0, scheduler.historySize());
+        assertEquals(1, idle.get());
+    }
 
     @Test
     void cleanupEndReasonUsesFallbackWithoutClosingVoiceSession() {

@@ -183,11 +183,12 @@ public class PlayerManager {
 
             @Override
             public void loadFailed(FriendlyException exception) {
+                String reason = SourceFailureFormatter.describe(identifier, exception);
                 voiceDiagnostics.sourceFailure(
                         guild.getIdLong(),
                         identifier,
-                        exception.getMessage());
-                log.warn("Media load failed in guild {}: {}", guild.getId(), exception.getMessage());
+                        reason);
+                log.warn("Media load failed in guild {}: {}", guild.getId(), reason);
                 musicManager.getScheduler().scheduleDisconnectIfIdle();
                 resultConsumer.accept(MusicLoadResult.withoutTrack(MusicLoadResult.Status.LOAD_FAILED));
             }
@@ -394,10 +395,13 @@ public class PlayerManager {
         if (!identifier.startsWith("scsearch:")) {
             return List.of();
         }
+        Set<String> seen = ConcurrentHashMap.newKeySet();
+        seen.add(trackKey(selected));
         return playlist.getTracks().stream()
                 .filter(candidate -> candidate != selected)
                 .filter(this::isPlayableCandidate)
-                .limit(4)
+                .filter(candidate -> seen.add(trackKey(candidate)))
+                .limit(9)
                 .toList();
     }
 
@@ -406,6 +410,17 @@ public class PlayerManager {
                 && !track.getInfo().isStream
                 && track.getDuration() > 0L
                 && track.getDuration() <= properties.getMaxTrackDuration().toMillis();
+    }
+
+    private static String trackKey(AudioTrack track) {
+        if (track == null || track.getInfo() == null) {
+            return "unknown";
+        }
+        String identifier = track.getInfo().identifier;
+        if (identifier != null && !identifier.isBlank()) {
+            return identifier;
+        }
+        return String.valueOf(track.getInfo().title) + ':' + track.getDuration();
     }
 
     private void safeCloseAudio(Guild guild) {

@@ -92,7 +92,9 @@ final class StatusMessageFormatter {
                 "Watchdog warnings: `" + voice.watchdogWarnings() + "`",
                 "Last voice: " + inline(voice.lastVoiceEvent()),
                 "Last voice error: " + inline(voice.lastVoiceError()),
-                "Last source error: " + inline(voice.lastSourceError()));
+                "Last source error: " + inline(voice.lastSourceError()),
+                "Last recovery: " + inline(voice.lastRecoveryEvent()),
+                "Last stale callback: " + inline(voice.lastStaleCallback()));
     }
 
     private static String frameState(VoiceDiagnosticSnapshot voice) {

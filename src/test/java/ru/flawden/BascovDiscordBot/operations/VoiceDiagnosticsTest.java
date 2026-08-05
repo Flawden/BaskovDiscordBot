@@ -44,6 +44,26 @@ class VoiceDiagnosticsTest {
         assertFalse(snapshot.sessionActive());
     }
 
+
+    @Test
+    void staleAndFallbackEventsDoNotOverwriteRootSourceFailure() {
+        MusicProperties properties = new MusicProperties();
+        VoiceDiagnostics diagnostics = new VoiceDiagnostics(
+                "bridge",
+                properties,
+                Clock.fixed(Instant.parse("2026-08-05T13:25:36Z"), ZoneOffset.UTC));
+
+        diagnostics.sourceFailure(42L, "Ария", "IOException: soundcloud 404");
+        diagnostics.fallback(42L, "Ария", "Ария remix");
+        diagnostics.staleCallback(42L, "end:REPLACED", "Ария");
+
+        VoiceDiagnosticSnapshot snapshot = diagnostics.snapshot(guild(true), null);
+
+        assertTrue(snapshot.lastSourceError().contains("soundcloud 404"));
+        assertTrue(snapshot.lastRecoveryEvent().contains("fallback"));
+        assertTrue(snapshot.lastStaleCallback().contains("REPLACED"));
+    }
+
     @Test
     void reportsWatchdogAsObserveOnlyByDefault() {
         MusicProperties properties = new MusicProperties();

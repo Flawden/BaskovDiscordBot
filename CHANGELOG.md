@@ -7,6 +7,31 @@
 ## [Unreleased]
 
 
+## [0.11.2] — 2026-08-05
+
+### Исправлено
+
+- Найден production root cause короткого воспроизведения: SoundCloud-трек с заявленной длительностью `03:13` завершался через 30 секунд с reason `FINISHED`, а другие HLS media URL возвращали `404`.
+- `TrackScheduler` теперь распознаёт преждевременный `FINISHED` как обрезанный preview/source failure и пробует следующий скрытый fallback вместо ложного успешного завершения.
+- Преждевременно завершённый результат не попадает в history и не активирует repeat mode.
+- Глубинный `IOException`/HTTP-код больше не теряется под общим `FriendlyException: Something broke when playing the track`.
+- Fallback и stale callback больше не затирают последнюю реальную source-ошибку в `/status`.
+
+### Изменено
+
+- SoundCloud search хранит до девяти дедуплицированных скрытых fallback-кандидатов вместо четырёх; пользовательская очередь и её лимит не меняются.
+- `/status` отдельно показывает `Last source error`, `Last recovery` и `Last stale callback`.
+
+### Сохранено
+
+- JDA `6.5.0`, native libDAVE `ce725965e`, Docker bridge, real frame polling, playback controls и bounded deque не менялись.
+
+### Тестирование
+
+- Добавлены unit-тесты preview detection, early-finish recovery, deepest-cause diagnostics и защиты root source error.
+- Добавлен architecture contract `SourceStreamingStabilityContractTest`.
+
+
 ## [0.11.1] — 2026-08-05
 
 ### Исправлено

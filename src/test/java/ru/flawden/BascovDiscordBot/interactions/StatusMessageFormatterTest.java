@@ -104,6 +104,8 @@ class StatusMessageFormatterTest {
                 "join",
                 "none",
                 "HTTP 404",
+                "fallback: primary -> backup",
+                "stale end:REPLACED",
                 false);
 
         assertEquals("""
@@ -114,6 +116,8 @@ class StatusMessageFormatterTest {
                 Frame polling: `25 calls, age=40ms`
                 Watchdog: `OBSERVE`""", StatusMessageFormatter.voice(snapshot));
         assertTrue(StatusMessageFormatter.voiceHistory(snapshot).contains("HTTP 404"));
+        assertTrue(StatusMessageFormatter.voiceHistory(snapshot).contains("fallback: primary -> backup"));
+        assertTrue(StatusMessageFormatter.voiceHistory(snapshot).contains("stale end:REPLACED"));
         assertTrue(StatusMessageFormatter.voiceHistory(snapshot).contains("1/1/0"));
     }
 

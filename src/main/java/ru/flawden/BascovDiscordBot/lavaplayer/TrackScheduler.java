@@ -34,6 +34,7 @@ public class TrackScheduler extends AudioEventAdapter {
     private final Object mutationLock = new Object();
 
     private volatile TrackRequest currentRequest;
+    private volatile long currentTrackStartedAtNanos;
     private volatile RepeatMode repeatMode = RepeatMode.OFF;
 
     public TrackScheduler(
@@ -117,6 +118,7 @@ public class TrackScheduler extends AudioEventAdapter {
         synchronized (mutationLock) {
             if (audioPlayer.startTrack(track, true)) {
                 currentRequest = request;
+                markCurrentTrackStarted();
                 diagnostics.trackStarted(title(track));
                 log.info("Track started: {} (requested by {})",
                         track.getInfo().title, request.requester().displayName());
@@ -144,6 +146,18 @@ public class TrackScheduler extends AudioEventAdapter {
             return;
         }
         log.info("Track ended: {} (reason: {})", track.getInfo().title, endReason);
+        long elapsedMillis = currentTrackElapsedMillis();
+        if (endReason == AudioTrackEndReason.FINISHED
+                && PrematureTrackEndPolicy.isPremature(track, elapsedMillis)) {
+            String reason = PrematureTrackEndPolicy.diagnostic(track, elapsedMillis);
+            diagnostics.sourceFailure(title(track), reason);
+            log.warn("Track ended far before its advertised duration: track={}, {}",
+                    title(track), reason);
+            if (!startFallback(track, "premature finish")) {
+                advanceToNext(false);
+            }
+            return;
+        }
         if (endReason == AudioTrackEndReason.CLEANUP) {
             diagnostics.cleanup(title(track));
             log.warn("Track cleanup received for {}; keeping voice session alive and trying recovery",
@@ -164,6 +178,7 @@ public class TrackScheduler extends AudioEventAdapter {
                 currentRequest = currentRequest.withTrack(clone);
                 onActivity.run();
                 audioPlayer.startTrack(clone, false);
+                markCurrentTrackStarted();
                 log.info("Repeating current track: {}", track.getInfo().title);
                 return;
             }
@@ -201,6 +216,7 @@ public class TrackScheduler extends AudioEventAdapter {
             currentRequest = next;
             onActivity.run();
             audioPlayer.startTrack(next.track(), false);
+            markCurrentTrackStarted();
             diagnostics.trackStarted(title(next.track()));
             log.info("Playing next track: {}", next.track().getInfo().title);
             return next;
@@ -229,6 +245,7 @@ public class TrackScheduler extends AudioEventAdapter {
             currentRequest = restarted;
             onActivity.run();
             audioPlayer.startTrack(restarted.track(), false);
+            markCurrentTrackStarted();
             diagnostics.trackStarted(title(restarted.track()));
             log.info("Playing previous track: {}", restarted.track().getInfo().title);
             return new PreviousResult(PreviousStatus.STARTED, restarted, returnedCurrentToQueue);
@@ -352,8 +369,9 @@ public class TrackScheduler extends AudioEventAdapter {
             log.warn("Ignoring stale track-exception callback: track={}", title(track));
             return;
         }
-        diagnostics.sourceFailure(title(track), exception.getMessage());
-        log.error("Track exception for {}: {}", track.getInfo().title, exception.getMessage(), exception);
+        String reason = SourceFailureFormatter.describe(track, exception);
+        diagnostics.sourceFailure(title(track), reason);
+        log.error("Track exception for {}: {}", track.getInfo().title, reason, exception);
         if (!startFallback(track, "playback exception")) {
             advanceToNext(false);
         }
@@ -386,6 +404,7 @@ public class TrackScheduler extends AudioEventAdapter {
             currentRequest = fallback;
             onActivity.run();
             audioPlayer.startTrack(fallback.track(), false);
+            markCurrentTrackStarted();
             diagnostics.fallback(title(failedTrack), title(fallback.track()));
             diagnostics.trackStarted(title(fallback.track()));
             log.warn("Primary search result failed ({}); trying fallback: {} -> {}",
@@ -428,6 +447,18 @@ public class TrackScheduler extends AudioEventAdapter {
                 throw new IllegalStateException("Queue capacity changed during mutation");
             }
         }
+    }
+
+    private void markCurrentTrackStarted() {
+        currentTrackStartedAtNanos = System.nanoTime();
+    }
+
+    private long currentTrackElapsedMillis() {
+        long startedAt = currentTrackStartedAtNanos;
+        if (startedAt <= 0L) {
+            return Long.MAX_VALUE;
+        }
+        return Math.max(0L, (System.nanoTime() - startedAt) / 1_000_000L);
     }
 
     private static long safeDuration(AudioTrack track) {
