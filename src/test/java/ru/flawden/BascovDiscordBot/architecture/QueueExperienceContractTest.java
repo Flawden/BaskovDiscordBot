@@ -17,7 +17,12 @@ class QueueExperienceContractTest {
     void schedulerKeepsRequesterRepeatAndQueueMutationState() throws IOException {
         String scheduler = read("lavaplayer/TrackScheduler.java");
 
-        assertTrue(scheduler.contains("BlockingQueue<TrackRequest>"));
+        assertTrue(scheduler.contains("LinkedBlockingDeque<TrackRequest> queue"));
+        assertTrue(scheduler.contains(
+                "new LinkedBlockingDeque<>(maxQueueSize + maxHistorySize)"));
+        assertTrue(scheduler.contains("queue.size() >= maxQueueSize"));
+        assertTrue(scheduler.contains(
+                "maxHistorySize = Math.max(1, Math.min(maxQueueSize, 25))"));
         assertTrue(scheduler.contains("RepeatMode repeatMode"));
         assertTrue(scheduler.contains("removeAt("));
         assertTrue(scheduler.contains("move("));

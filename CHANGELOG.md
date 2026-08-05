@@ -7,6 +7,24 @@
 ## [Unreleased]
 
 
+## [0.11.1] — 2026-08-05
+
+### Исправлено
+
+- Обновлены два устаревших architecture source-contract после перехода `TrackScheduler` с `LinkedBlockingQueue` на bounded `LinkedBlockingDeque` в `v0.11.0`.
+- `QueueExperienceContractTest` теперь закрепляет фактическую deque-модель, отдельный bounded history reserve и неизменный пользовательский лимит очереди.
+- `MusicSessionSafetyContractTest` проверяет реальную защиту `queue.size() >= maxQueueSize`, а не удалённую строку конструктора старой очереди.
+
+### Сохранено
+
+- Runtime playback-код, `/previous`, история, расширенный `/now`, JDA `6.5.0`, native libDAVE `ce725965e` и Docker bridge не менялись.
+
+### Тестирование
+
+- Baseline остаётся 44 test source files / 145 tests.
+- Hotfix устраняет только два ложных красных architecture-contract результата после успешных `compile`, `testCompile`, `NativeDaveRuntimeTest` и всех runtime unit-тестов.
+
+
 ## [0.11.0] — 2026-08-05
 
 ### Добавлено

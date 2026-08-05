@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая стабильная версия: **v0.11.0**.
+Текущая стабильная версия: **v0.11.1**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 

@@ -31,7 +31,12 @@ class MusicSessionSafetyContractTest {
         String scheduler = read("lavaplayer/TrackScheduler.java");
         String player = read("lavaplayer/PlayerManager.java");
 
-        assertTrue(scheduler.contains("new LinkedBlockingQueue<>(maxQueueSize)"));
+        assertTrue(scheduler.contains("LinkedBlockingDeque<TrackRequest> queue"));
+        assertTrue(scheduler.contains(
+                "new LinkedBlockingDeque<>(maxQueueSize + maxHistorySize)"));
+        assertTrue(scheduler.contains("queue.size() >= maxQueueSize"));
+        assertTrue(scheduler.contains(
+                "maxHistorySize = Math.max(1, Math.min(maxQueueSize, 25))"));
         assertTrue(scheduler.contains("TRACK_TOO_LONG"));
         assertTrue(scheduler.contains("STREAM_NOT_ALLOWED"));
         assertTrue(player.contains("scheduleIdleDisconnect"));
