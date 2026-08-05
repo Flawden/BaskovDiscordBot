@@ -15,6 +15,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.function.Consumer;
 
 /**
  * Потокобезопасная очередь одной Discord-гильдии.
@@ -31,6 +32,7 @@ public class TrackScheduler extends AudioEventAdapter {
     private final Runnable onActivity;
     private final Runnable onIdle;
     private final Diagnostics diagnostics;
+    private final Consumer<TrackRequest> historyListener;
     private final Object mutationLock = new Object();
 
     private volatile TrackRequest currentRequest;
@@ -78,6 +80,26 @@ public class TrackScheduler extends AudioEventAdapter {
             Runnable onActivity,
             Runnable onIdle,
             Diagnostics diagnostics) {
+        this(
+                audioPlayer,
+                maxQueueSize,
+                maxTrackDuration,
+                initialRepeatMode,
+                onActivity,
+                onIdle,
+                diagnostics,
+                ignored -> { });
+    }
+
+    public TrackScheduler(
+            AudioPlayer audioPlayer,
+            int maxQueueSize,
+            Duration maxTrackDuration,
+            RepeatMode initialRepeatMode,
+            Runnable onActivity,
+            Runnable onIdle,
+            Diagnostics diagnostics,
+            Consumer<TrackRequest> historyListener) {
         this.audioPlayer = Objects.requireNonNull(audioPlayer, "audioPlayer");
         if (maxQueueSize < 1) {
             throw new IllegalArgumentException("maxQueueSize must be positive");
@@ -90,6 +112,7 @@ public class TrackScheduler extends AudioEventAdapter {
         this.onActivity = Objects.requireNonNull(onActivity, "onActivity");
         this.onIdle = Objects.requireNonNull(onIdle, "onIdle");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
+        this.historyListener = Objects.requireNonNull(historyListener, "historyListener");
     }
 
     public QueueResult queue(AudioTrack track) {
@@ -430,9 +453,17 @@ public class TrackScheduler extends AudioEventAdapter {
         if (current == null) {
             return;
         }
-        history.addFirst(cloneRequest(current));
+        TrackRequest remembered = cloneRequest(current);
+        history.addFirst(remembered);
         while (history.size() > maxHistorySize) {
             history.removeLast();
+        }
+        try {
+            historyListener.accept(remembered);
+        } catch (RuntimeException exception) {
+            log.error("Persistent history listener failed for track {}; playback will continue",
+                    title(remembered.track()),
+                    exception);
         }
     }
 

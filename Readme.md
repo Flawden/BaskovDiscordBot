@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая стабильная версия: **v0.12.2**.
+Текущая стабильная версия: **v0.13.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -8,6 +8,7 @@
 
 - slash-команды воспроизведения и полноценного управления очередью;
 - `/search` с пятью результатами YouTube, одноразовыми кнопками выбора и пятиминутной owner-bound сессией; autocomplete последних запросов работает в `/play` и `/search`;
+- постоянная история до 50 треков на сервер, `/history`, `/replay` и серверные плейлисты с owner/admin-управлением, autocomplete и ordered batch playback;
 - legacy `!`-команды как compatibility layer;
 - воспроизведение музыки, пауза, остановка, пропуск и возврат к предыдущим трекам;
 - requester, ETA для каждой позиции, постраничная очередь с кнопками навигации, bounded history, previous, repeat mode, shuffle, seek, remove/move/clear и управление громкостью;
@@ -71,10 +72,12 @@ docker compose logs -f bot
 | `DISCORD_BOT_MUSIC_DEFAULT_VOLUME` | `100` | громкость новой guild-сессии |
 | `DISCORD_BOT_MUSIC_MAX_VOLUME` | `150` | верхняя граница команды `/volume` |
 | `DISCORD_BOT_PERSISTENCE_FILE` | `data/guild-settings.properties` | файл постоянных guild-настроек; в Docker используется `/app/data/...` |
+| `DISCORD_BOT_MUSIC_LIBRARY_FILE` | `data/music-library.tsv` | отдельный atomic-файл постоянных плейлистов и истории; в Docker `/app/data/music-library.tsv` |
 
 Live-потоки отключены. Подробные правила voice-доступа и lifecycle находятся в [`docs/MUSIC-SESSIONS.md`](docs/MUSIC-SESSIONS.md).
 Современный Discord-интерфейс описан в [`docs/MODERN-COMMANDS.md`](docs/MODERN-COMMANDS.md).
 Интерактивный поиск и безопасный выбор трека описаны в [`docs/SEARCH-TRACK-SELECTION.md`](docs/SEARCH-TRACK-SELECTION.md).
+Постоянные плейлисты, история и replay описаны в [`docs/PLAYLISTS-HISTORY-REPLAY.md`](docs/PLAYLISTS-HISTORY-REPLAY.md).
 Очередь и новые команды управления описаны в [`docs/QUEUE-EXPERIENCE.md`](docs/QUEUE-EXPERIENCE.md).
 Расширенный пульт, история и `/previous` описаны в [`docs/ADVANCED-PLAYBACK-CONTROLS.md`](docs/ADVANCED-PLAYBACK-CONTROLS.md).
 Маршрутизация источников и переход на YouTube primary описаны в [`docs/YOUTUBE-PRIMARY-PROVIDER.md`](docs/YOUTUBE-PRIMARY-PROVIDER.md).
@@ -152,6 +155,7 @@ ghcr.io/<owner>/<repository>:dev|latest
 | `DISCORD_BOT_VOICE_LOG_LEVEL` | `DEBUG` | уровень узкого JDA voice logger |
 | `DISCORD_BOT_MUSIC_DEFAULT_VOLUME` | `100` | начальная громкость |
 | `DISCORD_BOT_MUSIC_MAX_VOLUME` | `150` | максимальная громкость |
+| `DISCORD_BOT_MUSIC_LIBRARY_FILE` | `data/music-library.tsv` | файл постоянных плейлистов и истории |
 
 Workflow кодирует эти значения перед SSH-передачей, а серверный deploy-скрипт проверяет формат до перезаписи защищённого `.env`.
 

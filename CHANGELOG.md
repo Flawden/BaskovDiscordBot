@@ -7,6 +7,41 @@
 ## [Unreleased]
 
 
+## [0.13.0] — 2026-08-05
+
+### Добавлено
+
+- Постоянная серверная история воспроизведения с командами `/history [page]` и `/replay position`; хранится до 50 последних воспроизводимых записей на Discord-сервер.
+- Серверные плейлисты: `/playlist list|create|show|add|play|remove|delete`, autocomplete имени и постраничный просмотр.
+- Owner-bound изменения плейлиста с административным override для `Manage Server`; лимиты 20 плейлистов на сервер и 50 треков на плейлист.
+- Ordered batch loading сохранённых URL: плейлист повторно загружается в исходном порядке и возвращает единый итог started/queued/rejected.
+- Отдельный atomic TSV-файл `music-library.tsv` с форматом `BASKOV_MUSIC_LIBRARY_V1`, Base64-кодированием пользовательских строк и POSIX `0600`.
+- Конфигурация `DISCORD_BOT_MUSIC_LIBRARY_FILE` и постоянный Docker-путь `/app/data/music-library.tsv`.
+- Поле `Persistent library` в `/status`, показывающее количество плейлистов и глубину истории текущего сервера.
+- Документ `docs/PLAYLISTS-HISTORY-REPLAY.md`.
+
+### Изменено
+
+- Завершённый или вручную пропущенный трек публикуется из `TrackScheduler` в постоянную историю через отдельный single-thread daemon executor, поэтому файловый I/O не выполняется на LavaPlayer/JDA audio callback thread.
+- `/previous` сохраняет быстрый in-memory clone-путь текущей сессии, а `/replay` загружает публичный URL из постоянной истории после restart/redeploy.
+- Source failures, premature preview, `404`, stuck/cleanup recovery и неуспешные fallback-кандидаты не загрязняют постоянную историю.
+- `/help`, `/status`, README и каталог slash-команд синхронизированы с библиотекой.
+
+### Безопасность и отказоустойчивость
+
+- В хранилище не сериализуются `AudioTrack`, Discord token, cookies, OAuth или другие секреты — только ограниченные метаданные и повторно загружаемый YouTube/SoundCloud URL.
+- Имена плейлистов нормализуются, сравниваются без учёта регистра, ограничены 40 символами и не принимают управляющие символы.
+- Файловая мутация откатывает in-memory состояние при ошибке atomic persistence.
+- Shutdown recorder не может сорвать переход к следующему треку: новые history tasks после закрытия executor тихо отбрасываются.
+
+### Сохранено
+
+- Java 17, Spring Boot 3.4.3, JDA 6.5.0, LavaPlayer core 2.2.3, `youtube-source 1.18.2`, native libDAVE `ce725965e`, Docker bridge и voice foundation не меняются.
+- `/play`, `/search`, очередь, previous, seek, repeat, shuffle, source recovery и real frame polling остаются совместимыми.
+- Тестовый baseline повышен до 59 test source files / 206 `@Test` methods.
+
+
+
 ## [0.12.2] — 2026-08-05
 
 ### Исправлено

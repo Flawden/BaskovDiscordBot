@@ -11,6 +11,7 @@ import ru.flawden.BascovDiscordBot.operations.VoiceDiagnostics;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 /**
  * Изолированная музыкальная сессия одной Discord-гильдии.
@@ -33,7 +34,8 @@ public class GuildMusicManager {
             GuildPreferences preferences,
             Runnable onActivity,
             Runnable onIdle,
-            VoiceDiagnostics diagnostics) {
+            VoiceDiagnostics diagnostics,
+            Consumer<TrackRequest> historyListener) {
         this.guild = Objects.requireNonNull(guild, "guild");
         this.onActivity = Objects.requireNonNull(onActivity, "onActivity");
         this.audioPlayer = Objects.requireNonNull(manager, "manager").createPlayer();
@@ -71,7 +73,8 @@ public class GuildMusicManager {
                     public void staleCallback(String callback, String title) {
                         diagnostics.staleCallback(guild.getIdLong(), callback, title);
                     }
-                });
+                },
+                Objects.requireNonNull(historyListener, "historyListener"));
         this.audioPlayer.addListener(this.scheduler);
         this.sendHandler = new AudioPlayerSendHandler(this.audioPlayer);
         log.info("Music session created for guild {}", guild.getId());

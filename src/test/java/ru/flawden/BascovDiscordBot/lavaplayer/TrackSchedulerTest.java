@@ -264,6 +264,65 @@ class TrackSchedulerTest {
     }
 
     @Test
+    void publishesRememberedTrackToPersistentHistoryListener() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        java.util.concurrent.atomic.AtomicReference<TrackRequest> persisted =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        TrackScheduler scheduler = new TrackScheduler(
+                player,
+                10,
+                Duration.ofHours(4),
+                RepeatMode.OFF,
+                () -> { },
+                () -> { },
+                TrackScheduler.Diagnostics.noop(),
+                persisted::set);
+        AudioTrack first = track("First", Duration.ofMinutes(3));
+        AudioTrack remembered = track("First", Duration.ofMinutes(3));
+        AudioTrack second = track("Second", Duration.ofMinutes(4));
+        when(player.startTrack(first, true)).thenReturn(true);
+        when(player.startTrack(second, true)).thenReturn(false);
+        when(first.makeClone()).thenReturn(remembered);
+
+        scheduler.queue(first, new TrackRequester(42L, "Requester"));
+        scheduler.queue(second);
+        scheduler.nextTrack();
+
+        assertSame(remembered, persisted.get().track());
+        assertEquals(42L, persisted.get().requester().userId());
+    }
+
+    @Test
+    void persistentHistoryFailureCannotBlockNextTrack() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        TrackScheduler scheduler = new TrackScheduler(
+                player,
+                10,
+                Duration.ofHours(4),
+                RepeatMode.OFF,
+                () -> { },
+                () -> { },
+                TrackScheduler.Diagnostics.noop(),
+                ignored -> {
+                    throw new IllegalStateException("storage unavailable");
+                });
+        AudioTrack first = track("First", Duration.ofMinutes(3));
+        AudioTrack remembered = track("First", Duration.ofMinutes(3));
+        AudioTrack second = track("Second", Duration.ofMinutes(4));
+        when(player.startTrack(first, true)).thenReturn(true);
+        when(player.startTrack(second, true)).thenReturn(false);
+        when(first.makeClone()).thenReturn(remembered);
+
+        scheduler.queue(first);
+        scheduler.queue(second);
+        TrackRequest next = scheduler.nextTrack();
+
+        assertSame(second, next.track());
+        assertSame(second, scheduler.getCurrentRequest().track());
+        verify(player).startTrack(second, false);
+    }
+
+    @Test
     void previousRestoresHistoryAndReturnsInterruptedTrackToQueueFront() {
         AudioPlayer player = mock(AudioPlayer.class);
         TrackScheduler scheduler = new TrackScheduler(

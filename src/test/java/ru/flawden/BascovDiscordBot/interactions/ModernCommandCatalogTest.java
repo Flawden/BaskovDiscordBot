@@ -21,8 +21,8 @@ class ModernCommandCatalogTest {
 
         assertEquals(commands.size(), names.size());
         assertEquals(Set.of(
-                "help", "version", "status", "play", "search", "pause", "resume",
-                "previous", "skip", "stop", "queue", "now", "seek",
+                "help", "version", "status", "play", "search", "history", "replay", "playlist",
+                "pause", "resume", "previous", "skip", "stop", "queue", "now", "seek",
                 "volume", "repeat", "shuffle", "remove", "move", "clear", "settings"), names);
     }
 
@@ -54,6 +54,21 @@ class ModernCommandCatalogTest {
         assertEquals(Set.of("page"), queue.getOptions().stream()
                 .map(option -> option.getName())
                 .collect(Collectors.toSet()));
+    }
+
+    @Test
+    void playlistCommandExposesPersistentLibrarySubcommands() {
+        SlashCommandData playlist = command("playlist");
+        assertEquals(Set.of("list", "create", "show", "add", "play", "remove", "delete"),
+                playlist.getSubcommands().stream()
+                        .map(subcommand -> subcommand.getName())
+                        .collect(Collectors.toSet()));
+        assertTrue(playlist.getSubcommands().stream()
+                .filter(subcommand -> Set.of("show", "add", "play", "remove", "delete")
+                        .contains(subcommand.getName()))
+                .flatMap(subcommand -> subcommand.getOptions().stream())
+                .filter(option -> option.getName().equals("name"))
+                .allMatch(option -> option.isAutoComplete()));
     }
 
     @Test

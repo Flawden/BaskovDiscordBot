@@ -24,6 +24,7 @@ import ru.flawden.BascovDiscordBot.commands.music.MusicEmbeds;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
 import ru.flawden.BascovDiscordBot.dave.DaveRuntimeInfo;
 import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
+import ru.flawden.BascovDiscordBot.lavaplayer.BatchMusicLoadResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.MusicLoadResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.MusicSearchResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
@@ -33,6 +34,10 @@ import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackScheduler;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
 import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
+import ru.flawden.BascovDiscordBot.library.MusicLibraryRepository;
+import ru.flawden.BascovDiscordBot.library.PlaylistOperationResult;
+import ru.flawden.BascovDiscordBot.library.StoredPlaylist;
+import ru.flawden.BascovDiscordBot.library.StoredTrack;
 import ru.flawden.BascovDiscordBot.operations.JdaRuntimeInfo;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
@@ -44,6 +49,7 @@ import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
 import java.awt.Color;
 import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 
@@ -60,6 +66,7 @@ public class ModernInteractions extends ListenerAdapter {
     private final MusicProperties musicProperties;
     private final RecentSearchHistory searchHistory;
     private final SearchSelectionStore searchSelections;
+    private final MusicLibraryRepository musicLibraryRepository;
     private final VersionEvent versionEvent;
     private final GuildPreferencesRepository preferencesRepository;
     private final OperationalMetrics operationalMetrics;
@@ -73,6 +80,7 @@ public class ModernInteractions extends ListenerAdapter {
             MusicProperties musicProperties,
             RecentSearchHistory searchHistory,
             SearchSelectionStore searchSelections,
+            MusicLibraryRepository musicLibraryRepository,
             VersionEvent versionEvent,
             GuildPreferencesRepository preferencesRepository,
             OperationalMetrics operationalMetrics,
@@ -84,6 +92,7 @@ public class ModernInteractions extends ListenerAdapter {
         this.musicProperties = musicProperties;
         this.searchHistory = searchHistory;
         this.searchSelections = searchSelections;
+        this.musicLibraryRepository = musicLibraryRepository;
         this.versionEvent = versionEvent;
         this.preferencesRepository = preferencesRepository;
         this.operationalMetrics = operationalMetrics;
@@ -109,6 +118,9 @@ public class ModernInteractions extends ListenerAdapter {
                 case "status" -> status(event);
                 case "play" -> play(event);
                 case "search" -> search(event);
+                case "history" -> history(event);
+                case "replay" -> replay(event);
+                case "playlist" -> playlist(event);
                 case "pause" -> pause(event, true);
                 case "resume" -> pause(event, false);
                 case "previous" -> previous(event);
@@ -153,26 +165,50 @@ public class ModernInteractions extends ListenerAdapter {
 
     @Override
     public void onCommandAutoCompleteInteraction(@NotNull CommandAutoCompleteInteractionEvent event) {
-        boolean supportedCommand = "play".equals(event.getName()) || "search".equals(event.getName());
-        if (!supportedCommand || !"query".equals(event.getFocusedOption().getName())) {
+        String focusedName = event.getFocusedOption().getName();
+        String focusedValue = event.getFocusedOption().getValue();
+
+        if (("play".equals(event.getName()) || "search".equals(event.getName()))
+                && "query".equals(focusedName)) {
+            List<Command.Choice> choices = searchHistory
+                    .suggest(event.getUser().getIdLong(), focusedValue)
+                    .stream()
+                    .map(query -> new Command.Choice(query, query))
+                    .toList();
+            replyAutocomplete(event, choices);
             return;
         }
 
-        List<Command.Choice> choices = searchHistory
-                .suggest(event.getUser().getIdLong(), event.getFocusedOption().getValue())
-                .stream()
-                .map(query -> new Command.Choice(query, query))
-                .toList();
+        if ("playlist".equals(event.getName())
+                && "name".equals(focusedName)
+                && event.getGuild() != null) {
+            String normalized = focusedValue.trim().toLowerCase(Locale.ROOT);
+            List<Command.Choice> choices = musicLibraryRepository
+                    .playlists(event.getGuild().getIdLong())
+                    .stream()
+                    .map(StoredPlaylist::name)
+                    .filter(name -> normalized.isBlank()
+                            || name.toLowerCase(Locale.ROOT).contains(normalized))
+                    .limit(25)
+                    .map(name -> new Command.Choice(name, name))
+                    .toList();
+            replyAutocomplete(event, choices);
+        }
+    }
+
+    private void replyAutocomplete(
+            CommandAutoCompleteInteractionEvent event,
+            List<Command.Choice> choices) {
         event.replyChoices(choices).queue(
                 ignored -> { },
                 exception -> {
                     if (isExpiredAutocomplete(exception)) {
-                        log.debug("Autocomplete interaction expired before reply: user={}, query={}",
+                        log.debug("Autocomplete interaction expired before reply: user={}, value={}",
                                 event.getUser().getId(),
                                 event.getFocusedOption().getValue());
                         return;
                     }
-                    log.warn("Autocomplete reply failed: user={}, query={}",
+                    log.warn("Autocomplete reply failed: user={}, value={}",
                             event.getUser().getId(),
                             event.getFocusedOption().getValue(),
                             exception);
@@ -384,6 +420,11 @@ public class ModernInteractions extends ListenerAdapter {
         String voiceState = StatusMessageFormatter.voice(voice);
         String voiceHistory = StatusMessageFormatter.voiceHistory(voice);
         String commandState = StatusMessageFormatter.commands(commands);
+        String libraryState = "Плейлистов: `"
+                + musicLibraryRepository.playlists(event.getGuild().getIdLong()).size()
+                + "`\nИстория: `"
+                + musicLibraryRepository.history(event.getGuild().getIdLong()).size()
+                + "/" + MusicLibraryRepository.MAX_HISTORY_PER_GUILD + "`";
 
         event.replyEmbeds(new EmbedBuilder()
                         .setTitle("🩺 Состояние Baskov Discord Bot")
@@ -395,6 +436,7 @@ public class ModernInteractions extends ListenerAdapter {
                         .addField("Playback modes", playbackState, true)
                         .addField("Voice transport", voiceState, true)
                         .addField("Voice history", voiceHistory, false)
+                        .addField("Persistent library", libraryState, true)
                         .addField("Команды с запуска", commandState, false)
                         .setFooter("Health heartbeat обновляется каждые 10 секунд")
                         .build())
@@ -467,6 +509,318 @@ public class ModernInteractions extends ListenerAdapter {
                         session.token(),
                         session.candidates().size()))
                 .queue();
+    }
+
+    private void history(SlashCommandInteractionEvent event) {
+        long requestedPage = event.getOption("page", 1L, OptionMapping::getAsLong);
+        if (requestedPage < 1L || requestedPage > Integer.MAX_VALUE) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "📄 Неверная страница",
+                            "Номер страницы должен быть положительным целым числом."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        event.replyEmbeds(MusicEmbeds.playbackHistory(
+                        musicLibraryRepository.history(event.getGuild().getIdLong()),
+                        Math.toIntExact(requestedPage)))
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private void replay(SlashCommandInteractionEvent event) {
+        long requestedPosition = event.getOption("position", -1L, OptionMapping::getAsLong);
+        List<StoredTrack> history = musicLibraryRepository.history(event.getGuild().getIdLong());
+        if (requestedPosition < 1L || requestedPosition > history.size()) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🔁 Позиция истории не найдена",
+                            history.isEmpty()
+                                    ? "История пока пуста."
+                                    : "Укажи номер из диапазона `1.." + history.size() + "`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        StoredTrack selected = history.get(Math.toIntExact(requestedPosition - 1L));
+        queueStoredTracks(
+                event,
+                List.of(selected),
+                "🔁 Трек из истории добавлен");
+    }
+
+    private void playlist(SlashCommandInteractionEvent event) {
+        String subcommand = event.getSubcommandName();
+        if (subcommand == null || "list".equals(subcommand)) {
+            event.replyEmbeds(MusicEmbeds.playlistList(
+                            musicLibraryRepository.playlists(event.getGuild().getIdLong())))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        String name = event.getOption("name", "", OptionMapping::getAsString);
+        try {
+            switch (subcommand) {
+                case "create" -> createPlaylist(event, name);
+                case "show" -> showPlaylist(event, name);
+                case "add" -> addCurrentTrackToPlaylist(event, name);
+                case "play" -> playPlaylist(event, name);
+                case "remove" -> removeTrackFromPlaylist(event, name);
+                case "delete" -> deletePlaylist(event, name);
+                default -> event.replyEmbeds(MusicEmbeds.error(
+                                "📚 Неизвестная операция",
+                                "Используй `/playlist list`, `create`, `show`, `add`, `play`, `remove` или `delete`."))
+                        .setEphemeral(true)
+                        .queue();
+            }
+        } catch (IllegalArgumentException exception) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "📚 Название отклонено",
+                            exception.getMessage()))
+                    .setEphemeral(true)
+                    .queue();
+        }
+    }
+
+    private void createPlaylist(SlashCommandInteractionEvent event, String name) {
+        PlaylistOperationResult result = musicLibraryRepository.createPlaylist(
+                event.getGuild().getIdLong(),
+                event.getUser().getIdLong(),
+                name);
+        replyPlaylistMutation(event, result);
+    }
+
+    private void showPlaylist(SlashCommandInteractionEvent event, String name) {
+        long requestedPage = event.getOption("page", 1L, OptionMapping::getAsLong);
+        if (requestedPage < 1L || requestedPage > Integer.MAX_VALUE) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "📄 Неверная страница",
+                            "Номер страницы должен быть положительным целым числом."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        StoredPlaylist playlist = musicLibraryRepository
+                .playlist(event.getGuild().getIdLong(), name)
+                .orElse(null);
+        event.replyEmbeds(MusicEmbeds.playlistView(
+                        playlist,
+                        Math.toIntExact(requestedPage)))
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private void addCurrentTrackToPlaylist(SlashCommandInteractionEvent event, String name) {
+        if (!allowControl(event)) {
+            return;
+        }
+        GuildMusicManager manager = playerManager.findMusicManager(event.getGuild()).orElse(null);
+        TrackRequest current = manager == null ? null : manager.getScheduler().getCurrentRequest();
+        StoredTrack track = StoredTrack.from(current).orElse(null);
+        PlaylistOperationResult result = musicLibraryRepository.addTrack(
+                event.getGuild().getIdLong(),
+                name,
+                event.getUser().getIdLong(),
+                isLibraryAdministrator(event.getMember()),
+                track);
+        replyPlaylistMutation(event, result);
+    }
+
+    private void playPlaylist(SlashCommandInteractionEvent event, String name) {
+        StoredPlaylist playlist = musicLibraryRepository
+                .playlist(event.getGuild().getIdLong(), name)
+                .orElse(null);
+        if (playlist == null) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "📚 Плейлист не найден",
+                            "Проверь название через `/playlist list`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        if (playlist.tracks().isEmpty()) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "📭 Плейлист пуст",
+                            "Запусти музыку и добавь текущий трек через `/playlist add`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        queueStoredTracks(
+                event,
+                playlist.tracks(),
+                "📚 Плейлист `" + playlist.name() + "` добавлен");
+    }
+
+    private void removeTrackFromPlaylist(SlashCommandInteractionEvent event, String name) {
+        long requestedPosition = event.getOption("position", -1L, OptionMapping::getAsLong);
+        if (requestedPosition < 1L || requestedPosition > Integer.MAX_VALUE) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🗑️ Неверная позиция",
+                            "Позиция должна быть положительным целым числом."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        PlaylistOperationResult result = musicLibraryRepository.removeTrack(
+                event.getGuild().getIdLong(),
+                name,
+                event.getUser().getIdLong(),
+                isLibraryAdministrator(event.getMember()),
+                Math.toIntExact(requestedPosition));
+        replyPlaylistMutation(event, result);
+    }
+
+    private void deletePlaylist(SlashCommandInteractionEvent event, String name) {
+        PlaylistOperationResult result = musicLibraryRepository.deletePlaylist(
+                event.getGuild().getIdLong(),
+                name,
+                event.getUser().getIdLong(),
+                isLibraryAdministrator(event.getMember()));
+        replyPlaylistMutation(event, result);
+    }
+
+    private void replyPlaylistMutation(
+            SlashCommandInteractionEvent event,
+            PlaylistOperationResult result) {
+        MessageEmbed embed = switch (result.status()) {
+            case CREATED -> MusicEmbeds.success(
+                    "📚 Плейлист создан",
+                    "Создан плейлист `" + result.playlist().name() + "`. Добавляй текущую песню через `/playlist add`.");
+            case ADDED -> MusicEmbeds.success(
+                    "➕ Трек сохранён",
+                    "`" + result.track().title() + "` добавлен в `" + result.playlist().name()
+                            + "`. Треков: `" + result.playlist().tracks().size() + "`.");
+            case REMOVED -> MusicEmbeds.success(
+                    "🗑️ Трек удалён из плейлиста",
+                    "Удалён `" + result.track().title() + "`. Осталось: `"
+                            + result.playlist().tracks().size() + "`.");
+            case DELETED -> MusicEmbeds.success(
+                    "🗑️ Плейлист удалён",
+                    "Плейлист `" + result.playlist().name() + "` удалён.");
+            case ALREADY_EXISTS -> MusicEmbeds.error(
+                    "📚 Такой плейлист уже есть",
+                    "Используй существующий `" + result.playlist().name() + "` или выбери другое название.");
+            case NOT_FOUND -> MusicEmbeds.error(
+                    "📚 Плейлист не найден",
+                    "Проверь название через `/playlist list`.");
+            case FORBIDDEN -> MusicEmbeds.error(
+                    "🔐 Недостаточно прав",
+                    "Изменять этот плейлист может его создатель или участник с правом `Manage Server`.");
+            case PLAYLIST_LIMIT_REACHED -> MusicEmbeds.error(
+                    "🚧 Лимит плейлистов достигнут",
+                    "На сервере можно хранить до `" + MusicLibraryRepository.MAX_PLAYLISTS_PER_GUILD + "` плейлистов.");
+            case TRACK_LIMIT_REACHED -> MusicEmbeds.error(
+                    "🚧 Плейлист заполнен",
+                    "В одном плейлисте можно хранить до `" + MusicLibraryRepository.MAX_TRACKS_PER_PLAYLIST + "` треков.");
+            case INVALID_POSITION -> MusicEmbeds.error(
+                    "🗑️ Позиция не найдена",
+                    "Проверь номер через `/playlist show`.");
+            case UNREPLAYABLE_TRACK -> MusicEmbeds.error(
+                    "💾 Текущий трек нельзя сохранить",
+                    "Сейчас ничего не играет либо источник не содержит повторно загружаемую YouTube/SoundCloud-ссылку.");
+        };
+        event.replyEmbeds(embed).setEphemeral(true).queue();
+    }
+
+    private void queueStoredTracks(
+            SlashCommandInteractionEvent event,
+            List<StoredTrack> tracks,
+            String successTitle) {
+        Guild guild = event.getGuild();
+        Member member = event.getMember();
+        MusicControlPolicy.Decision decision = controlPolicy.canStartOrQueue(
+                member,
+                member.getVoiceState(),
+                guild.getSelfMember().getVoiceState());
+        if (!decision.allowed()) {
+            event.replyEmbeds(MusicEmbeds.error("🎧 Управление недоступно", decision.message()))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        var botChannel = guild.getSelfMember().getVoiceState().getChannel();
+        var targetChannel = botChannel != null ? botChannel : member.getVoiceState().getChannel();
+        if (targetChannel == null) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🔍 Голосовой канал потерян",
+                            "Войди в голосовой канал и повтори команду."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        List<String> identifiers = tracks.stream()
+                .map(StoredTrack::playbackIdentifier)
+                .toList();
+        TrackRequester requester = new TrackRequester(
+                event.getUser().getIdLong(),
+                member.getEffectiveName());
+        event.deferReply().queue(hook -> playerManager
+                .ensureVoiceConnection(guild, targetChannel)
+                .whenComplete((connection, failure) -> {
+                    if (failure != null) {
+                        log.error("Voice connection future failed while loading stored tracks in guild {}",
+                                guild.getId(), failure);
+                        editVoiceFailure(hook, new VoiceConnectionResult(
+                                VoiceConnectionResult.Status.FAILED,
+                                "Внутренняя ошибка голосового подключения."));
+                        return;
+                    }
+                    if (!connection.connected()) {
+                        editVoiceFailure(hook, connection);
+                        return;
+                    }
+                    playerManager.loadBatch(
+                            guild,
+                            identifiers,
+                            requester,
+                            result -> editBatchLoadResult(hook, guild, successTitle, result));
+                }));
+    }
+
+    private void editBatchLoadResult(
+            InteractionHook hook,
+            Guild guild,
+            String successTitle,
+            BatchMusicLoadResult result) {
+        if (result.firstStartedTrack() == null) {
+            var action = hook.editOriginalEmbeds(MusicEmbeds.batchLoadResult(successTitle, result));
+            if (result.accepted() > 0) {
+                action.setComponents(MusicControls.rows());
+            }
+            action.queue();
+            return;
+        }
+
+        playerManager.awaitPlaybackReady(guild, result.firstStartedTrack())
+                .whenComplete((readiness, failure) -> {
+                    if (failure != null) {
+                        log.error("Stored batch playback readiness failed in guild {}", guild.getId(), failure);
+                        hook.editOriginalEmbeds(MusicEmbeds.error(
+                                        "❌ Не удалось подтвердить воспроизведение",
+                                        "Список загружен, но проверка Discord media transport завершилась ошибкой."))
+                                .setComponents(List.of())
+                                .queue();
+                        return;
+                    }
+                    if (readiness.ready()) {
+                        hook.editOriginalEmbeds(MusicEmbeds.batchLoadResult(successTitle, result))
+                                .setComponents(MusicControls.rows())
+                                .queue();
+                        return;
+                    }
+                    hook.editOriginalEmbeds(MusicEmbeds.playbackReadinessFailure(
+                                    readiness,
+                                    JdaRuntimeInfo.version()))
+                            .setComponents(List.of())
+                            .queue();
+                });
+    }
+
+    private static boolean isLibraryAdministrator(Member member) {
+        return member != null && (member.isOwner() || member.hasPermission(Permission.MANAGE_SERVER));
     }
 
     private void play(SlashCommandInteractionEvent event) {
@@ -1204,12 +1558,14 @@ public class ModernInteractions extends ListenerAdapter {
                 .setColor(Color.CYAN)
                 .addField("▶️ Воспроизведение", "`/play` `/search` `/pause` `/resume` `/previous` `/skip` `/stop` `/seek`", false)
                 .addField("📋 Очередь", "`/queue` `/remove` `/move` `/shuffle` `/clear`", false)
+                .addField("📚 Библиотека", "`/playlist` `/history` `/replay`", false)
                 .addField("🎚️ Режимы", "`/volume` `/repeat` `/now`", false)
                 .addField("⚙️ Настройки", "`/settings show` `/settings volume` `/settings repeat` `/settings reset`", false)
                 .addField("ℹ️ Сервис", "`/version` `/status` `/help`", false)
                 .addField("🖱️ Кнопки", "Под `/now` доступны предыдущий трек, ±15 секунд, пауза, следующий трек, shuffle, repeat, очередь и stop.", false)
                 .addField("🔎 Выбор трека", "`/search` показывает до пяти результатов YouTube с кнопками выбора. Результаты живут пять минут и доступны только автору.", false)
-                .addField("💡 Autocomplete", "`/play` и `/search` предлагают твои недавние поисковые запросы.", false)
+                .addField("💡 Autocomplete", "`/play` и `/search` предлагают недавние запросы, а `/playlist` — сохранённые названия.", false)
+                .addField("💾 Постоянное хранение", "Плейлисты и последние 50 воспроизведённых треков переживают restart контейнера.", false)
                 .build();
     }
 }

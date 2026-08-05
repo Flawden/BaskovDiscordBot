@@ -21,6 +21,7 @@ services:
       DISCORD_BOT_MUSIC_DEFAULT_VOLUME: ${DISCORD_BOT_MUSIC_DEFAULT_VOLUME:-100}
       DISCORD_BOT_MUSIC_MAX_VOLUME: ${DISCORD_BOT_MUSIC_MAX_VOLUME:-150}
       DISCORD_BOT_PERSISTENCE_FILE: /app/data/guild-settings.properties
+      DISCORD_BOT_MUSIC_LIBRARY_FILE: /app/data/music-library.tsv
     healthcheck:
       test: ["CMD", "/app/healthcheck.sh"]
       interval: 15s

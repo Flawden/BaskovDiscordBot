@@ -35,6 +35,72 @@ public final class ModernCommandCatalog {
                                 "Название песни для поиска на YouTube",
                                 true)
                                 .setAutoComplete(true)),
+                Commands.slash("history", "Показывает недавнюю историю воспроизведения")
+                        .addOption(
+                                OptionType.INTEGER,
+                                "page",
+                                "Страница истории, начиная с 1",
+                                false),
+                Commands.slash("replay", "Повторно добавляет трек из истории")
+                        .addOption(
+                                OptionType.INTEGER,
+                                "position",
+                                "Номер трека из /history, где 1 — самый новый",
+                                true),
+                Commands.slash("playlist", "Управляет постоянными плейлистами сервера")
+                        .addSubcommands(
+                                new SubcommandData("list", "Показывает плейлисты сервера"),
+                                new SubcommandData("create", "Создаёт новый плейлист")
+                                        .addOption(
+                                                OptionType.STRING,
+                                                "name",
+                                                "Название плейлиста",
+                                                true),
+                                new SubcommandData("show", "Показывает содержимое плейлиста")
+                                        .addOptions(new OptionData(
+                                                OptionType.STRING,
+                                                "name",
+                                                "Название плейлиста",
+                                                true)
+                                                .setAutoComplete(true))
+                                        .addOption(
+                                                OptionType.INTEGER,
+                                                "page",
+                                                "Страница плейлиста, начиная с 1",
+                                                false),
+                                new SubcommandData("add", "Добавляет текущий трек в плейлист")
+                                        .addOptions(new OptionData(
+                                                OptionType.STRING,
+                                                "name",
+                                                "Название плейлиста",
+                                                true)
+                                                .setAutoComplete(true)),
+                                new SubcommandData("play", "Добавляет весь плейлист в очередь")
+                                        .addOptions(new OptionData(
+                                                OptionType.STRING,
+                                                "name",
+                                                "Название плейлиста",
+                                                true)
+                                                .setAutoComplete(true)),
+                                new SubcommandData("remove", "Удаляет трек из плейлиста")
+                                        .addOptions(new OptionData(
+                                                OptionType.STRING,
+                                                "name",
+                                                "Название плейлиста",
+                                                true)
+                                                .setAutoComplete(true))
+                                        .addOption(
+                                                OptionType.INTEGER,
+                                                "position",
+                                                "Позиция трека в плейлисте",
+                                                true),
+                                new SubcommandData("delete", "Удаляет плейлист")
+                                        .addOptions(new OptionData(
+                                                OptionType.STRING,
+                                                "name",
+                                                "Название плейлиста",
+                                                true)
+                                                .setAutoComplete(true))),
                 Commands.slash("pause", "Приостанавливает текущую песню"),
                 Commands.slash("resume", "Продолжает воспроизведение"),
                 Commands.slash("previous", "Возвращает предыдущую песню"),

@@ -21,6 +21,7 @@ import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnostics;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferences;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
+import ru.flawden.BascovDiscordBot.library.PlaybackHistoryRecorder;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -36,6 +37,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
@@ -57,16 +59,19 @@ public class PlayerManager {
     private final GuildPreferencesRepository preferencesRepository;
     private final VoiceConnectionCoordinator voiceConnections;
     private final VoiceDiagnostics voiceDiagnostics;
+    private final PlaybackHistoryRecorder historyRecorder;
 
     public PlayerManager(
             MusicProperties properties,
             GuildPreferencesRepository preferencesRepository,
             VoiceConnectionCoordinator voiceConnections,
-            VoiceDiagnostics voiceDiagnostics) {
+            VoiceDiagnostics voiceDiagnostics,
+            PlaybackHistoryRecorder historyRecorder) {
         this.properties = properties;
         this.preferencesRepository = preferencesRepository;
         this.voiceConnections = voiceConnections;
         this.voiceDiagnostics = voiceDiagnostics;
+        this.historyRecorder = historyRecorder;
         this.audioPlayerManager = new DefaultAudioPlayerManager();
 
         YoutubeAudioSourceManager youtubeSourceManager = new YoutubeAudioSourceManager();
@@ -116,7 +121,8 @@ public class PlayerManager {
                     preferences,
                     () -> cancelIdleDisconnect(guildId),
                     () -> scheduleIdleDisconnect(guild),
-                    voiceDiagnostics);
+                    voiceDiagnostics,
+                    request -> historyRecorder.record(guildId, request));
             guild.getAudioManager().setSendingHandler(manager.getSendHandler());
             return manager;
         });
@@ -292,6 +298,54 @@ public class PlayerManager {
                 requester,
                 List.of(),
                 resultConsumer);
+    }
+
+    /**
+     * Загружает несколько сохранённых URL в одном ordered channel и возвращает
+     * единый итог. Порядок исходного списка сохраняется.
+     */
+    public void loadBatch(
+            Guild guild,
+            List<String> identifiers,
+            TrackRequester requester,
+            Consumer<BatchMusicLoadResult> resultConsumer) {
+        List<String> ordered = identifiers == null
+                ? List.of()
+                : identifiers.stream()
+                        .filter(identifier -> identifier != null && !identifier.isBlank())
+                        .map(String::trim)
+                        .toList();
+        if (ordered.isEmpty()) {
+            resultConsumer.accept(new BatchMusicLoadResult(0, 0, 0, 0, null));
+            return;
+        }
+
+        AtomicInteger remaining = new AtomicInteger(ordered.size());
+        AtomicInteger started = new AtomicInteger();
+        AtomicInteger queued = new AtomicInteger();
+        AtomicInteger rejected = new AtomicInteger();
+        AtomicReference<AudioTrack> firstStarted = new AtomicReference<>();
+
+        for (String identifier : ordered) {
+            loadAndPlay(guild, identifier, requester, result -> {
+                switch (result.status()) {
+                    case STARTED -> {
+                        started.incrementAndGet();
+                        firstStarted.compareAndSet(null, result.track());
+                    }
+                    case QUEUED -> queued.incrementAndGet();
+                    default -> rejected.incrementAndGet();
+                }
+                if (remaining.decrementAndGet() == 0) {
+                    resultConsumer.accept(new BatchMusicLoadResult(
+                            ordered.size(),
+                            started.get(),
+                            queued.get(),
+                            rejected.get(),
+                            firstStarted.get()));
+                }
+            });
+        }
     }
 
     public CompletableFuture<PlaybackReadinessResult> awaitPlaybackReady(

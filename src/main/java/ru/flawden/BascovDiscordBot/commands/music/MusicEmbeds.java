@@ -6,12 +6,15 @@ import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
 import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
+import ru.flawden.BascovDiscordBot.lavaplayer.BatchMusicLoadResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.MusicLoadResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlaybackReadinessResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.QueuePage;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
 import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
+import ru.flawden.BascovDiscordBot.library.StoredPlaylist;
+import ru.flawden.BascovDiscordBot.library.StoredTrack;
 
 import java.awt.Color;
 import java.time.Duration;
@@ -188,6 +191,124 @@ public final class MusicEmbeds {
                 .build();
     }
 
+    public static MessageEmbed playbackHistory(List<StoredTrack> history, int requestedPage) {
+        if (history == null || history.isEmpty()) {
+            return error(
+                    "🕘 История пуста",
+                    "Завершённые и вручную пропущенные треки появятся здесь после воспроизведения.");
+        }
+        int pageSize = 10;
+        int totalPages = Math.max(1, (history.size() + pageSize - 1) / pageSize);
+        if (requestedPage < 1 || requestedPage > totalPages) {
+            return error(
+                    "📄 Страница истории не найдена",
+                    "Доступны страницы `1.." + totalPages + "`.");
+        }
+
+        int from = (requestedPage - 1) * pageSize;
+        int to = Math.min(history.size(), from + pageSize);
+        StringBuilder description = new StringBuilder();
+        for (int index = from; index < to; index++) {
+            StoredTrack track = history.get(index);
+            description.append("**").append(index + 1).append(". ")
+                    .append(shortText(track.title(), 90)).append("**\n")
+                    .append(shortText(track.author(), 70))
+                    .append(" • `").append(formatTime(track.durationMillis())).append("`")
+                    .append(" • `").append(track.provider().label()).append("`")
+                    .append(" • ").append(storedRequesterLabel(track))
+                    .append("\n<t:").append(track.capturedAtEpochMillis() / 1000L).append(":R>\n\n");
+        }
+
+        return new EmbedBuilder()
+                .setTitle("🕘 История воспроизведения • " + requestedPage + "/" + totalPages)
+                .setDescription(description.toString())
+                .setColor(Color.CYAN)
+                .setFooter("Номер подходит для /replay position • хранится до 50 треков")
+                .build();
+    }
+
+    public static MessageEmbed playlistList(List<StoredPlaylist> playlists) {
+        if (playlists == null || playlists.isEmpty()) {
+            return error(
+                    "📚 Плейлистов пока нет",
+                    "Создай первый через `/playlist create name:<название>`.");
+        }
+        StringBuilder description = new StringBuilder();
+        for (StoredPlaylist playlist : playlists) {
+            long duration = playlist.tracks().stream()
+                    .mapToLong(StoredTrack::durationMillis)
+                    .sum();
+            description.append("• **").append(shortText(playlist.name(), 60)).append("**")
+                    .append(" — `").append(playlist.tracks().size()).append(" треков`")
+                    .append(" • `").append(humanMillis(duration)).append("`")
+                    .append(" • владелец <@").append(playlist.ownerUserId()).append(">\n");
+        }
+        return new EmbedBuilder()
+                .setTitle("📚 Плейлисты сервера")
+                .setDescription(description.toString())
+                .setColor(Color.CYAN)
+                .setFooter("До 20 плейлистов на сервер и до 50 треков в каждом")
+                .build();
+    }
+
+    public static MessageEmbed playlistView(StoredPlaylist playlist, int requestedPage) {
+        if (playlist == null) {
+            return error("📚 Плейлист не найден", "Проверь название через `/playlist list`.");
+        }
+        if (playlist.tracks().isEmpty()) {
+            return new EmbedBuilder()
+                    .setTitle("📚 " + shortText(playlist.name(), 100))
+                    .setDescription("Плейлист пуст. Запусти музыку и используй `/playlist add`.")
+                    .setColor(Color.CYAN)
+                    .setFooter("Владелец: " + playlist.ownerUserId())
+                    .build();
+        }
+
+        int pageSize = 10;
+        int totalPages = Math.max(1, (playlist.tracks().size() + pageSize - 1) / pageSize);
+        if (requestedPage < 1 || requestedPage > totalPages) {
+            return error(
+                    "📄 Страница плейлиста не найдена",
+                    "Доступны страницы `1.." + totalPages + "`.");
+        }
+
+        int from = (requestedPage - 1) * pageSize;
+        int to = Math.min(playlist.tracks().size(), from + pageSize);
+        StringBuilder description = new StringBuilder();
+        for (int index = from; index < to; index++) {
+            StoredTrack track = playlist.tracks().get(index);
+            description.append("**").append(index + 1).append(". ")
+                    .append(shortText(track.title(), 90)).append("**\n")
+                    .append(shortText(track.author(), 70))
+                    .append(" • `").append(formatTime(track.durationMillis())).append("`")
+                    .append(" • `").append(track.provider().label()).append("`\n\n");
+        }
+        long duration = playlist.tracks().stream().mapToLong(StoredTrack::durationMillis).sum();
+        return new EmbedBuilder()
+                .setTitle("📚 " + shortText(playlist.name(), 100)
+                        + " • " + requestedPage + "/" + totalPages)
+                .setDescription(description.toString())
+                .setColor(Color.CYAN)
+                .setFooter("Треков: " + playlist.tracks().size()
+                        + " • Длительность: " + humanMillis(duration)
+                        + " • Владелец: " + playlist.ownerUserId())
+                .build();
+    }
+
+    public static MessageEmbed batchLoadResult(String title, BatchMusicLoadResult result) {
+        if (result == null || result.requested() == 0) {
+            return error("📭 Нечего загружать", "Список сохранённых треков пуст.");
+        }
+        String details = "Запрошено: `" + result.requested() + "`"
+                + "\nПринято: `" + result.accepted() + "`"
+                + "\nЗапущено сейчас: `" + result.started() + "`"
+                + "\nДобавлено в очередь: `" + result.queued() + "`"
+                + "\nНе удалось загрузить: `" + result.rejected() + "`.";
+        return result.accepted() == 0
+                ? error("❌ Сохранённые треки не загрузились", details)
+                : success(title, details);
+    }
+
     public static MessageEmbed nowPlaying(GuildMusicManager musicManager) {
         AudioPlayer audioPlayer = musicManager == null ? null : musicManager.getAudioPlayer();
         AudioTrack currentTrack = audioPlayer == null ? null : audioPlayer.getPlayingTrack();
@@ -348,6 +469,12 @@ public final class MusicEmbeds {
             provider = MediaProvider.fromIdentifier(track.getInfo().identifier);
         }
         return provider.label();
+    }
+
+    private static String storedRequesterLabel(StoredTrack track) {
+        return track.requesterUserId() > 0L
+                ? "<@" + track.requesterUserId() + ">"
+                : shortText(track.requesterDisplayName(), 70);
     }
 
     private static String requesterLabel(TrackRequester requester) {
