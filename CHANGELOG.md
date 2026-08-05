@@ -7,6 +7,30 @@
 ## [Unreleased]
 
 
+## [0.11.0] — 2026-08-05
+
+### Добавлено
+
+- Команда `/previous`, возвращающая последний завершённый или вручную пропущенный трек текущей guild-сессии.
+- Ограниченная история до 25 треков с сохранением requester и безопасным клонированием LavaPlayer track instances.
+- Двухрядный пульт `/now`: previous, −15 секунд, pause/resume, +15 секунд, next, queue, shuffle, repeat и stop.
+- Быстрые seek-кнопки с clamp к началу и концу трека.
+- Секция `Playback modes` в `/status` со состоянием PLAYING/PAUSED/IDLE, repeat, volume, history depth и seek availability.
+
+### Изменено
+
+- При возврате назад прерванный текущий трек ставится первым в очередь, поэтому пользователь может продолжить прежнюю последовательность.
+- История не запоминает cleanup, stuck и playback-exception источники, чтобы `/previous` не возвращал заведомо сломанный media result.
+- Внутренняя очередь переведена на bounded deque; пользовательский лимит очереди остаётся прежним, а history navigation имеет отдельный безопасный резерв.
+- `/seek` после выполнения показывает расширенный пульт `/now`.
+
+### Тестирование
+
+- Добавлены unit-тесты previous/history, расширенного пульта и playback status formatter.
+- Добавлен architecture contract на slash catalog, bounded history, seek buttons и live playback modes.
+- Тестовый baseline повышен до 43 test classes / 145 `@Test` methods.
+
+
 ## [0.10.0] — 2026-08-05
 
 ### Добавлено
@@ -28,7 +52,7 @@
 
 - Добавлены unit-тесты `QueuePage`, динамических component id и progress bar.
 - Добавлен architecture contract на slash option, read-only button flow, глобальные позиции, ETA и legacy parity.
-- Тестовый baseline повышен до 43 test classes / 137 `@Test` methods.
+- Тестовый baseline повышен до 42 test classes / 137 `@Test` methods.
 
 
 ## [0.9.5] — 2026-08-04

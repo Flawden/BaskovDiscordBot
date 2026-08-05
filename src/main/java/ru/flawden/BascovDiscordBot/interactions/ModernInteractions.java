@@ -29,6 +29,7 @@ import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlaybackReadinessResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.RepeatMode;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
+import ru.flawden.BascovDiscordBot.lavaplayer.TrackScheduler;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
 import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
 import ru.flawden.BascovDiscordBot.operations.JdaRuntimeInfo;
@@ -105,6 +106,7 @@ public class ModernInteractions extends ListenerAdapter {
                 case "play" -> play(event);
                 case "pause" -> pause(event, true);
                 case "resume" -> pause(event, false);
+                case "previous" -> previous(event);
                 case "skip" -> skip(event);
                 case "stop" -> stop(event);
                 case "queue" -> queue(event);
@@ -222,7 +224,11 @@ public class ModernInteractions extends ListenerAdapter {
 
         switch (event.getComponentId()) {
             case MusicControls.TOGGLE -> toggleFromButton(event, guild);
+            case MusicControls.PREVIOUS -> previousFromButton(event, guild);
+            case MusicControls.SEEK_BACKWARD -> seekFromButton(event, guild, -15_000L);
+            case MusicControls.SEEK_FORWARD -> seekFromButton(event, guild, 15_000L);
             case MusicControls.SKIP -> skipFromButton(event, guild);
+            case MusicControls.SHUFFLE -> shuffleFromButton(event, guild);
             case MusicControls.STOP -> stopFromButton(event, guild);
             case MusicControls.REPEAT -> repeatFromButton(event, guild);
             default -> { }
@@ -238,6 +244,8 @@ public class ModernInteractions extends ListenerAdapter {
         String discord = StatusMessageFormatter.discord(runtime, JdaRuntimeInfo.version());
         String daveState = StatusMessageFormatter.dave(daveRuntimeInfo.snapshot());
         String musicState = StatusMessageFormatter.music(music);
+        String playbackState = StatusMessageFormatter.playback(
+                playerManager.findMusicManager(event.getGuild()).orElse(null));
         String voiceState = StatusMessageFormatter.voice(voice);
         String voiceHistory = StatusMessageFormatter.voiceHistory(voice);
         String commandState = StatusMessageFormatter.commands(commands);
@@ -249,6 +257,7 @@ public class ModernInteractions extends ListenerAdapter {
                         .addField("Discord gateway", discord, true)
                         .addField("DAVE / E2EE", daveState, true)
                         .addField("Музыка", musicState, true)
+                        .addField("Playback modes", playbackState, true)
                         .addField("Voice transport", voiceState, true)
                         .addField("Voice history", voiceHistory, false)
                         .addField("Команды с запуска", commandState, false)
@@ -385,6 +394,43 @@ public class ModernInteractions extends ListenerAdapter {
                 .queue();
     }
 
+    private void previous(SlashCommandInteractionEvent event) {
+        if (!allowControl(event)) {
+            return;
+        }
+        GuildMusicManager manager = activeManager(event);
+        if (manager == null) {
+            return;
+        }
+
+        TrackScheduler.PreviousResult result = manager.getScheduler().previousTrack();
+        if (result.status() == TrackScheduler.PreviousStatus.NO_HISTORY) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "⏮️ Предыдущего трека нет",
+                            "История текущей музыкальной сессии пока пуста."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        if (result.status() == TrackScheduler.PreviousStatus.QUEUE_CAPACITY_EXCEEDED) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "⏮️ Не удалось вернуться",
+                            "Очередь и история достигли безопасного лимита. Очисти несколько позиций и повтори команду."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        event.replyEmbeds(MusicEmbeds.success(
+                        "⏮️ Возвращаю предыдущий трек",
+                        "Сейчас играет: `" + result.request().track().getInfo().title + "`."
+                                + (result.returnedCurrentToQueue()
+                                ? "\nПрерванный трек поставлен первым в очередь."
+                                : "")))
+                .setComponents(MusicControls.nowRows())
+                .queue();
+    }
+
     private void skip(SlashCommandInteractionEvent event) {
         if (!allowControl(event)) {
             return;
@@ -451,7 +497,7 @@ public class ModernInteractions extends ListenerAdapter {
     private void now(SlashCommandInteractionEvent event) {
         GuildMusicManager manager = playerManager.findMusicManager(event.getGuild()).orElse(null);
         event.replyEmbeds(MusicEmbeds.nowPlaying(manager))
-                .setComponents(MusicControls.rows())
+                .setComponents(MusicControls.nowRows())
                 .queue();
     }
 
@@ -494,11 +540,19 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
-        track.setPosition(position);
+        applySeek(event, track, position);
+    }
+
+    private void applySeek(
+            SlashCommandInteractionEvent event,
+            AudioTrack track,
+            long requestedPosition) {
+        long clamped = Math.max(0L, Math.min(requestedPosition, track.getDuration()));
+        track.setPosition(clamped);
         event.replyEmbeds(MusicEmbeds.success(
                         "⏳ Трек перемотан",
-                        "Новая позиция: `" + MusicEmbeds.formatTime(position) + "`."))
-                .setComponents(MusicControls.rows())
+                        "Новая позиция: `" + MusicEmbeds.formatTime(clamped) + "`."))
+                .setComponents(MusicControls.nowRows())
                 .queue();
     }
 
@@ -809,6 +863,75 @@ public class ModernInteractions extends ListenerAdapter {
                 .queue();
     }
 
+    private void previousFromButton(ButtonInteractionEvent event, Guild guild) {
+        GuildMusicManager manager = playerManager.findMusicManager(guild).orElse(null);
+        if (manager == null) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🎵 Музыкальной сессии нет",
+                            "Сначала добавь песню через `/play`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        TrackScheduler.PreviousResult result = manager.getScheduler().previousTrack();
+        if (result.status() != TrackScheduler.PreviousStatus.STARTED) {
+            String details = result.status() == TrackScheduler.PreviousStatus.NO_HISTORY
+                    ? "История текущей сессии пока пуста."
+                    : "Очередь и история достигли безопасного лимита.";
+            event.replyEmbeds(MusicEmbeds.error("⏮️ Предыдущий трек недоступен", details))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        event.replyEmbeds(MusicEmbeds.success(
+                        "⏮️ Предыдущий трек",
+                        "Сейчас играет: `" + result.request().track().getInfo().title + "`."))
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private void seekFromButton(ButtonInteractionEvent event, Guild guild, long deltaMillis) {
+        AudioPlayer player = currentPlayer(guild);
+        AudioTrack track = player == null ? null : player.getPlayingTrack();
+        if (track == null) {
+            event.replyEmbeds(MusicEmbeds.error("🎵 Сейчас тишина", "Перематывать нечего."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        if (!track.isSeekable()) {
+            event.replyEmbeds(MusicEmbeds.error("⏳ Перемотка недоступна", "Этот источник нельзя перематывать."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        long target = Math.max(0L, Math.min(track.getPosition() + deltaMillis, track.getDuration()));
+        track.setPosition(target);
+        event.replyEmbeds(MusicEmbeds.success(
+                        deltaMillis < 0 ? "⏪ Назад на 15 секунд" : "⏩ Вперёд на 15 секунд",
+                        "Новая позиция: `" + MusicEmbeds.formatTime(target) + "`."))
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private void shuffleFromButton(ButtonInteractionEvent event, Guild guild) {
+        GuildMusicManager manager = playerManager.findMusicManager(guild).orElse(null);
+        int size = manager == null ? 0 : manager.getScheduler().shuffleQueue();
+        if (size < 2) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🔀 Перемешивать нечего",
+                            "В очереди должно быть хотя бы два ожидающих трека."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        event.replyEmbeds(MusicEmbeds.success(
+                        "🔀 Очередь перемешана",
+                        "Новый порядок применён к `" + size + "` трекам."))
+                .setEphemeral(true)
+                .queue();
+    }
+
     private void skipFromButton(ButtonInteractionEvent event, Guild guild) {
         GuildMusicManager manager = playerManager.findMusicManager(guild).orElse(null);
         AudioTrack current = manager == null ? null : manager.getAudioPlayer().getPlayingTrack();
@@ -877,12 +1000,12 @@ public class ModernInteractions extends ListenerAdapter {
                 .setTitle("🎤 Современные команды Баскова")
                 .setDescription("Slash-команды — основной интерфейс. Старые `!`-команды пока продолжают работать.")
                 .setColor(Color.CYAN)
-                .addField("▶️ Воспроизведение", "`/play` `/pause` `/resume` `/skip` `/stop` `/seek`", false)
+                .addField("▶️ Воспроизведение", "`/play` `/pause` `/resume` `/previous` `/skip` `/stop` `/seek`", false)
                 .addField("📋 Очередь", "`/queue` `/remove` `/move` `/shuffle` `/clear`", false)
                 .addField("🎚️ Режимы", "`/volume` `/repeat` `/now`", false)
                 .addField("⚙️ Настройки", "`/settings show` `/settings volume` `/settings repeat` `/settings reset`", false)
                 .addField("ℹ️ Сервис", "`/version` `/status` `/help`", false)
-                .addField("🖱️ Кнопки", "Пауза, пропуск, очередь, повтор и стоп доступны под музыкальными сообщениями.", false)
+                .addField("🖱️ Кнопки", "Под `/now` доступны предыдущий трек, ±15 секунд, пауза, следующий трек, shuffle, repeat, очередь и stop.", false)
                 .addField("💡 Autocomplete", "`/play` предлагает твои недавние поисковые запросы.", false)
                 .build();
     }

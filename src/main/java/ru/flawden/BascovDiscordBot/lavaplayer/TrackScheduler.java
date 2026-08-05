@@ -8,12 +8,13 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.LinkedBlockingDeque;
 
 /**
  * Потокобезопасная очередь одной Discord-гильдии.
@@ -22,7 +23,10 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class TrackScheduler extends AudioEventAdapter {
 
     private final AudioPlayer audioPlayer;
-    private final BlockingQueue<TrackRequest> queue;
+    private final LinkedBlockingDeque<TrackRequest> queue;
+    private final Deque<TrackRequest> history = new ArrayDeque<>();
+    private final int maxQueueSize;
+    private final int maxHistorySize;
     private final long maxTrackDurationMillis;
     private final Runnable onActivity;
     private final Runnable onIdle;
@@ -74,7 +78,12 @@ public class TrackScheduler extends AudioEventAdapter {
             Runnable onIdle,
             Diagnostics diagnostics) {
         this.audioPlayer = Objects.requireNonNull(audioPlayer, "audioPlayer");
-        this.queue = new LinkedBlockingQueue<>(maxQueueSize);
+        if (maxQueueSize < 1) {
+            throw new IllegalArgumentException("maxQueueSize must be positive");
+        }
+        this.maxQueueSize = maxQueueSize;
+        this.maxHistorySize = Math.max(1, Math.min(maxQueueSize, 25));
+        this.queue = new LinkedBlockingDeque<>(maxQueueSize + maxHistorySize);
         this.maxTrackDurationMillis = Objects.requireNonNull(maxTrackDuration, "maxTrackDuration").toMillis();
         this.repeatMode = Objects.requireNonNull(initialRepeatMode, "initialRepeatMode");
         this.onActivity = Objects.requireNonNull(onActivity, "onActivity");
@@ -115,7 +124,7 @@ public class TrackScheduler extends AudioEventAdapter {
             }
 
             long estimatedWaitMillis = estimatedWaitMillisLocked();
-            if (!queue.offer(request)) {
+            if (queue.size() >= maxQueueSize || !queue.offerLast(request)) {
                 log.warn("Queue limit reached; rejected track: {}", track.getInfo().title);
                 return new QueueResult(QueueStatus.QUEUE_FULL, queue.size(), estimatedWaitMillis, request);
             }
@@ -140,7 +149,7 @@ public class TrackScheduler extends AudioEventAdapter {
             log.warn("Track cleanup received for {}; keeping voice session alive and trying recovery",
                     track.getInfo().title);
             if (!startFallback(track, "cleanup")) {
-                nextTrack();
+                advanceToNext(false);
             }
             return;
         }
@@ -169,12 +178,19 @@ public class TrackScheduler extends AudioEventAdapter {
                 }
             }
         }
-        nextTrack();
+        advanceToNext(true);
     }
 
     public TrackRequest nextTrack() {
+        return advanceToNext(true);
+    }
+
+    private TrackRequest advanceToNext(boolean rememberCurrent) {
         synchronized (mutationLock) {
-            TrackRequest next = queue.poll();
+            if (rememberCurrent) {
+                rememberCurrentLocked();
+            }
+            TrackRequest next = queue.pollFirst();
             if (next == null) {
                 currentRequest = null;
                 audioPlayer.stopTrack();
@@ -188,6 +204,40 @@ public class TrackScheduler extends AudioEventAdapter {
             diagnostics.trackStarted(title(next.track()));
             log.info("Playing next track: {}", next.track().getInfo().title);
             return next;
+        }
+    }
+
+    public PreviousResult previousTrack() {
+        synchronized (mutationLock) {
+            TrackRequest previous = history.pollFirst();
+            if (previous == null) {
+                return new PreviousResult(PreviousStatus.NO_HISTORY, null, false);
+            }
+
+            TrackRequest displaced = currentRequest;
+            boolean returnedCurrentToQueue = false;
+            if (displaced != null) {
+                TrackRequest clone = cloneRequest(displaced);
+                returnedCurrentToQueue = queue.offerFirst(clone);
+                if (!returnedCurrentToQueue) {
+                    history.addFirst(previous);
+                    return new PreviousResult(PreviousStatus.QUEUE_CAPACITY_EXCEEDED, null, false);
+                }
+            }
+
+            TrackRequest restarted = cloneRequest(previous);
+            currentRequest = restarted;
+            onActivity.run();
+            audioPlayer.startTrack(restarted.track(), false);
+            diagnostics.trackStarted(title(restarted.track()));
+            log.info("Playing previous track: {}", restarted.track().getInfo().title);
+            return new PreviousResult(PreviousStatus.STARTED, restarted, returnedCurrentToQueue);
+        }
+    }
+
+    public int historySize() {
+        synchronized (mutationLock) {
+            return history.size();
         }
     }
 
@@ -305,7 +355,7 @@ public class TrackScheduler extends AudioEventAdapter {
         diagnostics.sourceFailure(title(track), exception.getMessage());
         log.error("Track exception for {}: {}", track.getInfo().title, exception.getMessage(), exception);
         if (!startFallback(track, "playback exception")) {
-            nextTrack();
+            advanceToNext(false);
         }
     }
 
@@ -319,7 +369,7 @@ public class TrackScheduler extends AudioEventAdapter {
         diagnostics.sourceFailure(title(track), "stuck for " + thresholdMs + "ms");
         log.error("Track stuck: {} (threshold: {}ms)", track.getInfo().title, thresholdMs);
         if (!startFallback(track, "stuck track")) {
-            nextTrack();
+            advanceToNext(false);
         }
     }
 
@@ -356,10 +406,25 @@ public class TrackScheduler extends AudioEventAdapter {
         return wait;
     }
 
+    private void rememberCurrentLocked() {
+        TrackRequest current = currentRequest;
+        if (current == null) {
+            return;
+        }
+        history.addFirst(cloneRequest(current));
+        while (history.size() > maxHistorySize) {
+            history.removeLast();
+        }
+    }
+
+    private static TrackRequest cloneRequest(TrackRequest request) {
+        return request.withTrack(request.track().makeClone());
+    }
+
     private void replaceQueueLocked(List<TrackRequest> tracks) {
         queue.clear();
         for (TrackRequest track : tracks) {
-            if (!queue.offer(track)) {
+            if (!queue.offerLast(track)) {
                 throw new IllegalStateException("Queue capacity changed during mutation");
             }
         }
@@ -415,6 +480,18 @@ public class TrackScheduler extends AudioEventAdapter {
                 }
             };
         }
+    }
+
+    public enum PreviousStatus {
+        STARTED,
+        NO_HISTORY,
+        QUEUE_CAPACITY_EXCEEDED
+    }
+
+    public record PreviousResult(
+            PreviousStatus status,
+            TrackRequest request,
+            boolean returnedCurrentToQueue) {
     }
 
     public enum QueueStatus {

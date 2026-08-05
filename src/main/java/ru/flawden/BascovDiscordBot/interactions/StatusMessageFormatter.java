@@ -1,6 +1,9 @@
 package ru.flawden.BascovDiscordBot.interactions;
 
+import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
+import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import ru.flawden.BascovDiscordBot.dave.DaveRuntimeInfo;
+import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
@@ -42,6 +45,28 @@ final class StatusMessageFormatter {
                 "Активных сессий: `" + music.activeSessions() + "`",
                 "Сейчас играет: `" + music.playingSessions() + "`",
                 "Треков в очередях: `" + music.queuedTracks() + "`");
+    }
+
+    static String playback(GuildMusicManager manager) {
+        if (manager == null || !manager.isActive()) {
+            return String.join("\n",
+                    "Сессия: `INACTIVE`",
+                    "Повтор: `—`",
+                    "Громкость: `—`",
+                    "Предыдущих: `0`",
+                    "Seek: `—`");
+        }
+
+        AudioPlayer player = manager.getAudioPlayer();
+        AudioTrack track = player.getPlayingTrack();
+        String state = track == null ? "IDLE" : player.isPaused() ? "PAUSED" : "PLAYING";
+        String seek = track == null ? "—" : track.isSeekable() ? "READY" : "UNAVAILABLE";
+        return String.join("\n",
+                "Сессия: `" + state + "`",
+                "Повтор: `" + manager.getScheduler().getRepeatMode().label() + "`",
+                "Громкость: `" + player.getVolume() + "%`",
+                "Предыдущих: `" + manager.getScheduler().historySize() + "`",
+                "Seek: `" + seek + "`");
     }
 
     static String voice(VoiceDiagnosticSnapshot voice) {

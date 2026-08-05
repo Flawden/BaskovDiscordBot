@@ -30,6 +30,7 @@ public final class ModernCommandCatalog {
                                 .setAutoComplete(true)),
                 Commands.slash("pause", "Приостанавливает текущую песню"),
                 Commands.slash("resume", "Продолжает воспроизведение"),
+                Commands.slash("previous", "Возвращает предыдущую песню"),
                 Commands.slash("skip", "Пропускает текущую песню"),
                 Commands.slash("stop", "Останавливает музыку и отключает бота"),
                 Commands.slash("queue", "Показывает текущий трек и очередь")

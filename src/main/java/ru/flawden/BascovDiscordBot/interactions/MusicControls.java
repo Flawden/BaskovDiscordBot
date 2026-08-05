@@ -12,10 +12,14 @@ import java.util.OptionalInt;
 public final class MusicControls {
 
     public static final String TOGGLE = "baskov:music:toggle";
+    public static final String PREVIOUS = "baskov:music:previous";
     public static final String SKIP = "baskov:music:skip";
     public static final String STOP = "baskov:music:stop";
     public static final String QUEUE = "baskov:music:queue";
     public static final String REPEAT = "baskov:music:repeat";
+    public static final String SHUFFLE = "baskov:music:shuffle";
+    public static final String SEEK_BACKWARD = "baskov:music:seek:-15";
+    public static final String SEEK_FORWARD = "baskov:music:seek:+15";
     private static final String QUEUE_PAGE_PREFIX = "baskov:queue:page:";
 
     private MusicControls() {
@@ -29,6 +33,25 @@ public final class MusicControls {
                 Button.secondary(REPEAT, "Повтор"),
                 Button.danger(STOP, "Стоп")
         ));
+    }
+
+    /**
+     * Расширенный пульт для /now: навигация по истории, короткий seek и
+     * операции над очередью без повторного ввода slash-команд.
+     */
+    public static List<ActionRow> nowRows() {
+        return List.of(
+                ActionRow.of(
+                        Button.secondary(PREVIOUS, "⏮ Предыдущий"),
+                        Button.secondary(SEEK_BACKWARD, "−15 сек"),
+                        Button.primary(TOGGLE, "Пауза / играть"),
+                        Button.secondary(SEEK_FORWARD, "+15 сек"),
+                        Button.secondary(SKIP, "Следующий ⏭")),
+                ActionRow.of(
+                        Button.secondary(QUEUE, "Очередь"),
+                        Button.secondary(SHUFFLE, "Перемешать"),
+                        Button.secondary(REPEAT, "Повтор"),
+                        Button.danger(STOP, "Стоп")));
     }
 
     public static List<ActionRow> queueRows(int page, int totalPages) {
@@ -76,10 +99,14 @@ public final class MusicControls {
 
     public static boolean supports(String componentId) {
         return TOGGLE.equals(componentId)
+                || PREVIOUS.equals(componentId)
                 || SKIP.equals(componentId)
                 || STOP.equals(componentId)
                 || QUEUE.equals(componentId)
                 || REPEAT.equals(componentId)
+                || SHUFFLE.equals(componentId)
+                || SEEK_BACKWARD.equals(componentId)
+                || SEEK_FORWARD.equals(componentId)
                 || queuePage(componentId).isPresent();
     }
 }

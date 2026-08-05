@@ -175,6 +175,7 @@ public final class MusicEmbeds {
                         + "**Осталось:** `" + humanMillis(remaining) + "`\n"
                         + "**Громкость:** `" + audioPlayer.getVolume() + "%`\n"
                         + "**Повтор:** `" + musicManager.getScheduler().getRepeatMode().label() + "`\n"
+                        + "**Предыдущих:** `" + musicManager.getScheduler().historySize() + "`\n"
                         + (audioPlayer.isPaused() ? "⚠️ Воспроизведение на паузе" : "▶️ Воспроизведение активно"))
                 .build();
     }
@@ -241,7 +242,8 @@ public final class MusicEmbeds {
         if (musicManager != null) {
             description.append("\n**Состояние сессии:**\n")
                     .append("Громкость: `").append(audioPlayer.getVolume()).append("%` • ")
-                    .append("Повтор: `").append(musicManager.getScheduler().getRepeatMode().label()).append("`\n")
+                    .append("Повтор: `").append(musicManager.getScheduler().getRepeatMode().label()).append("` • ")
+                    .append("Предыдущих: `").append(musicManager.getScheduler().historySize()).append("`\n")
                     .append("До конца текущей очереди: `")
                     .append(humanMillis(musicManager.getScheduler().estimatedWaitMillis())).append('`');
         }

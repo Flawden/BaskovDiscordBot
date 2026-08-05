@@ -225,6 +225,52 @@ class TrackSchedulerTest {
         verify(player).startTrack(fallback, false);
     }
 
+    @Test
+    void previousRestoresHistoryAndReturnsInterruptedTrackToQueueFront() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        TrackScheduler scheduler = new TrackScheduler(
+                player, 10, Duration.ofHours(4), () -> { }, () -> { });
+        AudioTrack first = track("First", Duration.ofMinutes(3));
+        AudioTrack firstHistory = track("First", Duration.ofMinutes(3));
+        AudioTrack firstReplay = track("First", Duration.ofMinutes(3));
+        AudioTrack second = track("Second", Duration.ofMinutes(4));
+        AudioTrack secondReturned = track("Second", Duration.ofMinutes(4));
+        when(player.startTrack(first, true)).thenReturn(true);
+        when(player.startTrack(second, true)).thenReturn(false);
+        when(first.makeClone()).thenReturn(firstHistory);
+        when(firstHistory.makeClone()).thenReturn(firstReplay);
+        when(second.makeClone()).thenReturn(secondReturned);
+
+        scheduler.queue(first, new TrackRequester(1L, "First requester"));
+        scheduler.queue(second, new TrackRequester(2L, "Second requester"));
+        assertSame(second, scheduler.nextTrack().track());
+        assertEquals(1, scheduler.historySize());
+
+        TrackScheduler.PreviousResult result = scheduler.previousTrack();
+
+        assertEquals(TrackScheduler.PreviousStatus.STARTED, result.status());
+        assertTrue(result.returnedCurrentToQueue());
+        assertSame(firstReplay, result.request().track());
+        assertSame(secondReturned, scheduler.queuedTracks().get(0));
+        assertEquals(0, scheduler.historySize());
+        verify(player).startTrack(firstReplay, false);
+    }
+
+    @Test
+    void previousReportsEmptyHistoryWithoutReplacingCurrentTrack() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        TrackScheduler scheduler = new TrackScheduler(
+                player, 10, Duration.ofHours(4), () -> { }, () -> { });
+        AudioTrack current = track("Only", Duration.ofMinutes(3));
+        when(player.startTrack(current, true)).thenReturn(true);
+        scheduler.queue(current);
+
+        TrackScheduler.PreviousResult result = scheduler.previousTrack();
+
+        assertEquals(TrackScheduler.PreviousStatus.NO_HISTORY, result.status());
+        assertSame(current, scheduler.getCurrentRequest().track());
+    }
+
     private static AudioTrack track(String title, Duration duration) {
         AudioTrack track = mock(AudioTrack.class);
         AudioTrackInfo info = mock(AudioTrackInfo.class);

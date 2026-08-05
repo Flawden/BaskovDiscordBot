@@ -1,7 +1,12 @@
 package ru.flawden.BascovDiscordBot.interactions;
 
+import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
+import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import org.junit.jupiter.api.Test;
 import ru.flawden.BascovDiscordBot.dave.DaveRuntimeInfo;
+import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
+import ru.flawden.BascovDiscordBot.lavaplayer.RepeatMode;
+import ru.flawden.BascovDiscordBot.lavaplayer.TrackScheduler;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
@@ -12,6 +17,8 @@ import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class StatusMessageFormatterTest {
 
@@ -48,6 +55,30 @@ class StatusMessageFormatterTest {
                 Активных сессий: `2`
                 Сейчас играет: `1`
                 Треков в очередях: `7`""", StatusMessageFormatter.music(snapshot));
+    }
+
+    @Test
+    void formatsGuildPlaybackModesAndHistory() {
+        GuildMusicManager manager = mock(GuildMusicManager.class);
+        AudioPlayer player = mock(AudioPlayer.class);
+        AudioTrack track = mock(AudioTrack.class);
+        TrackScheduler scheduler = mock(TrackScheduler.class);
+        when(manager.isActive()).thenReturn(true);
+        when(manager.getAudioPlayer()).thenReturn(player);
+        when(manager.getScheduler()).thenReturn(scheduler);
+        when(player.getPlayingTrack()).thenReturn(track);
+        when(player.getVolume()).thenReturn(85);
+        when(player.isPaused()).thenReturn(true);
+        when(track.isSeekable()).thenReturn(true);
+        when(scheduler.getRepeatMode()).thenReturn(RepeatMode.QUEUE);
+        when(scheduler.historySize()).thenReturn(3);
+
+        assertEquals("""
+                Сессия: `PAUSED`
+                Повтор: `Вся очередь`
+                Громкость: `85%`
+                Предыдущих: `3`
+                Seek: `READY`""", StatusMessageFormatter.playback(manager));
     }
 
     @Test

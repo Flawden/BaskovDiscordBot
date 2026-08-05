@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая стабильная версия: **v0.10.0**.
+Текущая стабильная версия: **v0.11.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -9,10 +9,10 @@
 - slash-команды воспроизведения и полноценного управления очередью;
 - autocomplete последних поисковых запросов и интерактивные кнопки управления;
 - legacy `!`-команды как compatibility layer;
-- воспроизведение музыки, пауза, остановка и пропуск треков;
-- requester, ETA для каждой позиции, постраничная очередь с кнопками навигации, repeat mode, shuffle, remove/move/clear и управление громкостью;
+- воспроизведение музыки, пауза, остановка, пропуск и возврат к предыдущим трекам;
+- requester, ETA для каждой позиции, постраничная очередь с кнопками навигации, bounded history, previous, repeat mode, shuffle, seek, remove/move/clear и управление громкостью;
 - постоянные настройки громкости и повтора отдельно для каждого Discord-сервера;
-- `/now` с визуальным прогрессом и оставшимся временем; `/status` с uptime, Discord gateway, музыкальными сессиями, voice transport snapshot и последними voice/source ошибками;
+- `/now` с визуальным прогрессом, оставшимся временем и двухрядным пультом previous/±15s/pause/next/shuffle/repeat; `/status` с активными playback modes, uptime, Discord gateway, voice transport snapshot и последними voice/source ошибками;
 - динамический Docker heartbeat, который подтверждает свежее подключение к Discord, а не только факт старта;
 - JDA 6.5.0 с настоящей JNI libDAVE `ce725965e`, положительной protocol version и подтверждением playback только после реального запроса аудиофрейма Discord media transport;
 - bounded voice connection: одна попытка, отключённый auto-reconnect, startup-grace и observe-only watchdog по реальному запросу аудиофреймов;
@@ -75,6 +75,7 @@ docker compose logs -f bot
 Live-потоки отключены. Подробные правила voice-доступа и lifecycle находятся в [`docs/MUSIC-SESSIONS.md`](docs/MUSIC-SESSIONS.md).
 Современный Discord-интерфейс описан в [`docs/MODERN-COMMANDS.md`](docs/MODERN-COMMANDS.md).
 Очередь и новые команды управления описаны в [`docs/QUEUE-EXPERIENCE.md`](docs/QUEUE-EXPERIENCE.md).
+Расширенный пульт, история и `/previous` описаны в [`docs/ADVANCED-PLAYBACK-CONTROLS.md`](docs/ADVANCED-PLAYBACK-CONTROLS.md).
 Постоянные guild-настройки описаны в [`docs/GUILD-SETTINGS.md`](docs/GUILD-SETTINGS.md).
 Operations и health-модель описаны в [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 Voice connection state machine описана в [`docs/VOICE-CONNECTIONS.md`](docs/VOICE-CONNECTIONS.md).

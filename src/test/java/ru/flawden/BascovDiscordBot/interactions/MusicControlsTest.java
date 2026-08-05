@@ -33,6 +33,15 @@ class MusicControlsTest {
     }
 
     @Test
+    void nowControlsExposePreviousRelativeSeekAndShuffle() {
+        assertEquals(2, MusicControls.nowRows().size());
+        assertTrue(MusicControls.supports(MusicControls.PREVIOUS));
+        assertTrue(MusicControls.supports(MusicControls.SEEK_BACKWARD));
+        assertTrue(MusicControls.supports(MusicControls.SEEK_FORWARD));
+        assertTrue(MusicControls.supports(MusicControls.SHUFFLE));
+    }
+
+    @Test
     void pageIdsRejectNonPositiveNumbers() {
         assertThrows(IllegalArgumentException.class, () -> MusicControls.queuePageId(0));
     }
