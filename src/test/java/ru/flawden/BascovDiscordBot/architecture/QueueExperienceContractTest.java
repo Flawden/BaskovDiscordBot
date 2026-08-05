@@ -57,6 +57,8 @@ class QueueExperienceContractTest {
         assertTrue(embeds.contains("Примерно начнётся через"));
         assertTrue(embeds.contains("Громкость"));
         assertTrue(embeds.contains("Повтор"));
+        assertTrue(embeds.contains("QueueView"));
+        assertTrue(embeds.contains("Страница"));
     }
 
     private static String read(String relative) throws IOException {

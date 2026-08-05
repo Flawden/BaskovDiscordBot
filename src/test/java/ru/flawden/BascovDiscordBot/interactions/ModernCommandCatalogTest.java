@@ -43,6 +43,7 @@ class ModernCommandCatalogTest {
         SlashCommandData repeat = command("repeat");
         SlashCommandData move = command("move");
         SlashCommandData volume = command("volume");
+        SlashCommandData queue = command("queue");
 
         assertEquals(Set.of("mode"), repeat.getOptions().stream()
                 .map(option -> option.getName())
@@ -51,6 +52,9 @@ class ModernCommandCatalogTest {
                 .map(option -> option.getName())
                 .collect(Collectors.toSet()));
         assertEquals(Set.of("level"), volume.getOptions().stream()
+                .map(option -> option.getName())
+                .collect(Collectors.toSet()));
+        assertEquals(Set.of("page"), queue.getOptions().stream()
                 .map(option -> option.getName())
                 .collect(Collectors.toSet()));
     }

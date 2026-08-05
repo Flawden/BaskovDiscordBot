@@ -19,9 +19,10 @@ public class TrackListEvent implements Event {
     @Override
     public void execute(EventArgs event) {
         GuildMusicManager musicManager = playerManager.findMusicManager(event.getGuild()).orElse(null);
+        MusicEmbeds.QueueView view = MusicEmbeds.queueView(musicManager, 1);
         event.getTextChannel()
-                .sendMessageEmbeds(MusicEmbeds.queue(musicManager))
-                .setComponents(MusicControls.rows())
+                .sendMessageEmbeds(view.embed())
+                .setComponents(MusicControls.queueRows(view.page(), view.totalPages()))
                 .queue();
     }
 

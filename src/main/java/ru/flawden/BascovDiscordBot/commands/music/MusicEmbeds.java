@@ -8,6 +8,7 @@ import ru.flawden.BascovDiscordBot.config.MusicProperties;
 import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.MusicLoadResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlaybackReadinessResult;
+import ru.flawden.BascovDiscordBot.lavaplayer.QueuePage;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
 import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
@@ -155,14 +156,23 @@ public final class MusicEmbeds {
         }
 
         TrackRequest request = musicManager.getScheduler().getCurrentRequest();
+        long duration = Math.max(0L, currentTrack.getDuration());
+        long position = Math.max(0L, Math.min(currentTrack.getPosition(), duration));
+        long remaining = Math.max(0L, duration - position);
+        int progressPercent = duration <= 0L
+                ? 0
+                : (int) Math.min(100L, Math.round(position * 100.0d / duration));
+
         return new EmbedBuilder()
                 .setTitle("🎵 Сейчас играет")
                 .setColor(Color.CYAN)
                 .setDescription("**Название:** `" + shorten(currentTrack.getInfo().title) + "`\n"
                         + "**Автор:** `" + shorten(currentTrack.getInfo().author) + "`\n"
-                        + "**Заказал:** " + requesterLabel(request == null ? null : request.requester()) + "\n"
-                        + "**Позиция:** `" + formatTime(currentTrack.getPosition()) + " / "
-                        + formatTime(currentTrack.getDuration()) + "`\n"
+                        + "**Заказал:** " + requesterLabel(request == null ? null : request.requester()) + "\n\n"
+                        + "`" + progressBar(position, duration, 16) + "` `" + progressPercent + "%`\n"
+                        + "**Позиция:** `" + formatTime(position) + " / "
+                        + formatTime(duration) + "`\n"
+                        + "**Осталось:** `" + humanMillis(remaining) + "`\n"
                         + "**Громкость:** `" + audioPlayer.getVolume() + "%`\n"
                         + "**Повтор:** `" + musicManager.getScheduler().getRepeatMode().label() + "`\n"
                         + (audioPlayer.isPaused() ? "⚠️ Воспроизведение на паузе" : "▶️ Воспроизведение активно"))
@@ -170,27 +180,39 @@ public final class MusicEmbeds {
     }
 
     public static MessageEmbed queue(GuildMusicManager musicManager) {
+        return queueView(musicManager, 1).embed();
+    }
+
+    public static QueueView queueView(GuildMusicManager musicManager, int requestedPage) {
         AudioPlayer audioPlayer = musicManager == null ? null : musicManager.getAudioPlayer();
         AudioTrack playingTrack = audioPlayer == null ? null : audioPlayer.getPlayingTrack();
         List<TrackRequest> requests = musicManager == null
                 ? List.of()
                 : musicManager.getScheduler().queuedRequests();
+        QueuePage page = QueuePage.of(requests, requestedPage);
 
         if (playingTrack == null && requests.isEmpty()) {
-            return error("🎶 Очередь пуста", "Сейчас ничего не играет. Добавь песню через `/play`.");
+            return new QueueView(
+                    error("🎶 Очередь пуста", "Сейчас ничего не играет. Добавь песню через `/play`."),
+                    page.number(),
+                    page.totalPages());
         }
 
         StringBuilder description = new StringBuilder();
+        long queueEta = 0L;
         if (playingTrack != null) {
             TrackRequest current = musicManager.getScheduler().getCurrentRequest();
+            long duration = Math.max(0L, playingTrack.getDuration());
+            long position = Math.max(0L, Math.min(playingTrack.getPosition(), duration));
+            queueEta = Math.max(0L, duration - position);
             description.append("**Текущая песня:**\n")
                     .append('`').append(shorten(playingTrack.getInfo().title)).append("` — ")
                     .append(shorten(playingTrack.getInfo().author)).append('\n')
+                    .append("`").append(progressBar(position, duration, 12)).append("` ")
+                    .append('`').append(formatTime(position)).append(" / ")
+                    .append(formatTime(duration)).append("`\n")
                     .append("**Заказал:** ")
-                    .append(requesterLabel(current == null ? null : current.requester())).append('\n')
-                    .append("**Позиция:** `")
-                    .append(formatTime(playingTrack.getPosition())).append(" / ")
-                    .append(formatTime(playingTrack.getDuration())).append('`')
+                    .append(requesterLabel(current == null ? null : current.requester()))
                     .append(audioPlayer.isPaused() ? "\n⚠️ Воспроизведение на паузе" : "")
                     .append("\n\n");
         }
@@ -198,33 +220,49 @@ public final class MusicEmbeds {
         if (requests.isEmpty()) {
             description.append("**Очередь:**\nСписок следующих песен пуст.");
         } else {
+            for (int index = 0; index < Math.max(0, page.firstPosition() - 1); index++) {
+                queueEta += safeDuration(requests.get(index).track());
+            }
+
             description.append("**Очередь (").append(requests.size()).append("):**\n");
-            for (int index = 0; index < Math.min(10, requests.size()); index++) {
-                TrackRequest request = requests.get(index);
+            for (int index = 0; index < page.items().size(); index++) {
+                TrackRequest request = page.items().get(index);
                 AudioTrack track = request.track();
-                description.append(index + 1).append(". `")
+                int globalPosition = page.firstPosition() + index;
+                description.append(globalPosition).append(". `")
                         .append(shorten(track.getInfo().title)).append("` — ")
                         .append(formatTime(track.getDuration()))
-                        .append(" • ").append(requesterLabel(request.requester())).append('\n');
-            }
-            if (requests.size() > 10) {
-                description.append("...и ещё ").append(requests.size() - 10).append(" треков.\n");
+                        .append(" • ").append(requesterLabel(request.requester()))
+                        .append(" • через `").append(humanMillis(queueEta)).append("`\n");
+                queueEta += safeDuration(track);
             }
         }
 
         if (musicManager != null) {
-            description.append("\n\n**Состояние сессии:**\n")
+            description.append("\n**Состояние сессии:**\n")
                     .append("Громкость: `").append(audioPlayer.getVolume()).append("%` • ")
                     .append("Повтор: `").append(musicManager.getScheduler().getRepeatMode().label()).append("`\n")
                     .append("До конца текущей очереди: `")
                     .append(humanMillis(musicManager.getScheduler().estimatedWaitMillis())).append('`');
         }
 
-        return new EmbedBuilder()
-                .setTitle("🎶 Список треков")
+        String footer = requests.isEmpty()
+                ? "Страница 1/1"
+                : "Показано " + page.firstPosition() + "–" + page.lastPosition()
+                + " из " + page.totalItems() + " • Страница "
+                + page.number() + "/" + page.totalPages()
+                + " • Номера подходят для /remove и /move";
+
+        MessageEmbed embed = new EmbedBuilder()
+                .setTitle("🎶 Список треков • страница " + page.number() + "/" + page.totalPages())
                 .setDescription(description.toString())
+                .setFooter(footer)
                 .setColor(Color.CYAN)
                 .build();
+        return new QueueView(embed, page.number(), page.totalPages());
+    }
+
+    public record QueueView(MessageEmbed embed, int page, int totalPages) {
     }
 
     public static MessageEmbed success(String title, String description) {
@@ -265,6 +303,22 @@ public final class MusicEmbeds {
             return "Неизвестно";
         }
         return value.length() > 70 ? value.substring(0, 67) + "..." : value;
+    }
+
+    static String progressBar(long positionMillis, long durationMillis, int width) {
+        if (width < 1) {
+            throw new IllegalArgumentException("Progress width must be positive");
+        }
+        long safeDuration = Math.max(0L, durationMillis);
+        long safePosition = Math.max(0L, Math.min(positionMillis, safeDuration));
+        int filled = safeDuration == 0L
+                ? 0
+                : (int) Math.min(width, Math.round(safePosition * (double) width / safeDuration));
+        return "█".repeat(filled) + "░".repeat(width - filled);
+    }
+
+    private static long safeDuration(AudioTrack track) {
+        return track == null ? 0L : Math.max(0L, track.getDuration());
     }
 
     private static String humanDuration(Duration duration) {

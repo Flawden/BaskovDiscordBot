@@ -42,6 +42,7 @@ import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
 import java.awt.Color;
 import java.time.Duration;
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 
 /**
@@ -191,7 +192,23 @@ public class ModernInteractions extends ListenerAdapter {
 
         if (MusicControls.QUEUE.equals(event.getComponentId())) {
             GuildMusicManager manager = playerManager.findMusicManager(guild).orElse(null);
-            event.replyEmbeds(MusicEmbeds.queue(manager)).setEphemeral(true).queue();
+            MusicEmbeds.QueueView view = MusicEmbeds.queueView(manager, 1);
+            event.replyEmbeds(view.embed())
+                    .setComponents(MusicControls.queueRows(view.page(), view.totalPages()))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        OptionalInt queuePage = MusicControls.queuePage(event.getComponentId());
+        if (queuePage.isPresent()) {
+            GuildMusicManager manager = playerManager.findMusicManager(guild).orElse(null);
+            MusicEmbeds.QueueView view = MusicEmbeds.queueView(
+                    manager,
+                    queuePage.getAsInt());
+            event.editMessageEmbeds(view.embed())
+                    .setComponents(MusicControls.queueRows(view.page(), view.totalPages()))
+                    .queue();
             return;
         }
 
@@ -412,9 +429,22 @@ public class ModernInteractions extends ListenerAdapter {
     }
 
     private void queue(SlashCommandInteractionEvent event) {
+        long requestedPage = event.getOption("page", 1L, OptionMapping::getAsLong);
+        if (requestedPage < 1L || requestedPage > Integer.MAX_VALUE) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "📄 Неверная страница",
+                            "Номер страницы должен быть положительным целым числом."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
         GuildMusicManager manager = playerManager.findMusicManager(event.getGuild()).orElse(null);
-        event.replyEmbeds(MusicEmbeds.queue(manager))
-                .setComponents(MusicControls.rows())
+        MusicEmbeds.QueueView view = MusicEmbeds.queueView(
+                manager,
+                Math.toIntExact(requestedPage));
+        event.replyEmbeds(view.embed())
+                .setComponents(MusicControls.queueRows(view.page(), view.totalPages()))
                 .queue();
     }
 

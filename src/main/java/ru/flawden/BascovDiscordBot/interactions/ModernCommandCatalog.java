@@ -32,7 +32,12 @@ public final class ModernCommandCatalog {
                 Commands.slash("resume", "Продолжает воспроизведение"),
                 Commands.slash("skip", "Пропускает текущую песню"),
                 Commands.slash("stop", "Останавливает музыку и отключает бота"),
-                Commands.slash("queue", "Показывает текущий трек и очередь"),
+                Commands.slash("queue", "Показывает текущий трек и очередь")
+                        .addOption(
+                                OptionType.INTEGER,
+                                "page",
+                                "Страница очереди, начиная с 1",
+                                false),
                 Commands.slash("now", "Показывает текущую песню"),
                 Commands.slash("seek", "Перематывает текущую песню")
                         .addOption(
