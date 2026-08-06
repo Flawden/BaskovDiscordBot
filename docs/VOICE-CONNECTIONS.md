@@ -31,10 +31,11 @@ IDLE -> CONNECTING -> CONNECTED
 - повторный запрос к тому же каналу разделяет уже существующий `CompletableFuture`;
 - запрос к другому каналу во время подключения получает `BUSY`;
 - трек загружается только после подтверждения `AudioManager.isConnected()` и voice state самого бота в ожидаемом канале;
-- при таймауте соединение закрывается, sending handler снимается, сессия уничтожается;
-- во время cooldown новая попытка не открывает канал;
+- при таймауте отдельная connection-attempt закрывается и снимает sending handler;
+- обычная пользовательская команда уважает cooldown, а bounded recovery coordinator может контролируемо обойти его между собственными ограниченными попытками;
 - `CLEANUP` LavaPlayer считается потерей audio transport и закрывает сессию;
-- после подключения watchdog не вооружается до окончания startup-grace; затем закрывает сессию только при отсутствии реального запроса аудиофреймов дольше grace-периода.
+- после подключения watchdog не вооружается до окончания startup-grace; подтверждённая потеря frame polling запускает bounded recovery;
+- после трёх неудачных recovery-попыток runtime-сессия освобождается, но актуальный checkpoint сохраняется для restart/return-listener restoration.
 
 ## Настройки
 
@@ -76,3 +77,10 @@ Voice connection ready ...
 ## v0.7.6
 
 `AudioTrackEndReason.CLEANUP` больше не закрывает voice-сессию напрямую. Scheduler пробует fallback/очередь, а реальный обрыв подтверждает bounded watchdog.
+
+
+## v0.15.0 bounded recovery
+
+Начиная с `v0.15.0`, неожиданный self `LEAVE` и подтверждённый frame timeout не уничтожают очередь немедленно. Текущий player ставится на pause, затем выполняются до трёх отдельных connection-attempt с линейным backoff. JDA auto-reconnect по-прежнему выключен.
+
+Полная модель сохранения voice channel, позиции, очереди и startup restore находится в [`VOICE-RECOVERY-SESSION-RESTORATION.md`](VOICE-RECOVERY-SESSION-RESTORATION.md).

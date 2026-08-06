@@ -24,11 +24,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Выполняет ровно одну ограниченную попытку voice-подключения на гильдию.
+ * Выполняет одну ограниченную попытку voice-подключения на гильдию.
  *
- * <p>Автоматический reconnect JDA намеренно отключён: при проблеме транспорта
- * бот должен завершить попытку, освободить сессию и дать пользователю повторить
- * команду позже, а не бесконечно входить и выходить из канала.</p>
+ * <p>Автоматический reconnect JDA намеренно отключён. Более высокий recovery
+ * coordinator может запустить несколько таких попыток с bounded backoff, но
+ * каждая отдельная попытка по-прежнему имеет жёсткий timeout и не зацикливается.</p>
  */
 @Slf4j
 @Component
@@ -73,6 +73,18 @@ public class VoiceConnectionCoordinator {
             Guild guild,
             AudioChannel target,
             AudioPlayerSendHandler sendHandler) {
+        return ensureConnected(guild, target, sendHandler, false);
+    }
+
+    /**
+     * Внутренний recovery-путь может обходить пользовательский cooldown, но всё
+     * равно остаётся ограниченным внешним coordinator-ом восстановления.
+     */
+    public CompletableFuture<VoiceConnectionResult> ensureConnected(
+            Guild guild,
+            AudioChannel target,
+            AudioPlayerSendHandler sendHandler,
+            boolean bypassCooldown) {
         Objects.requireNonNull(guild, "guild");
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(sendHandler, "sendHandler");
@@ -86,6 +98,10 @@ public class VoiceConnectionCoordinator {
         long guildId = guild.getIdLong();
         Instant now = clock.instant();
         Instant blockedUntil = cooldownUntil.get(guildId);
+        if (bypassCooldown && blockedUntil != null) {
+            cooldownUntil.remove(guildId, blockedUntil);
+            blockedUntil = null;
+        }
         if (blockedUntil != null && blockedUntil.isAfter(now)) {
             Duration remaining = Duration.between(now, blockedUntil);
             log.warn("Voice connection suppressed by cooldown for guild {} (remaining={})",

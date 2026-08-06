@@ -44,6 +44,7 @@ import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
+import ru.flawden.BascovDiscordBot.session.SessionRecoverySnapshot;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferences;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
 import ru.flawden.BascovDiscordBot.settings.PlaybackAccessMode;
@@ -421,6 +422,7 @@ public class ModernInteractions extends ListenerAdapter {
         OperationalMetrics.Snapshot commands = operationalMetrics.snapshot();
         MusicRuntimeSnapshot music = playerManager.runtimeSnapshot();
         VoiceDiagnosticSnapshot voice = playerManager.voiceDiagnosticsSnapshot(event.getGuild());
+        SessionRecoverySnapshot recovery = playerManager.sessionRecoverySnapshot();
 
         String discord = StatusMessageFormatter.discord(runtime, JdaRuntimeInfo.version());
         String daveState = StatusMessageFormatter.dave(daveRuntimeInfo.snapshot());
@@ -429,6 +431,7 @@ public class ModernInteractions extends ListenerAdapter {
                 playerManager.findMusicManager(event.getGuild()).orElse(null));
         String voiceState = StatusMessageFormatter.voice(voice);
         String voiceHistory = StatusMessageFormatter.voiceHistory(voice);
+        String recoveryState = StatusMessageFormatter.recovery(recovery);
         String commandState = StatusMessageFormatter.commands(commands);
         GuildPreferences accessPreferences = preferencesRepository.get(event.getGuild().getIdLong());
         String accessState = String.join("\n",
@@ -451,6 +454,7 @@ public class ModernInteractions extends ListenerAdapter {
                         .addField("Playback modes", playbackState, true)
                         .addField("Voice transport", voiceState, true)
                         .addField("Voice history", voiceHistory, false)
+                        .addField("Voice recovery", recoveryState, false)
                         .addField("Persistent library", libraryState, true)
                         .addField("DJ & voting", accessState, true)
                         .addField("Команды с запуска", commandState, false)

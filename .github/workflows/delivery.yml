@@ -251,6 +251,13 @@ jobs:
           BOT_MUSIC_VOICE_FAILURE_COOLDOWN: ${{ vars.DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN }}
           BOT_MUSIC_VOICE_DISCONNECT_GRACE: ${{ vars.DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE }}
           BOT_MUSIC_VOICE_WATCHDOG_ENFORCE: ${{ vars.DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE }}
+          BOT_MUSIC_SESSION_CHECKPOINT_INTERVAL: ${{ vars.DISCORD_BOT_MUSIC_SESSION_CHECKPOINT_INTERVAL }}
+          BOT_MUSIC_SESSION_MAX_AGE: ${{ vars.DISCORD_BOT_MUSIC_SESSION_MAX_AGE }}
+          BOT_MUSIC_SESSION_RESTORE_ON_STARTUP: ${{ vars.DISCORD_BOT_MUSIC_SESSION_RESTORE_ON_STARTUP }}
+          BOT_MUSIC_SESSION_REQUIRE_HUMAN_LISTENER: ${{ vars.DISCORD_BOT_MUSIC_SESSION_REQUIRE_HUMAN_LISTENER }}
+          BOT_MUSIC_SESSION_VOICE_RECOVERY_ENABLED: ${{ vars.DISCORD_BOT_MUSIC_SESSION_VOICE_RECOVERY_ENABLED }}
+          BOT_MUSIC_SESSION_MAX_RECOVERY_ATTEMPTS: ${{ vars.DISCORD_BOT_MUSIC_SESSION_MAX_RECOVERY_ATTEMPTS }}
+          BOT_MUSIC_SESSION_RECOVERY_BACKOFF: ${{ vars.DISCORD_BOT_MUSIC_SESSION_RECOVERY_BACKOFF }}
           BOT_NETWORK_MODE: ${{ vars.BOT_NETWORK_MODE }}
           BOT_NETWORK_MODE_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && inputs.network_mode || '' }}
           BOT_VOICE_LOG_LEVEL: ${{ vars.DISCORD_BOT_VOICE_LOG_LEVEL }}
@@ -269,6 +276,13 @@ jobs:
           voice_failure_cooldown="${BOT_MUSIC_VOICE_FAILURE_COOLDOWN:-30s}"
           voice_disconnect_grace="${BOT_MUSIC_VOICE_DISCONNECT_GRACE:-5s}"
           voice_watchdog_enforce="${BOT_MUSIC_VOICE_WATCHDOG_ENFORCE:-false}"
+          session_checkpoint_interval="${BOT_MUSIC_SESSION_CHECKPOINT_INTERVAL:-5s}"
+          session_max_age="${BOT_MUSIC_SESSION_MAX_AGE:-6h}"
+          session_restore_on_startup="${BOT_MUSIC_SESSION_RESTORE_ON_STARTUP:-true}"
+          session_require_human_listener="${BOT_MUSIC_SESSION_REQUIRE_HUMAN_LISTENER:-true}"
+          session_voice_recovery_enabled="${BOT_MUSIC_SESSION_VOICE_RECOVERY_ENABLED:-true}"
+          session_max_recovery_attempts="${BOT_MUSIC_SESSION_MAX_RECOVERY_ATTEMPTS:-3}"
+          session_recovery_backoff="${BOT_MUSIC_SESSION_RECOVERY_BACKOFF:-2s}"
           network_mode="${BOT_NETWORK_MODE:-bridge}"
           if [[ -n "${BOT_NETWORK_MODE_OVERRIDE}" && "${BOT_NETWORK_MODE_OVERRIDE}" != "environment" ]]; then
             network_mode="${BOT_NETWORK_MODE_OVERRIDE}"
@@ -294,6 +308,13 @@ jobs:
             printf 'DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN_B64=%s\n' "$(encode "${voice_failure_cooldown}")"
             printf 'DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE_B64=%s\n' "$(encode "${voice_disconnect_grace}")"
             printf 'DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE_B64=%s\n' "$(encode "${voice_watchdog_enforce}")"
+            printf 'DISCORD_BOT_MUSIC_SESSION_CHECKPOINT_INTERVAL_B64=%s\n' "$(encode "${session_checkpoint_interval}")"
+            printf 'DISCORD_BOT_MUSIC_SESSION_MAX_AGE_B64=%s\n' "$(encode "${session_max_age}")"
+            printf 'DISCORD_BOT_MUSIC_SESSION_RESTORE_ON_STARTUP_B64=%s\n' "$(encode "${session_restore_on_startup}")"
+            printf 'DISCORD_BOT_MUSIC_SESSION_REQUIRE_HUMAN_LISTENER_B64=%s\n' "$(encode "${session_require_human_listener}")"
+            printf 'DISCORD_BOT_MUSIC_SESSION_VOICE_RECOVERY_ENABLED_B64=%s\n' "$(encode "${session_voice_recovery_enabled}")"
+            printf 'DISCORD_BOT_MUSIC_SESSION_MAX_RECOVERY_ATTEMPTS_B64=%s\n' "$(encode "${session_max_recovery_attempts}")"
+            printf 'DISCORD_BOT_MUSIC_SESSION_RECOVERY_BACKOFF_B64=%s\n' "$(encode "${session_recovery_backoff}")"
             printf 'BOT_NETWORK_MODE_B64=%s\n' "$(encode "${network_mode}")"
             printf 'DISCORD_BOT_VOICE_LOG_LEVEL_B64=%s\n' "$(encode "${voice_log_level}")"
             printf 'DISCORD_BOT_MUSIC_DEFAULT_VOLUME_B64=%s\n' "$(encode "${default_volume}")"

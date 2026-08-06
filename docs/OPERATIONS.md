@@ -11,6 +11,7 @@
 - uptime процесса;
 - число активных и реально воспроизводящих музыкальных сессий;
 - суммарное количество ожидающих треков;
+- количество session checkpoints, текущих recovery operations и transport attempts/success/fail и startup restored/failed;
 - успешные и упавшие prefix/slash/button interactions с момента запуска.
 
 Команда не выводит Discord token, имена пользователей, поисковые запросы, содержимое очереди или guild settings.
@@ -66,4 +67,4 @@ Docker logs: 3 × 10 MiB
 
 ## Voice transport
 
-Voice-подключение имеет отдельный bounded lifecycle: автоматический reconnect JDA отключён, одна попытка ограничена timeout, а потерянное во время воспроизведения соединение закрывается после grace-периода. Подробная state machine и команды диагностики находятся в [`VOICE-CONNECTIONS.md`](VOICE-CONNECTIONS.md).
+Voice-подключение имеет отдельный bounded lifecycle: автоматический reconnect JDA отключён, каждая попытка ограничена timeout, а потерянное во время воспроизведения соединение передаётся recovery coordinator-у. Подробная state machine находится в [`VOICE-CONNECTIONS.md`](VOICE-CONNECTIONS.md), а checkpoint/restart restoration — в [`VOICE-RECOVERY-SESSION-RESTORATION.md`](VOICE-RECOVERY-SESSION-RESTORATION.md).

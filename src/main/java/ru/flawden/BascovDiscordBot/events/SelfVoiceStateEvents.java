@@ -6,23 +6,33 @@ import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnostics;
+import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 
 /**
- * Наблюдает только за voice-переходами самого бота.
+ * Наблюдает за voice-переходами самого бота и за возвращением людей в канал,
+ * для которого остался pending checkpoint.
  */
 @Slf4j
 @Component
 public class SelfVoiceStateEvents extends ListenerAdapter {
 
     private final VoiceDiagnostics diagnostics;
+    private final PlayerManager playerManager;
 
-    public SelfVoiceStateEvents(VoiceDiagnostics diagnostics) {
+    public SelfVoiceStateEvents(
+            VoiceDiagnostics diagnostics,
+            PlayerManager playerManager) {
         this.diagnostics = diagnostics;
+        this.playerManager = playerManager;
     }
 
     @Override
     public void onGuildVoiceUpdate(@NotNull GuildVoiceUpdateEvent event) {
         if (event.getMember().getIdLong() != event.getGuild().getSelfMember().getIdLong()) {
+            var joinedByListener = event.getChannelJoined();
+            if (joinedByListener != null && !event.getMember().getUser().isBot()) {
+                playerManager.handleHumanVoiceJoin(event.getGuild(), joinedByListener.getIdLong());
+            }
             return;
         }
 
@@ -42,6 +52,7 @@ public class SelfVoiceStateEvents extends ListenerAdapter {
         }
 
         diagnostics.selfVoiceEvent(event.getGuild().getIdLong(), transition, channelId);
+        playerManager.handleSelfVoiceTransition(event.getGuild(), transition, channelId);
         log.warn("Self voice state changed: guild={}, transition={}, channel={}",
                 event.getGuild().getId(), transition, channelId == null ? "none" : channelId);
     }

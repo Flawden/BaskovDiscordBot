@@ -9,6 +9,7 @@ import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
+import ru.flawden.BascovDiscordBot.session.SessionRecoverySnapshot;
 
 import java.util.Objects;
 
@@ -48,6 +49,18 @@ final class StatusMessageFormatter {
                 "Активных сессий: `" + music.activeSessions() + "`",
                 "Сейчас играет: `" + music.playingSessions() + "`",
                 "Треков в очередях: `" + music.queuedTracks() + "`");
+    }
+
+    static String recovery(SessionRecoverySnapshot recovery) {
+        Objects.requireNonNull(recovery, "recovery");
+        return String.join("\n",
+                "Checkpoint-сессий: `" + recovery.persistedSessions() + "`",
+                "Восстановлений сейчас: `" + recovery.recoveriesInProgress() + "`",
+                "Transport A/S/F: `" + recovery.transportAttempts() + "/"
+                        + recovery.transportSuccesses() + "/" + recovery.transportFailures() + "`",
+                "Startup restored/failed: `" + recovery.startupRestoreSuccesses() + "/"
+                        + recovery.startupRestoreFailures() + "`",
+                "Последнее событие: " + inline(recovery.lastEvent()));
     }
 
     static String playback(GuildMusicManager manager) {

@@ -7,6 +7,41 @@
 ## [Unreleased]
 
 
+## [0.15.0] — 2026-08-06
+
+### Добавлено
+
+- Atomic checkpoint активной music/voice-сессии в `music-sessions.tsv` с форматом `BASKOV_MUSIC_SESSIONS_V1`, Base64-safe полями и POSIX `0600`.
+- Startup restoration после `JDA.awaitReady()`: voice channel, текущий трек и позиция, очередь, pause, volume и repeat загружаются после restart/redeploy.
+- Pending restore: бот не входит в пустой voice channel; первый вернувшийся человек запускает восстановление свежего checkpoint автоматически.
+- Bounded runtime voice recovery для неожиданного self `LEAVE` и подтверждённого отсутствия frame polling: до трёх попыток с линейным backoff.
+- Секция `Voice recovery` в `/status` со счётчиками checkpoint, in-progress, transport attempts/success/fail, startup restored/failed и последним operational event.
+- Конфигурация `DISCORD_BOT_MUSIC_SESSION_*` для пути, интервала checkpoint, TTL, startup restore, human-listener gate и recovery attempts/backoff.
+- Документ `docs/VOICE-RECOVERY-SESSION-RESTORATION.md`.
+
+### Изменено
+
+- JDA auto-reconnect остаётся выключенным, но каждая bounded попытка `VoiceConnectionCoordinator` теперь может быть повторно вызвана recovery coordinator-ом с контролируемым обходом cooldown.
+- При transport failure текущий `AudioPlayer` временно ставится на pause; после успешного reconnect продолжается тот же in-memory трек и возвращается исходный pause state.
+- При исчерпании recovery-попыток runtime-сессия освобождается, но checkpoint не удаляется и остаётся доступным для следующего restart/return listener.
+- Graceful shutdown сначала сохраняет актуальное состояние всех активных сессий и только затем уничтожает players и voice transport.
+- Watchdog при включённом session recovery больше не уничтожает очередь сразу, а передаёт управление bounded recovery path.
+
+### Безопасность и отказоустойчивость
+
+- В checkpoint не сериализуются `AudioTrack`, decoder state, Discord token, DAVE keys, cookies, OAuth, poToken или голосовые пакеты — только публичные replayable identifiers и ограниченные метаданные.
+- При загрузке файла строго проверяются boolean-поля и соответствие сохранённого provider публичному YouTube/SoundCloud URL; повреждённая строка игнорируется.
+- На сервер хранится максимум один checkpoint на guild; очередь дополнительно ограничена runtime `maxQueueSize` и абсолютной границей 1000 записей.
+- Старые, удалённые guild/channel и checkpoint старше TTL очищаются; пустой канал оставляет checkpoint pending без фонового JOIN/LEAVE-цикла.
+- Удалённый или недоступный трек пропускается при restore, а остальные элементы загружаются последовательно в сохранённом порядке.
+
+### Сохранено
+
+- Java 17, Spring Boot 3.4.3, JDA 6.5.0, LavaPlayer core 2.2.3, `youtube-source 1.18.2`, native libDAVE `ce725965e`, Docker bridge, DJ/vote, плейлисты и история не меняются.
+- Новых slash-команд, зависимостей и Secrets нет.
+- Тестовый baseline повышен до 66 test source files / 233 `@Test` methods.
+
+
 ## [0.14.0] — 2026-08-06
 
 ### Добавлено

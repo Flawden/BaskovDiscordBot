@@ -11,6 +11,7 @@ import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
+import ru.flawden.BascovDiscordBot.session.SessionRecoverySnapshot;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -57,6 +58,26 @@ class StatusMessageFormatterTest {
                 Активных сессий: `2`
                 Сейчас играет: `1`
                 Треков в очередях: `7`""", StatusMessageFormatter.music(snapshot));
+    }
+
+    @Test
+    void formatsVoiceRecoveryCheckpointSection() {
+        SessionRecoverySnapshot snapshot = new SessionRecoverySnapshot(
+                2,
+                1,
+                4L,
+                3L,
+                1L,
+                2L,
+                1L,
+                "2026-08-06T02:00:00Z voice recovery complete");
+
+        String rendered = StatusMessageFormatter.recovery(snapshot);
+
+        assertTrue(rendered.contains("Checkpoint-сессий: `2`"));
+        assertTrue(rendered.contains("Transport A/S/F: `4/3/1`"));
+        assertTrue(rendered.contains("Startup restored/failed: `2/1`"));
+        assertTrue(rendered.contains("voice recovery complete"));
     }
 
     @Test

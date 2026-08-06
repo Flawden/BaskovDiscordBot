@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая стабильная версия: **v0.14.0**.
+Текущая стабильная версия: **v0.15.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -16,7 +16,8 @@
 - `/now` с визуальным прогрессом, оставшимся временем и двухрядным пультом previous/±15s/pause/next/shuffle/repeat; `/status` с активными playback modes, uptime, Discord gateway, voice transport snapshot и последними voice/source ошибками;
 - динамический Docker heartbeat, который подтверждает свежее подключение к Discord, а не только факт старта;
 - JDA 6.5.0 с настоящей JNI libDAVE `ce725965e`, положительной protocol version и подтверждением playback только после реального запроса аудиофрейма Discord media transport;
-- bounded voice connection: одна попытка, отключённый auto-reconnect, startup-grace и observe-only watchdog по реальному запросу аудиофреймов;
+- bounded voice recovery: отключённый JDA auto-reconnect, до трёх контролируемых повторных подключений с backoff и сохранением checkpoint при исчерпании попыток;
+- восстановление активной музыкальной сессии после restart/redeploy: voice channel, текущий трек и позиция, очередь, pause, volume и repeat сохраняются в atomic checkpoint;
 - YouTube как основной провайдер текстового поиска через отдельный modern `youtube-source 1.18.2`; встроенный legacy extractor LavaPlayer отключён, а SoundCloud остаётся только для прямых ссылок и совместимости;
 - переключаемый diagnostic network mode `bridge|host` для A/B-проверки Docker UDP/NAT;
 - ограничения CPU, памяти, PID и ротация Docker-логов;
@@ -73,8 +74,17 @@ docker compose logs -f bot
 | `DISCORD_BOT_MUSIC_MAX_VOLUME` | `150` | верхняя граница команды `/volume` |
 | `DISCORD_BOT_PERSISTENCE_FILE` | `data/guild-settings.properties` | файл постоянных guild-настроек; в Docker используется `/app/data/...` |
 | `DISCORD_BOT_MUSIC_LIBRARY_FILE` | `data/music-library.tsv` | отдельный atomic-файл постоянных плейлистов и истории; в Docker `/app/data/music-library.tsv` |
+| `DISCORD_BOT_MUSIC_SESSION_FILE` | `data/music-sessions.tsv` | atomic checkpoint активных voice/music-сессий; в Docker `/app/data/music-sessions.tsv` |
+| `DISCORD_BOT_MUSIC_SESSION_CHECKPOINT_INTERVAL` | `5s` | период сохранения активной сессии |
+| `DISCORD_BOT_MUSIC_SESSION_MAX_AGE` | `6h` | максимальный возраст checkpoint для автозапуска |
+| `DISCORD_BOT_MUSIC_SESSION_RESTORE_ON_STARTUP` | `true` | восстановление после restart/redeploy |
+| `DISCORD_BOT_MUSIC_SESSION_REQUIRE_HUMAN_LISTENER` | `true` | не входить в пустой voice channel; checkpoint остаётся pending |
+| `DISCORD_BOT_MUSIC_SESSION_VOICE_RECOVERY_ENABLED` | `true` | bounded recovery при неожиданном LEAVE или пропаже frame polling |
+| `DISCORD_BOT_MUSIC_SESSION_MAX_RECOVERY_ATTEMPTS` | `3` | максимум transport-recovery попыток |
+| `DISCORD_BOT_MUSIC_SESSION_RECOVERY_BACKOFF` | `2s` | базовый линейный backoff между попытками |
 
 Live-потоки отключены. Подробные правила voice-доступа и lifecycle находятся в [`docs/MUSIC-SESSIONS.md`](docs/MUSIC-SESSIONS.md).
+Voice recovery и восстановление сессий после restart/redeploy описаны в [`docs/VOICE-RECOVERY-SESSION-RESTORATION.md`](docs/VOICE-RECOVERY-SESSION-RESTORATION.md).
 Современный Discord-интерфейс описан в [`docs/MODERN-COMMANDS.md`](docs/MODERN-COMMANDS.md).
 Интерактивный поиск и безопасный выбор трека описаны в [`docs/SEARCH-TRACK-SELECTION.md`](docs/SEARCH-TRACK-SELECTION.md).
 Постоянные плейлисты, история и replay описаны в [`docs/PLAYLISTS-HISTORY-REPLAY.md`](docs/PLAYLISTS-HISTORY-REPLAY.md).

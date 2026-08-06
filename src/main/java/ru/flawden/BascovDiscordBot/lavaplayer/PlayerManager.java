@@ -10,18 +10,24 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import dev.lavalink.youtube.YoutubeAudioSourceManager;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
 import net.dv8tion.jda.api.managers.AudioManager;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.commands.music.MediaQueryResolver;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
+import ru.flawden.BascovDiscordBot.config.MusicSessionProperties;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnostics;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferences;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
 import ru.flawden.BascovDiscordBot.library.PlaybackHistoryRecorder;
+import ru.flawden.BascovDiscordBot.session.MusicSessionRepository;
+import ru.flawden.BascovDiscordBot.session.SessionRecoverySnapshot;
+import ru.flawden.BascovDiscordBot.session.StoredMusicSession;
+import ru.flawden.BascovDiscordBot.session.StoredSessionTrack;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -30,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -37,7 +44,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 /**
@@ -49,29 +58,47 @@ public class PlayerManager {
 
     private final Map<Long, GuildMusicManager> musicManagers = new ConcurrentHashMap<>();
     private final Map<Long, ScheduledFuture<?>> idleDisconnects = new ConcurrentHashMap<>();
+    private final Map<Long, Long> voiceTargets = new ConcurrentHashMap<>();
+    private final Map<Long, VoiceRecoveryRun> voiceRecoveries = new ConcurrentHashMap<>();
+    private final Set<Long> startupRestoresInProgress = ConcurrentHashMap.newKeySet();
+    private final Map<Long, Instant> intentionalDisconnectUntil = new ConcurrentHashMap<>();
     private final Map<Long, Instant> voiceFrameDemandMissingSince = new ConcurrentHashMap<>();
     private final Map<Long, Instant> voiceWatchdogNotBefore = new ConcurrentHashMap<>();
     private final Set<Long> voiceWatchdogReported = ConcurrentHashMap.newKeySet();
     private final DefaultAudioPlayerManager audioPlayerManager;
     private final ScheduledExecutorService idleScheduler;
     private final ScheduledExecutorService playbackReadinessScheduler;
+    private final ScheduledExecutorService sessionLifecycleScheduler;
     private final MusicProperties properties;
+    private final MusicSessionProperties sessionProperties;
     private final GuildPreferencesRepository preferencesRepository;
     private final VoiceConnectionCoordinator voiceConnections;
     private final VoiceDiagnostics voiceDiagnostics;
     private final PlaybackHistoryRecorder historyRecorder;
+    private final MusicSessionRepository sessionRepository;
+    private final AtomicBoolean closing = new AtomicBoolean();
+    private final AtomicLong recoveryAttempts = new AtomicLong();
+    private final AtomicLong recoverySuccesses = new AtomicLong();
+    private final AtomicLong recoveryFailures = new AtomicLong();
+    private final AtomicLong startupRestoreSuccesses = new AtomicLong();
+    private final AtomicLong startupRestoreFailures = new AtomicLong();
+    private final AtomicReference<String> lastSessionRecoveryEvent = new AtomicReference<>("none");
 
     public PlayerManager(
             MusicProperties properties,
             GuildPreferencesRepository preferencesRepository,
             VoiceConnectionCoordinator voiceConnections,
             VoiceDiagnostics voiceDiagnostics,
-            PlaybackHistoryRecorder historyRecorder) {
+            PlaybackHistoryRecorder historyRecorder,
+            MusicSessionProperties sessionProperties,
+            MusicSessionRepository sessionRepository) {
         this.properties = properties;
+        this.sessionProperties = sessionProperties;
         this.preferencesRepository = preferencesRepository;
         this.voiceConnections = voiceConnections;
         this.voiceDiagnostics = voiceDiagnostics;
         this.historyRecorder = historyRecorder;
+        this.sessionRepository = sessionRepository;
         this.audioPlayerManager = new DefaultAudioPlayerManager();
 
         YoutubeAudioSourceManager youtubeSourceManager = new YoutubeAudioSourceManager();
@@ -96,11 +123,21 @@ public class PlayerManager {
             thread.setDaemon(true);
             return thread;
         });
+        this.sessionLifecycleScheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "baskov-session-recovery");
+            thread.setDaemon(true);
+            return thread;
+        });
         this.idleScheduler.scheduleWithFixedDelay(
                 this::monitorVoiceConnections,
                 1L,
                 1L,
                 TimeUnit.SECONDS);
+        this.sessionLifecycleScheduler.scheduleWithFixedDelay(
+                this::checkpointAllSessionsSafely,
+                sessionProperties.getCheckpointInterval().toMillis(),
+                sessionProperties.getCheckpointInterval().toMillis(),
+                TimeUnit.MILLISECONDS);
         log.info("PlayerManager initialized: maxQueue={}, maxTrack={}, idleTimeout={}, "
                         + "playbackReadyTimeout={}, volume={}/{}",
                 properties.getMaxQueueSize(),
@@ -109,6 +146,16 @@ public class PlayerManager {
                 properties.getPlaybackReadyTimeout(),
                 properties.getDefaultVolume(),
                 properties.getMaxVolume());
+        log.info("Voice recovery initialized: enabled={}, attempts={}, backoff={}, startupRestore={}, "
+                        + "requireHumanListener={}, checkpointInterval={}, maxAge={}, persisted={}",
+                sessionProperties.isVoiceRecoveryEnabled(),
+                sessionProperties.getMaxRecoveryAttempts(),
+                sessionProperties.getRecoveryBackoff(),
+                sessionProperties.isRestoreOnStartup(),
+                sessionProperties.isRequireHumanListener(),
+                sessionProperties.getCheckpointInterval(),
+                sessionProperties.getMaxAge(),
+                sessionRepository.sessions().size());
     }
 
     public GuildMusicManager getMusicManager(Guild guild) {
@@ -138,11 +185,26 @@ public class PlayerManager {
     public CompletableFuture<VoiceConnectionResult> ensureVoiceConnection(
             Guild guild,
             AudioChannel target) {
+        return ensureVoiceConnection(guild, target, true, false);
+    }
+
+    private CompletableFuture<VoiceConnectionResult> ensureVoiceConnection(
+            Guild guild,
+            AudioChannel target,
+            boolean releaseOnFailure,
+            boolean bypassCooldown) {
         GuildMusicManager manager = getMusicManager(guild);
-        return voiceConnections.ensureConnected(guild, target, manager.getSendHandler())
+        voiceTargets.put(guild.getIdLong(), target.getIdLong());
+        return voiceConnections.ensureConnected(
+                        guild,
+                        target,
+                        manager.getSendHandler(),
+                        bypassCooldown)
                 .thenApply(result -> {
                     if (!result.connected()) {
-                        stopAndRelease(guild);
+                        if (releaseOnFailure) {
+                            releaseSession(guild, true);
+                        }
                         return result;
                     }
                     manager.getSendHandler().resetFrameTelemetry();
@@ -436,16 +498,485 @@ public class PlayerManager {
         return result;
     }
 
+    /**
+     * Принимает voice-переходы самого бота. Неожиданный LEAVE при активном
+     * playback запускает ограниченное восстановление текущего transport.
+     */
+    public void handleSelfVoiceTransition(Guild guild, String transition, Long channelId) {
+        Objects.requireNonNull(guild, "guild");
+        String normalized = transition == null ? "UNKNOWN" : transition.trim().toUpperCase();
+        long guildId = guild.getIdLong();
+        if (("JOIN".equals(normalized) || "MOVE".equals(normalized)) && channelId != null) {
+            voiceTargets.put(guildId, channelId);
+            intentionalDisconnectUntil.remove(guildId);
+            return;
+        }
+        if (!"LEAVE".equals(normalized)) {
+            return;
+        }
+        Instant intentionalUntil = intentionalDisconnectUntil.get(guildId);
+        if (intentionalUntil != null && intentionalUntil.isAfter(Instant.now())) {
+            log.debug("Ignoring intentional self voice leave: guild={}, channel={}", guild.getId(), channelId);
+            return;
+        }
+        GuildMusicManager manager = musicManagers.get(guildId);
+        if (manager == null || !manager.isActive() || !playbackExpected(manager)) {
+            return;
+        }
+        recoverVoiceSession(guild, "unexpected self voice leave");
+    }
+
+    /**
+     * Если startup checkpoint был оставлен pending из-за пустого канала,
+     * первый вернувшийся человек запускает восстановление без новой команды.
+     */
+    public void handleHumanVoiceJoin(Guild guild, long channelId) {
+        if (closing.get()
+                || !sessionProperties.isRestoreOnStartup()
+                || musicManagers.containsKey(guild.getIdLong())) {
+            return;
+        }
+        sessionRepository.session(guild.getIdLong()).ifPresent(stored -> {
+            if (stored.voiceChannelId() != channelId) {
+                return;
+            }
+            if (stored.expired(Instant.now(), sessionProperties.getMaxAge())) {
+                removeCheckpointSafely(stored.guildId(), "expired pending checkpoint");
+                return;
+            }
+            AudioChannel target = resolveAudioChannel(guild, channelId);
+            if (target != null) {
+                sessionLifecycleScheduler.execute(() -> restoreStoredSession(guild, target, stored));
+            }
+        });
+    }
+
+    /**
+     * Восстанавливает сохранённые до restart/deploy сессии после READY JDA.
+     */
+    public void restorePersistedSessions(JDA jda) {
+        Objects.requireNonNull(jda, "jda");
+        if (closing.get()) {
+            return;
+        }
+        if (!sessionProperties.isRestoreOnStartup()) {
+            log.info("Startup music session restoration is disabled; persisted={}",
+                    sessionRepository.sessions().size());
+            return;
+        }
+        sessionLifecycleScheduler.execute(() -> {
+            Instant now = Instant.now();
+            for (StoredMusicSession stored : sessionRepository.sessions()) {
+                if (stored.expired(now, sessionProperties.getMaxAge())) {
+                    removeCheckpointSafely(stored.guildId(), "expired startup checkpoint");
+                    continue;
+                }
+                Guild guild = jda.getGuildById(stored.guildId());
+                if (guild == null) {
+                    removeCheckpointSafely(stored.guildId(), "bot no longer belongs to guild");
+                    continue;
+                }
+                AudioChannel target = resolveAudioChannel(guild, stored.voiceChannelId());
+                if (target == null) {
+                    removeCheckpointSafely(stored.guildId(), "saved voice channel no longer exists");
+                    continue;
+                }
+                if (sessionProperties.isRequireHumanListener()
+                        && !hasHumanListener(guild, stored.voiceChannelId())) {
+                    updateSessionEvent("startup restore pending: guild=" + guild.getId()
+                            + " channel=" + stored.voiceChannelId() + " has no human listeners");
+                    log.info("Keeping startup checkpoint pending because voice channel has no human listeners: "
+                                    + "guild={}, channel={}, tracks={}",
+                            guild.getId(), stored.voiceChannelId(), stored.trackCount());
+                    continue;
+                }
+                restoreStoredSession(guild, target, stored);
+            }
+        });
+    }
+
+    public SessionRecoverySnapshot sessionRecoverySnapshot() {
+        return new SessionRecoverySnapshot(
+                sessionRepository.sessions().size(),
+                voiceRecoveries.size() + startupRestoresInProgress.size(),
+                recoveryAttempts.get(),
+                recoverySuccesses.get(),
+                recoveryFailures.get(),
+                startupRestoreSuccesses.get(),
+                startupRestoreFailures.get(),
+                lastSessionRecoveryEvent.get());
+    }
+
+    private void restoreStoredSession(
+            Guild guild,
+            AudioChannel target,
+            StoredMusicSession stored) {
+        long guildId = guild.getIdLong();
+        if (musicManagers.containsKey(guildId) || !startupRestoresInProgress.add(guildId)) {
+            return;
+        }
+        voiceTargets.put(guildId, target.getIdLong());
+        updateSessionEvent("startup restore requested: guild=" + guild.getId()
+                + " channel=" + target.getId() + " tracks=" + stored.trackCount());
+        log.info("Restoring persisted music session: guild={}, channel={}, tracks={}, position={}ms, paused={}",
+                guild.getId(),
+                target.getId(),
+                stored.trackCount(),
+                stored.currentTrack() == null ? 0L : stored.currentTrack().positionMillis(),
+                stored.paused());
+
+        ensureVoiceConnection(guild, target, false, true)
+                .whenComplete((connection, failure) -> {
+                    if (closing.get()) {
+                        startupRestoresInProgress.remove(guildId);
+                        return;
+                    }
+                    if (failure != null || connection == null || !connection.connected()) {
+                        startupRestoresInProgress.remove(guildId);
+                        startupRestoreFailures.incrementAndGet();
+                        String details = failure == null
+                                ? connection == null ? "missing connection result" : connection.details()
+                                : failure.getClass().getSimpleName() + ": " + failure.getMessage();
+                        updateSessionEvent("startup restore failed: guild=" + guild.getId() + " " + details);
+                        log.warn("Startup session restore could not connect: guild={}, details={}",
+                                guild.getId(), details);
+                        releaseSession(guild, false);
+                        return;
+                    }
+                    GuildMusicManager manager = musicManagers.get(guildId);
+                    if (manager == null || !manager.isActive()) {
+                        startupRestoresInProgress.remove(guildId);
+                        startupRestoreFailures.incrementAndGet();
+                        updateSessionEvent("startup restore failed: guild=" + guild.getId()
+                                + " session disappeared after voice connect");
+                        return;
+                    }
+                    manager.getAudioPlayer().setVolume(stored.volume());
+                    manager.getScheduler().setRepeatMode(stored.repeatMode());
+                    List<StoredSessionTrack> ordered = new ArrayList<>();
+                    if (stored.currentTrack() != null) {
+                        ordered.add(stored.currentTrack());
+                    }
+                    ordered.addAll(stored.queue());
+                    restoreTracksSequentially(guild, manager, stored, ordered, 0, new AtomicInteger());
+                });
+    }
+
+    private void restoreTracksSequentially(
+            Guild guild,
+            GuildMusicManager manager,
+            StoredMusicSession stored,
+            List<StoredSessionTrack> ordered,
+            int index,
+            AtomicInteger accepted) {
+        long guildId = guild.getIdLong();
+        if (closing.get()
+                || !manager.isActive()
+                || musicManagers.get(guildId) != manager) {
+            startupRestoresInProgress.remove(guildId);
+            return;
+        }
+        if (index >= ordered.size()) {
+            startupRestoresInProgress.remove(guild.getIdLong());
+            if (accepted.get() == 0) {
+                startupRestoreFailures.incrementAndGet();
+                updateSessionEvent("startup restore failed: guild=" + guild.getId()
+                        + " no saved tracks could be loaded");
+                log.warn("No saved tracks could be restored for guild {}", guild.getId());
+                releaseSession(guild, false);
+                return;
+            }
+            manager.getAudioPlayer().setPaused(stored.paused());
+            startupRestoreSuccesses.incrementAndGet();
+            updateSessionEvent("startup restore complete: guild=" + guild.getId()
+                    + " accepted=" + accepted.get() + "/" + ordered.size());
+            checkpointSessionSafely(manager);
+            log.info("Persisted music session restored: guild={}, accepted={}/{}, paused={}",
+                    guild.getId(), accepted.get(), ordered.size(), stored.paused());
+            return;
+        }
+
+        StoredSessionTrack saved = ordered.get(index);
+        loadAndPlay(
+                guild,
+                saved.track().playbackIdentifier(),
+                saved.requester(),
+                result -> {
+                    boolean loaded = result.status() == MusicLoadResult.Status.STARTED
+                            || result.status() == MusicLoadResult.Status.QUEUED;
+                    if (loaded) {
+                        accepted.incrementAndGet();
+                    }
+                    boolean isSavedCurrent = index == 0 && stored.currentTrack() != null;
+                    if (loaded
+                            && result.status() == MusicLoadResult.Status.STARTED
+                            && result.track() != null) {
+                        if (isSavedCurrent && result.track().isSeekable()) {
+                            result.track().setPosition(saved.safeResumePositionMillis());
+                        }
+                        if (stored.paused()) {
+                            manager.getAudioPlayer().setPaused(true);
+                        }
+                    }
+                    restoreTracksSequentially(
+                            guild,
+                            manager,
+                            stored,
+                            ordered,
+                            index + 1,
+                            accepted);
+                });
+    }
+
+    private void recoverVoiceSession(Guild guild, String reason) {
+        if (closing.get() || !sessionProperties.isVoiceRecoveryEnabled()) {
+            return;
+        }
+        long guildId = guild.getIdLong();
+        GuildMusicManager manager = musicManagers.get(guildId);
+        if (manager == null || !manager.isActive() || !playbackExpected(manager)) {
+            return;
+        }
+        Long targetId = voiceTargets.get(guildId);
+        if (targetId == null) {
+            var selfState = guild.getSelfMember().getVoiceState();
+            if (selfState != null && selfState.getChannel() != null) {
+                targetId = selfState.getChannel().getIdLong();
+                voiceTargets.put(guildId, targetId);
+            }
+        }
+        if (targetId == null) {
+            recoveryFailures.incrementAndGet();
+            updateSessionEvent("voice recovery impossible: guild=" + guild.getId() + " no target channel");
+            checkpointSessionSafely(manager);
+            releaseSession(guild, false);
+            return;
+        }
+        AudioChannel target = resolveAudioChannel(guild, targetId);
+        if (target == null) {
+            recoveryFailures.incrementAndGet();
+            updateSessionEvent("voice recovery impossible: guild=" + guild.getId()
+                    + " target channel missing");
+            checkpointSessionSafely(manager);
+            releaseSession(guild, false);
+            return;
+        }
+
+        boolean wasPaused = manager.getAudioPlayer().isPaused();
+        VoiceRecoveryRun run = new VoiceRecoveryRun(manager, target, wasPaused, reason);
+        if (voiceRecoveries.putIfAbsent(guildId, run) != null) {
+            return;
+        }
+        manager.getAudioPlayer().setPaused(true);
+        attemptVoiceRecovery(guild, run, 1);
+    }
+
+    private void attemptVoiceRecovery(Guild guild, VoiceRecoveryRun run, int attempt) {
+        long guildId = guild.getIdLong();
+        if (voiceRecoveries.get(guildId) != run
+                || musicManagers.get(guildId) != run.manager()
+                || !run.manager().isActive()) {
+            voiceRecoveries.remove(guildId, run);
+            return;
+        }
+        recoveryAttempts.incrementAndGet();
+        updateSessionEvent("voice recovery attempt " + attempt + "/"
+                + sessionProperties.getMaxRecoveryAttempts() + ": guild=" + guild.getId()
+                + " reason=" + run.reason());
+        log.warn("Voice recovery attempt {}/{}: guild={}, channel={}, reason={}",
+                attempt,
+                sessionProperties.getMaxRecoveryAttempts(),
+                guild.getId(),
+                run.target().getId(),
+                run.reason());
+
+        ensureVoiceConnection(guild, run.target(), false, true)
+                .whenComplete((result, failure) -> {
+                    if (closing.get()
+                            || voiceRecoveries.get(guildId) != run
+                            || musicManagers.get(guildId) != run.manager()
+                            || !run.manager().isActive()) {
+                        voiceRecoveries.remove(guildId, run);
+                        return;
+                    }
+                    boolean connected = failure == null && result != null && result.connected();
+                    if (connected) {
+                        voiceRecoveries.remove(guildId, run);
+                        if (!run.wasPaused()) {
+                            run.manager().getAudioPlayer().setPaused(false);
+                        }
+                        recoverySuccesses.incrementAndGet();
+                        voiceFrameDemandMissingSince.remove(guildId);
+                        voiceWatchdogReported.remove(guildId);
+                        updateSessionEvent("voice recovery complete: guild=" + guild.getId()
+                                + " attempt=" + attempt);
+                        checkpointSessionSafely(run.manager());
+                        log.info("Voice session recovered: guild={}, channel={}, attempt={}",
+                                guild.getId(), run.target().getId(), attempt);
+                        return;
+                    }
+                    if (attempt < sessionProperties.getMaxRecoveryAttempts()) {
+                        long delay = Math.multiplyExact(
+                                sessionProperties.getRecoveryBackoff().toMillis(),
+                                (long) attempt);
+                        sessionLifecycleScheduler.schedule(
+                                () -> attemptVoiceRecovery(guild, run, attempt + 1),
+                                delay,
+                                TimeUnit.MILLISECONDS);
+                        return;
+                    }
+                    voiceRecoveries.remove(guildId, run);
+                    recoveryFailures.incrementAndGet();
+                    String details = failure != null
+                            ? failure.getClass().getSimpleName() + ": " + failure.getMessage()
+                            : result == null ? "missing connection result" : result.details();
+                    updateSessionEvent("voice recovery exhausted: guild=" + guild.getId()
+                            + " details=" + details);
+                    run.manager().getAudioPlayer().setPaused(run.wasPaused());
+                    checkpointSessionSafely(run.manager());
+                    log.error("Voice recovery exhausted; preserving checkpoint: guild={}, attempts={}, details={}",
+                            guild.getId(), sessionProperties.getMaxRecoveryAttempts(), details);
+                    releaseSession(guild, false);
+                });
+    }
+
+    private void checkpointAllSessionsSafely() {
+        try {
+            Instant now = Instant.now();
+            intentionalDisconnectUntil.entrySet().removeIf(entry -> !entry.getValue().isAfter(now));
+            for (StoredMusicSession stored : sessionRepository.sessions()) {
+                if (!musicManagers.containsKey(stored.guildId())
+                        && stored.expired(now, sessionProperties.getMaxAge())) {
+                    removeCheckpointSafely(stored.guildId(), "expired inactive checkpoint");
+                }
+            }
+            for (GuildMusicManager manager : musicManagers.values()) {
+                long guildId = manager.getGuild().getIdLong();
+                if (!startupRestoresInProgress.contains(guildId)
+                        && !voiceRecoveries.containsKey(guildId)) {
+                    checkpointSessionSafely(manager);
+                }
+            }
+        } catch (RuntimeException exception) {
+            log.error("Music session checkpoint sweep failed", exception);
+        }
+    }
+
+    private void checkpointSessionSafely(GuildMusicManager manager) {
+        if (manager == null || !manager.isActive()) {
+            return;
+        }
+        try {
+            StoredMusicSession snapshot = snapshotSession(manager);
+            if (snapshot == null) {
+                sessionRepository.remove(manager.getGuild().getIdLong());
+            } else {
+                sessionRepository.save(snapshot);
+            }
+        } catch (RuntimeException exception) {
+            log.error("Cannot persist music session checkpoint for guild {}",
+                    manager.getGuild().getId(), exception);
+        }
+    }
+
+    private StoredMusicSession snapshotSession(GuildMusicManager manager) {
+        Guild guild = manager.getGuild();
+        long guildId = guild.getIdLong();
+        Long channelId = voiceTargets.get(guildId);
+        if (channelId == null) {
+            var selfState = guild.getSelfMember().getVoiceState();
+            if (selfState != null && selfState.getChannel() != null) {
+                channelId = selfState.getChannel().getIdLong();
+                voiceTargets.put(guildId, channelId);
+            }
+        }
+        if (channelId == null || channelId <= 0L) {
+            return null;
+        }
+
+        TrackRequest current = manager.getScheduler().getCurrentRequest();
+        StoredSessionTrack currentStored = current == null
+                ? null
+                : StoredSessionTrack.from(current, current.track().getPosition()).orElse(null);
+        List<StoredSessionTrack> queue = manager.getScheduler().queuedRequests().stream()
+                .map(request -> StoredSessionTrack.from(request, 0L).orElse(null))
+                .filter(Objects::nonNull)
+                .limit(properties.getMaxQueueSize())
+                .toList();
+        if (currentStored == null && queue.isEmpty()) {
+            return null;
+        }
+        return new StoredMusicSession(
+                guildId,
+                channelId,
+                System.currentTimeMillis(),
+                manager.getAudioPlayer().isPaused(),
+                manager.getAudioPlayer().getVolume(),
+                manager.getScheduler().getRepeatMode(),
+                currentStored,
+                queue);
+    }
+
+    private void removeCheckpointSafely(long guildId, String reason) {
+        try {
+            sessionRepository.remove(guildId);
+            updateSessionEvent("checkpoint removed: guild=" + guildId + " reason=" + reason);
+        } catch (RuntimeException exception) {
+            log.error("Cannot remove music session checkpoint for guild {}", guildId, exception);
+        }
+    }
+
+    private static AudioChannel resolveAudioChannel(Guild guild, long channelId) {
+        AudioChannel channel = guild.getVoiceChannelById(channelId);
+        if (channel != null) {
+            return channel;
+        }
+        return guild.getStageChannelById(channelId);
+    }
+
+    private static boolean hasHumanListener(Guild guild, long channelId) {
+        return guild.getVoiceStates().stream()
+                .anyMatch(state -> state.getChannel() != null
+                        && state.getChannel().getIdLong() == channelId
+                        && !state.getMember().getUser().isBot());
+    }
+
+    private static boolean playbackExpected(GuildMusicManager manager) {
+        return manager.getAudioPlayer().getPlayingTrack() != null
+                || manager.getScheduler().getCurrentRequest() != null
+                || manager.getScheduler().queueSize() > 0;
+    }
+
+    private void updateSessionEvent(String event) {
+        String safe = event == null ? "none" : event.replace('\n', ' ').replace('\r', ' ').trim();
+        if (safe.length() > 700) {
+            safe = safe.substring(0, 697) + "...";
+        }
+        lastSessionRecoveryEvent.set(Instant.now() + " " + safe);
+    }
+
     public void stopAndRelease(Guild guild) {
-        GuildMusicManager manager = musicManagers.remove(guild.getIdLong());
-        cancelIdleDisconnect(guild.getIdLong());
-        voiceFrameDemandMissingSince.remove(guild.getIdLong());
-        voiceWatchdogNotBefore.remove(guild.getIdLong());
-        voiceWatchdogReported.remove(guild.getIdLong());
+        releaseSession(guild, true);
+    }
+
+    private void releaseSession(Guild guild, boolean removeCheckpoint) {
+        long guildId = guild.getIdLong();
+        GuildMusicManager manager = musicManagers.remove(guildId);
+        cancelIdleDisconnect(guildId);
+        voiceFrameDemandMissingSince.remove(guildId);
+        voiceWatchdogNotBefore.remove(guildId);
+        voiceWatchdogReported.remove(guildId);
+        voiceRecoveries.remove(guildId);
+        startupRestoresInProgress.remove(guildId);
+        intentionalDisconnectUntil.put(guildId, Instant.now().plusSeconds(10L));
         voiceConnections.cancel(guild);
         safeCloseAudio(guild);
+        voiceTargets.remove(guildId);
         if (manager != null) {
             manager.destroy();
+        }
+        if (removeCheckpoint) {
+            removeCheckpointSafely(guildId, "session released");
         }
     }
 
@@ -530,14 +1061,21 @@ public class PlayerManager {
                     + missingFor.toSeconds() + " s";
             if (voiceWatchdogReported.add(guildId)) {
                 voiceDiagnostics.watchdogWarning(guildId, reason);
-                log.error("{}: guild={}, enforce={}",
-                        reason, guild.getId(), properties.isVoiceWatchdogEnforce());
+                log.error("{}: guild={}, recoveryEnabled={}, legacyEnforce={}",
+                        reason,
+                        guild.getId(),
+                        sessionProperties.isVoiceRecoveryEnabled(),
+                        properties.isVoiceWatchdogEnforce());
             }
-            if (!properties.isVoiceWatchdogEnforce()) {
+            if (sessionProperties.isVoiceRecoveryEnabled()) {
+                voiceConnections.recordTransportFailure(guild, reason);
+                recoverVoiceSession(guild, reason);
                 continue;
             }
-            voiceConnections.recordTransportFailure(guild, reason);
-            stopAndRelease(guild);
+            if (properties.isVoiceWatchdogEnforce()) {
+                voiceConnections.recordTransportFailure(guild, reason);
+                stopAndRelease(guild);
+            }
         }
     }
 
@@ -684,9 +1222,14 @@ public class PlayerManager {
 
     @PreDestroy
     public void close() {
+        if (!closing.compareAndSet(false, true)) {
+            return;
+        }
         log.info("Shutting down {} music sessions", musicManagers.size());
+        checkpointAllSessionsSafely();
         for (GuildMusicManager manager : musicManagers.values()) {
             Guild guild = manager.getGuild();
+            intentionalDisconnectUntil.put(guild.getIdLong(), Instant.now().plusSeconds(10L));
             voiceConnections.cancel(guild);
             safeCloseAudio(guild);
             manager.destroy();
@@ -694,11 +1237,23 @@ public class PlayerManager {
         musicManagers.clear();
         idleDisconnects.values().forEach(future -> future.cancel(false));
         idleDisconnects.clear();
+        voiceTargets.clear();
+        voiceRecoveries.clear();
+        startupRestoresInProgress.clear();
+        intentionalDisconnectUntil.clear();
         voiceFrameDemandMissingSince.clear();
         voiceWatchdogNotBefore.clear();
         voiceWatchdogReported.clear();
         idleScheduler.shutdownNow();
         playbackReadinessScheduler.shutdownNow();
+        sessionLifecycleScheduler.shutdownNow();
         audioPlayerManager.shutdown();
+    }
+
+    private record VoiceRecoveryRun(
+            GuildMusicManager manager,
+            AudioChannel target,
+            boolean wasPaused,
+            String reason) {
     }
 }

@@ -24,7 +24,9 @@
 - Когда последний трек заканчивается и очередь пуста, запускается idle-таймер.
 - По истечении idle-таймера бот отключается и удаляет сессию из памяти.
 - Новый трек отменяет запланированное idle-отключение.
-- При завершении приложения закрываются все voice connections и LavaPlayer resources.
+- Перед graceful shutdown активная сессия сохраняется в `music-sessions.tsv`, затем закрываются voice connections и LavaPlayer resources.
+- После restart/redeploy бот восстанавливает свежий checkpoint только в существующий канал с живым слушателем.
+- Неожиданный self voice leave и подтверждённый frame timeout запускают bounded recovery, а не бесконечный JDA auto-reconnect.
 
 ## Ограничения по умолчанию
 
@@ -58,3 +60,6 @@ Spring duration поддерживает значения вроде `30s`, `5m`
 - idle timeout: ноль или положительное значение;
 - default volume: от 0 до max volume;
 - max volume: от 1 до 500.
+
+
+Подробная модель checkpoint, startup restore и bounded reconnect описана в [`VOICE-RECOVERY-SESSION-RESTORATION.md`](VOICE-RECOVERY-SESSION-RESTORATION.md).
