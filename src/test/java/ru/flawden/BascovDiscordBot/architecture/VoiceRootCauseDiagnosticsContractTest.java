@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class VoiceRootCauseDiagnosticsContractTest {
 
     @Test
-    void watchdogDefaultsToObserveOnlyAndStatusExposesTransportSignals() throws Exception {
+    void watchdogDefaultsToObserveOnlyWhileSessionRecoveryOwnsTransportFailures() throws Exception {
         String properties = Files.readString(Path.of("src/main/resources/application.properties"));
         String manager = Files.readString(Path.of(
                 "src/main/java/ru/flawden/BascovDiscordBot/lavaplayer/PlayerManager.java"));
@@ -20,7 +20,15 @@ class VoiceRootCauseDiagnosticsContractTest {
 
         assertTrue(properties.contains(
                 "DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE:false"));
-        assertTrue(manager.contains("if (!properties.isVoiceWatchdogEnforce())"));
+
+        int recoveryBranch = manager.indexOf(
+                "if (sessionProperties.isVoiceRecoveryEnabled())");
+        int legacyEnforceBranch = manager.indexOf(
+                "if (properties.isVoiceWatchdogEnforce())");
+
+        assertTrue(recoveryBranch >= 0);
+        assertTrue(manager.contains("recoverVoiceSession(guild, reason);"));
+        assertTrue(legacyEnforceBranch > recoveryBranch);
         assertTrue(formatter.contains("Frame polling"));
         assertTrue(formatter.contains("Last source error"));
     }

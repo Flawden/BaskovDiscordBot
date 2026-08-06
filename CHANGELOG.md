@@ -7,6 +7,21 @@
 ## [Unreleased]
 
 
+## [0.15.1] — 2026-08-06
+
+### Исправлено
+
+- Обновлён устаревший `VoiceRootCauseDiagnosticsContractTest`: после `v0.15.0` watchdog больше не обязан содержать старую ветку `if (!properties.isVoiceWatchdogEnforce())`, потому что при включённом session recovery transport failure передаётся в bounded `recoverVoiceSession(...)`.
+- Контракт теперь проверяет фактическую семантику: безопасный default `DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE=false`, наличие recovery-path, вызов `recoverVoiceSession(guild, reason)` и расположение legacy `stopAndRelease` enforcement только после recovery-ветки.
+- Документация root-cause diagnostics синхронизирована с новым разделением: `voice-recovery-enabled` управляет восстановлением, а `voice-watchdog-enforce` остаётся аварийным legacy fallback при отключённом recovery.
+
+### Сохранено
+
+- Production runtime, checkpoint format `BASKOV_MUSIC_SESSIONS_V1`, startup/pending restore, bounded reconnect, slash-команды и deployment pipeline не меняются.
+- Java 17, Spring Boot 3.4.3, JDA 6.5.0, LavaPlayer 2.2.3, `youtube-source 1.18.2`, native libDAVE `ce725965e` и Docker bridge остаются закреплены.
+- Тестовый baseline остаётся 66 test source files / 233 `@Test` methods.
+
+
 ## [0.15.0] — 2026-08-06
 
 ### Добавлено

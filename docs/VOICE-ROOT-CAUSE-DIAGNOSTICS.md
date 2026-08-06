@@ -34,6 +34,20 @@ Watchdog записывает отсутствие frame polling, но не вы
 `stopAndRelease()`. Это исключает ситуацию, когда диагностический механизм сам
 создаёт исследуемое отключение.
 
+Начиная с `v0.15.0`, значение `false` означает отсутствие destructive legacy enforcement,
+но не отключает recovery. При стандартном:
+
+```text
+DISCORD_BOT_MUSIC_SESSION_VOICE_RECOVERY_ENABLED=true
+```
+
+подтверждённый transport failure сначала передаётся в bounded
+`recoverVoiceSession(...)`. Только когда session recovery явно отключён, параметр
+`DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE=true` разрешает старый аварийный путь
+`stopAndRelease()`. Поэтому диагностика остаётся observe-only относительно
+немедленного уничтожения очереди, а восстановление выполняется отдельным
+ограниченным coordinator-ом.
+
 После подтверждения корректного порога режим можно включить явно:
 
 ```text
