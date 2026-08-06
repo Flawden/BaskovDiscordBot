@@ -1,7 +1,9 @@
 package ru.flawden.BascovDiscordBot.commands.music;
 
 import org.junit.jupiter.api.Test;
+import ru.flawden.BascovDiscordBot.settings.PlaybackAccessMode;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -31,5 +33,35 @@ class MusicControlPolicyTest {
                 MusicControlPolicy.Mode.START_OR_QUEUE, true, null, null).allowed());
         assertTrue(MusicControlPolicy.decide(
                 MusicControlPolicy.Mode.START_OR_QUEUE, false, 10L, null).allowed());
+    }
+
+    @Test
+    void djOnlyModeGrantsConfiguredDjButDeniesOrdinaryListener() {
+        assertTrue(MusicControlPolicy.controlDecision(
+                PlaybackAccessMode.DJ_ONLY, false, true, 10L, 10L).allowed());
+        assertFalse(MusicControlPolicy.controlDecision(
+                PlaybackAccessMode.DJ_ONLY, false, false, 10L, 10L).allowed());
+    }
+
+    @Test
+    void voteModeRoutesOrdinarySkipToBallotAndDjSkipDirectly() {
+        assertEquals(MusicControlPolicy.SkipAccess.VOTE,
+                MusicControlPolicy.skipDecision(
+                        PlaybackAccessMode.VOTE_SKIP, false, false, 10L, 10L).access());
+        assertEquals(MusicControlPolicy.SkipAccess.DIRECT,
+                MusicControlPolicy.skipDecision(
+                        PlaybackAccessMode.VOTE_SKIP, false, true, 10L, 10L).access());
+        assertEquals(MusicControlPolicy.SkipAccess.DIRECT,
+                MusicControlPolicy.skipDecision(
+                        PlaybackAccessMode.VOTE_SKIP, true, false, null, 10L).access());
+    }
+
+    @Test
+    void openModePreservesExistingDirectControl() {
+        assertTrue(MusicControlPolicy.controlDecision(
+                PlaybackAccessMode.OPEN, false, false, 10L, 10L).allowed());
+        assertEquals(MusicControlPolicy.SkipAccess.DIRECT,
+                MusicControlPolicy.skipDecision(
+                        PlaybackAccessMode.OPEN, false, false, 10L, 10L).access());
     }
 }

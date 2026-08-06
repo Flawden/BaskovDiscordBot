@@ -31,7 +31,8 @@ import java.util.regex.Pattern;
 @Repository
 public class FileGuildPreferencesRepository implements GuildPreferencesRepository {
 
-    private static final Pattern KEY_PATTERN = Pattern.compile("guild\\.(\\d+)\\.(volume|repeat)");
+    private static final Pattern KEY_PATTERN = Pattern.compile(
+            "guild\\.(\\d+)\\.(volume|repeat|access|dj-role|vote-skip-percent)");
     private static final Set<PosixFilePermission> OWNER_ONLY = EnumSet.of(
             PosixFilePermission.OWNER_READ,
             PosixFilePermission.OWNER_WRITE
@@ -86,12 +87,27 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
                         ignored -> new MutablePreferences(defaults()));
                 String value = stored.getProperty(key, "").trim();
                 try {
-                    if ("volume".equals(matcher.group(2))) {
-                        int volume = Integer.parseInt(value);
-                        validateVolume(volume);
-                        candidate.volume = volume;
-                    } else {
-                        candidate.repeatMode = RepeatMode.parse(value);
+                    switch (matcher.group(2)) {
+                        case "volume" -> {
+                            int volume = Integer.parseInt(value);
+                            validateVolume(volume);
+                            candidate.volume = volume;
+                        }
+                        case "repeat" -> candidate.repeatMode = RepeatMode.parse(value);
+                        case "access" -> candidate.accessMode = PlaybackAccessMode.parse(value);
+                        case "dj-role" -> {
+                            long roleId = Long.parseUnsignedLong(value);
+                            if (roleId < 0) {
+                                throw new IllegalArgumentException("role id cannot be negative");
+                            }
+                            candidate.djRoleId = roleId;
+                        }
+                        case "vote-skip-percent" -> {
+                            int percent = Integer.parseInt(value);
+                            validateVoteSkipPercent(percent);
+                            candidate.voteSkipPercent = percent;
+                        }
+                        default -> throw new IllegalArgumentException("unknown key");
                     }
                 } catch (IllegalArgumentException exception) {
                     log.warn("Ignoring invalid guild setting {}={}: {}", key, value, exception.getMessage());
@@ -115,7 +131,12 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
         validateVolume(volume);
         synchronized (mutationLock) {
             GuildPreferences current = preferences.getOrDefault(guildId, defaults());
-            GuildPreferences updated = new GuildPreferences(volume, current.repeatMode());
+            GuildPreferences updated = new GuildPreferences(
+                    volume,
+                    current.repeatMode(),
+                    current.accessMode(),
+                    current.djRoleId(),
+                    current.voteSkipPercent());
             GuildPreferences previous = preferences.put(guildId, updated);
             try {
                 persistLocked();
@@ -135,7 +156,85 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
         }
         synchronized (mutationLock) {
             GuildPreferences current = preferences.getOrDefault(guildId, defaults());
-            GuildPreferences updated = new GuildPreferences(current.volume(), repeatMode);
+            GuildPreferences updated = new GuildPreferences(
+                    current.volume(),
+                    repeatMode,
+                    current.accessMode(),
+                    current.djRoleId(),
+                    current.voteSkipPercent());
+            GuildPreferences previous = preferences.put(guildId, updated);
+            try {
+                persistLocked();
+                return updated;
+            } catch (RuntimeException exception) {
+                restore(guildId, previous);
+                throw exception;
+            }
+        }
+    }
+
+    @Override
+    public GuildPreferences saveAccessMode(long guildId, PlaybackAccessMode accessMode) {
+        validateGuildId(guildId);
+        if (accessMode == null) {
+            throw new IllegalArgumentException("accessMode cannot be null");
+        }
+        synchronized (mutationLock) {
+            GuildPreferences current = preferences.getOrDefault(guildId, defaults());
+            GuildPreferences updated = new GuildPreferences(
+                    current.volume(),
+                    current.repeatMode(),
+                    accessMode,
+                    current.djRoleId(),
+                    current.voteSkipPercent());
+            GuildPreferences previous = preferences.put(guildId, updated);
+            try {
+                persistLocked();
+                return updated;
+            } catch (RuntimeException exception) {
+                restore(guildId, previous);
+                throw exception;
+            }
+        }
+    }
+
+    @Override
+    public GuildPreferences saveDjRoleId(long guildId, long roleId) {
+        validateGuildId(guildId);
+        if (roleId < 0) {
+            throw new IllegalArgumentException("roleId cannot be negative");
+        }
+        synchronized (mutationLock) {
+            GuildPreferences current = preferences.getOrDefault(guildId, defaults());
+            GuildPreferences updated = new GuildPreferences(
+                    current.volume(),
+                    current.repeatMode(),
+                    current.accessMode(),
+                    roleId,
+                    current.voteSkipPercent());
+            GuildPreferences previous = preferences.put(guildId, updated);
+            try {
+                persistLocked();
+                return updated;
+            } catch (RuntimeException exception) {
+                restore(guildId, previous);
+                throw exception;
+            }
+        }
+    }
+
+    @Override
+    public GuildPreferences saveVoteSkipPercent(long guildId, int percent) {
+        validateGuildId(guildId);
+        validateVoteSkipPercent(percent);
+        synchronized (mutationLock) {
+            GuildPreferences current = preferences.getOrDefault(guildId, defaults());
+            GuildPreferences updated = new GuildPreferences(
+                    current.volume(),
+                    current.repeatMode(),
+                    current.accessMode(),
+                    current.djRoleId(),
+                    percent);
             GuildPreferences previous = preferences.put(guildId, updated);
             try {
                 persistLocked();
@@ -171,13 +270,24 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
     }
 
     private GuildPreferences defaults() {
-        return new GuildPreferences(musicProperties.getDefaultVolume(), RepeatMode.OFF);
+        return new GuildPreferences(
+                musicProperties.getDefaultVolume(),
+                RepeatMode.OFF,
+                PlaybackAccessMode.OPEN,
+                0L,
+                GuildPreferences.DEFAULT_VOTE_SKIP_PERCENT);
     }
 
     private void validateVolume(int volume) {
         if (volume < 0 || volume > musicProperties.getMaxVolume()) {
             throw new IllegalArgumentException(
                     "volume must be between 0 and " + musicProperties.getMaxVolume());
+        }
+    }
+
+    private static void validateVoteSkipPercent(int percent) {
+        if (percent < 25 || percent > 100) {
+            throw new IllegalArgumentException("vote skip percent must be between 25 and 100");
         }
     }
 
@@ -193,8 +303,12 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
                 .sorted(Map.Entry.comparingByKey())
                 .forEach(entry -> {
                     String prefix = "guild." + Long.toUnsignedString(entry.getKey()) + ".";
-                    stored.setProperty(prefix + "volume", Integer.toString(entry.getValue().volume()));
-                    stored.setProperty(prefix + "repeat", entry.getValue().repeatMode().name());
+                    GuildPreferences value = entry.getValue();
+                    stored.setProperty(prefix + "volume", Integer.toString(value.volume()));
+                    stored.setProperty(prefix + "repeat", value.repeatMode().name());
+                    stored.setProperty(prefix + "access", value.accessMode().name());
+                    stored.setProperty(prefix + "dj-role", Long.toUnsignedString(value.djRoleId()));
+                    stored.setProperty(prefix + "vote-skip-percent", Integer.toString(value.voteSkipPercent()));
                 });
 
         Path parent = file.getParent();
@@ -246,14 +360,20 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
     private static final class MutablePreferences {
         private int volume;
         private RepeatMode repeatMode;
+        private PlaybackAccessMode accessMode;
+        private long djRoleId;
+        private int voteSkipPercent;
 
         private MutablePreferences(GuildPreferences defaults) {
             this.volume = defaults.volume();
             this.repeatMode = defaults.repeatMode();
+            this.accessMode = defaults.accessMode();
+            this.djRoleId = defaults.djRoleId();
+            this.voteSkipPercent = defaults.voteSkipPercent();
         }
 
         private GuildPreferences toImmutable() {
-            return new GuildPreferences(volume, repeatMode);
+            return new GuildPreferences(volume, repeatMode, accessMode, djRoleId, voteSkipPercent);
         }
     }
 }

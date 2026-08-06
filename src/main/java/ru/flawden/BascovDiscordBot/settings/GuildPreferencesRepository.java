@@ -13,5 +13,11 @@ public interface GuildPreferencesRepository {
 
     GuildPreferences saveRepeatMode(long guildId, RepeatMode repeatMode);
 
+    GuildPreferences saveAccessMode(long guildId, PlaybackAccessMode accessMode);
+
+    GuildPreferences saveDjRoleId(long guildId, long roleId);
+
+    GuildPreferences saveVoteSkipPercent(long guildId, int percent);
+
     GuildPreferences reset(long guildId);
 }

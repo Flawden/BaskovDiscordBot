@@ -104,7 +104,8 @@ public final class ModernCommandCatalog {
                 Commands.slash("pause", "Приостанавливает текущую песню"),
                 Commands.slash("resume", "Продолжает воспроизведение"),
                 Commands.slash("previous", "Возвращает предыдущую песню"),
-                Commands.slash("skip", "Пропускает текущую песню"),
+                Commands.slash("skip", "Пропускает песню или голосует по правилам сервера"),
+                Commands.slash("voteskip", "Голосует за пропуск текущей песни"),
                 Commands.slash("stop", "Останавливает музыку и отключает бота"),
                 Commands.slash("queue", "Показывает текущий трек и очередь")
                         .addOption(
@@ -163,6 +164,27 @@ public final class ModernCommandCatalog {
                                                 .addChoice("Выключить", "off")
                                                 .addChoice("Текущий трек", "track")
                                                 .addChoice("Всю очередь", "queue")),
+                                new SubcommandData("access", "Выбирает правила управления музыкой")
+                                        .addOptions(new OptionData(
+                                                OptionType.STRING,
+                                                "mode",
+                                                "Кто может напрямую управлять сессией",
+                                                true)
+                                                .addChoice("Открытый доступ", "open")
+                                                .addChoice("Только DJ", "dj")
+                                                .addChoice("DJ + голосование за пропуск", "vote")),
+                                new SubcommandData("dj-role", "Назначает или очищает DJ-роль")
+                                        .addOption(
+                                                OptionType.ROLE,
+                                                "role",
+                                                "DJ-роль; оставь пустым, чтобы очистить",
+                                                false),
+                                new SubcommandData("vote-threshold", "Настраивает процент голосов для пропуска")
+                                        .addOption(
+                                                OptionType.INTEGER,
+                                                "percent",
+                                                "От 25 до 100 процентов слушателей",
+                                                true),
                                 new SubcommandData("reset", "Возвращает настройки сервера к значениям по умолчанию"))
         );
     }

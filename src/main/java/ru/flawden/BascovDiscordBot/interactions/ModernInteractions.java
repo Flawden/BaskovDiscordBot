@@ -8,6 +8,7 @@ import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.MessageEmbed;
+import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
@@ -45,6 +46,7 @@ import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferences;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
+import ru.flawden.BascovDiscordBot.settings.PlaybackAccessMode;
 
 import java.awt.Color;
 import java.time.Duration;
@@ -66,6 +68,7 @@ public class ModernInteractions extends ListenerAdapter {
     private final MusicProperties musicProperties;
     private final RecentSearchHistory searchHistory;
     private final SearchSelectionStore searchSelections;
+    private final VoteSkipService voteSkipService;
     private final MusicLibraryRepository musicLibraryRepository;
     private final VersionEvent versionEvent;
     private final GuildPreferencesRepository preferencesRepository;
@@ -80,6 +83,7 @@ public class ModernInteractions extends ListenerAdapter {
             MusicProperties musicProperties,
             RecentSearchHistory searchHistory,
             SearchSelectionStore searchSelections,
+            VoteSkipService voteSkipService,
             MusicLibraryRepository musicLibraryRepository,
             VersionEvent versionEvent,
             GuildPreferencesRepository preferencesRepository,
@@ -92,6 +96,7 @@ public class ModernInteractions extends ListenerAdapter {
         this.musicProperties = musicProperties;
         this.searchHistory = searchHistory;
         this.searchSelections = searchSelections;
+        this.voteSkipService = voteSkipService;
         this.musicLibraryRepository = musicLibraryRepository;
         this.versionEvent = versionEvent;
         this.preferencesRepository = preferencesRepository;
@@ -125,6 +130,7 @@ public class ModernInteractions extends ListenerAdapter {
                 case "resume" -> pause(event, false);
                 case "previous" -> previous(event);
                 case "skip" -> skip(event);
+                case "voteskip" -> skip(event);
                 case "stop" -> stop(event);
                 case "queue" -> queue(event);
                 case "now" -> now(event);
@@ -288,6 +294,11 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
+        if (MusicControls.SKIP.equals(event.getComponentId())) {
+            skipFromButton(event, guild, member);
+            return;
+        }
+
         MusicControlPolicy.Decision decision = controlDecision(guild, member);
         if (!decision.allowed()) {
             event.replyEmbeds(MusicEmbeds.error("🎧 Управление недоступно", decision.message()))
@@ -301,7 +312,6 @@ public class ModernInteractions extends ListenerAdapter {
             case MusicControls.PREVIOUS -> previousFromButton(event, guild);
             case MusicControls.SEEK_BACKWARD -> seekFromButton(event, guild, -15_000L);
             case MusicControls.SEEK_FORWARD -> seekFromButton(event, guild, 15_000L);
-            case MusicControls.SKIP -> skipFromButton(event, guild);
             case MusicControls.SHUFFLE -> shuffleFromButton(event, guild);
             case MusicControls.STOP -> stopFromButton(event, guild);
             case MusicControls.REPEAT -> repeatFromButton(event, guild);
@@ -420,6 +430,11 @@ public class ModernInteractions extends ListenerAdapter {
         String voiceState = StatusMessageFormatter.voice(voice);
         String voiceHistory = StatusMessageFormatter.voiceHistory(voice);
         String commandState = StatusMessageFormatter.commands(commands);
+        GuildPreferences accessPreferences = preferencesRepository.get(event.getGuild().getIdLong());
+        String accessState = String.join("\n",
+                "Режим: `" + accessPreferences.accessMode().label() + "`",
+                "DJ-роль: " + djRoleLabel(accessPreferences),
+                "Vote-skip: `" + accessPreferences.voteSkipPercent() + "%`");
         String libraryState = "Плейлистов: `"
                 + musicLibraryRepository.playlists(event.getGuild().getIdLong()).size()
                 + "`\nИстория: `"
@@ -437,6 +452,7 @@ public class ModernInteractions extends ListenerAdapter {
                         .addField("Voice transport", voiceState, true)
                         .addField("Voice history", voiceHistory, false)
                         .addField("Persistent library", libraryState, true)
+                        .addField("DJ & voting", accessState, true)
                         .addField("Команды с запуска", commandState, false)
                         .setFooter("Health heartbeat обновляется каждые 10 секунд")
                         .build())
@@ -988,10 +1004,17 @@ public class ModernInteractions extends ListenerAdapter {
     }
 
     private void skip(SlashCommandInteractionEvent event) {
-        if (!allowControl(event)) {
+        Guild guild = event.getGuild();
+        Member member = event.getMember();
+        MusicControlPolicy.SkipDecision decision = skipDecision(guild, member);
+        if (decision.access() == MusicControlPolicy.SkipAccess.DENIED) {
+            event.replyEmbeds(MusicEmbeds.error("🎧 Пропуск недоступен", decision.message()))
+                    .setEphemeral(true)
+                    .queue();
             return;
         }
-        GuildMusicManager manager = playerManager.findMusicManager(event.getGuild()).orElse(null);
+
+        GuildMusicManager manager = playerManager.findMusicManager(guild).orElse(null);
         AudioTrack current = manager == null ? null : manager.getAudioPlayer().getPlayingTrack();
         if (current == null) {
             event.replyEmbeds(MusicEmbeds.error("⏭️ Нечего пропускать", "Сейчас ничего не играет."))
@@ -1000,14 +1023,70 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
+        if (decision.access() == MusicControlPolicy.SkipAccess.VOTE) {
+            VoteSkipService.VoteResult result = castSkipVote(guild, member, current);
+            if (result.status() != VoteSkipService.VoteStatus.PASSED) {
+                replyVoteProgress(event, result);
+                return;
+            }
+        }
+
         TrackRequest next = manager.getScheduler().nextTrack();
+        voteSkipService.reset(guild.getIdLong());
         String description = next == null
                 ? "Песня `" + current.getInfo().title + "` пропущена. Очередь пуста."
                 : "Песня `" + current.getInfo().title + "` пропущена.\nСейчас играет: `"
                 + next.track().getInfo().title + "`";
-        event.replyEmbeds(MusicEmbeds.success("⏭️ Песня пропущена", description))
+        String title = decision.access() == MusicControlPolicy.SkipAccess.VOTE
+                ? "🗳️ Голосование прошло"
+                : "⏭️ Песня пропущена";
+        event.replyEmbeds(MusicEmbeds.success(title, description))
                 .setComponents(MusicControls.rows())
                 .queue();
+    }
+
+    private VoteSkipService.VoteResult castSkipVote(Guild guild, Member member, AudioTrack current) {
+        GuildPreferences preferences = preferencesRepository.get(guild.getIdLong());
+        int eligibleListeners = eligibleHumanListeners(guild);
+        return voteSkipService.vote(
+                guild.getIdLong(),
+                playbackVoteKey(current),
+                member.getIdLong(),
+                eligibleListeners,
+                preferences.voteSkipPercent());
+    }
+
+    private void replyVoteProgress(
+            SlashCommandInteractionEvent event,
+            VoteSkipService.VoteResult result) {
+        String title = result.status() == VoteSkipService.VoteStatus.DUPLICATE
+                ? "🗳️ Голос уже учтён"
+                : "🗳️ Голос принят";
+        String description = "Голосов: `" + result.votes() + "/" + result.requiredVotes() + "`. "
+                + "Слушателей в канале: `" + result.eligibleListeners() + "`.";
+        event.replyEmbeds(MusicEmbeds.success(title, description))
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private int eligibleHumanListeners(Guild guild) {
+        var botChannel = guild.getSelfMember().getVoiceState().getChannel();
+        if (botChannel == null) {
+            return 1;
+        }
+        long channelId = botChannel.getIdLong();
+        long count = guild.getVoiceStates().stream()
+                .filter(state -> state.inAudioChannel() && state.getChannel() != null)
+                .filter(state -> state.getChannel().getIdLong() == channelId)
+                .map(state -> state.getMember())
+                .filter(candidate -> !candidate.getUser().isBot())
+                .count();
+        return Math.max(1, Math.toIntExact(count));
+    }
+
+    private static String playbackVoteKey(AudioTrack track) {
+        String identifier = track.getIdentifier() == null ? "unknown" : track.getIdentifier();
+        return identifier + "#" + Integer.toUnsignedString(System.identityHashCode(track));
     }
 
     private void stop(SlashCommandInteractionEvent event) {
@@ -1024,6 +1103,7 @@ public class ModernInteractions extends ListenerAdapter {
         }
         String title = player.getPlayingTrack().getInfo().title;
         playerManager.stopAndRelease(guild);
+        voteSkipService.reset(guild.getIdLong());
         event.replyEmbeds(MusicEmbeds.success(
                 "⏹️ Воспроизведение остановлено",
                 "Песня `" + title + "` остановлена, очередь очищена, бот отключён."))
@@ -1282,10 +1362,14 @@ public class ModernInteractions extends ListenerAdapter {
         switch (subcommand) {
             case "volume" -> updateDefaultVolume(event);
             case "repeat" -> updateDefaultRepeat(event);
+            case "access" -> updateAccessMode(event);
+            case "dj-role" -> updateDjRole(event);
+            case "vote-threshold" -> updateVoteThreshold(event);
             case "reset" -> resetSettings(event);
             default -> event.replyEmbeds(MusicEmbeds.error(
                             "⚙️ Неизвестная настройка",
-                            "Используй `/settings show`, `/settings volume`, `/settings repeat` или `/settings reset`."))
+                            "Используй `/settings show`, `/settings access`, `/settings dj-role`, "
+                                    + "`/settings vote-threshold`, `/settings volume`, `/settings repeat` или `/settings reset`."))
                     .setEphemeral(true)
                     .queue();
         }
@@ -1332,8 +1416,63 @@ public class ModernInteractions extends ListenerAdapter {
         event.replyEmbeds(settingsEmbed(preferences)).setEphemeral(true).queue();
     }
 
+    private void updateAccessMode(SlashCommandInteractionEvent event) {
+        String rawMode = event.getOption("mode", "open", OptionMapping::getAsString);
+        PlaybackAccessMode mode;
+        try {
+            mode = PlaybackAccessMode.parse(rawMode);
+        } catch (IllegalArgumentException exception) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🎛️ Неизвестный режим доступа",
+                            "Доступны режимы: `open`, `dj` и `vote`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        GuildPreferences preferences = preferencesRepository.saveAccessMode(
+                event.getGuild().getIdLong(), mode);
+        voteSkipService.reset(event.getGuild().getIdLong());
+        event.replyEmbeds(settingsEmbed(preferences)).setEphemeral(true).queue();
+    }
+
+    private void updateDjRole(SlashCommandInteractionEvent event) {
+        Role role = event.getOption("role", null, OptionMapping::getAsRole);
+        if (role != null && role.isPublicRole()) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🎧 Нельзя использовать @everyone",
+                            "Выбери отдельную роль для DJ или оставь поле пустым, чтобы очистить настройку."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        GuildPreferences preferences = preferencesRepository.saveDjRoleId(
+                event.getGuild().getIdLong(), role == null ? 0L : role.getIdLong());
+        voteSkipService.reset(event.getGuild().getIdLong());
+        event.replyEmbeds(settingsEmbed(preferences)).setEphemeral(true).queue();
+    }
+
+    private void updateVoteThreshold(SlashCommandInteractionEvent event) {
+        long requested = event.getOption("percent", -1L, OptionMapping::getAsLong);
+        if (requested < 25 || requested > 100) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🗳️ Недопустимый порог",
+                            "Укажи значение от `25` до `100` процентов слушателей."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        GuildPreferences preferences = preferencesRepository.saveVoteSkipPercent(
+                event.getGuild().getIdLong(), Math.toIntExact(requested));
+        voteSkipService.reset(event.getGuild().getIdLong());
+        event.replyEmbeds(settingsEmbed(preferences)).setEphemeral(true).queue();
+    }
+
     private void resetSettings(SlashCommandInteractionEvent event) {
         GuildPreferences preferences = preferencesRepository.reset(event.getGuild().getIdLong());
+        voteSkipService.reset(event.getGuild().getIdLong());
         playerManager.findMusicManager(event.getGuild()).ifPresent(manager -> {
             manager.getAudioPlayer().setVolume(preferences.volume());
             manager.getScheduler().setRepeatMode(preferences.repeatMode());
@@ -1362,8 +1501,15 @@ public class ModernInteractions extends ListenerAdapter {
                 .setColor(Color.ORANGE)
                 .addField("Громкость новых сессий", "`" + preferences.volume() + "%`", true)
                 .addField("Повтор новых сессий", "`" + preferences.repeatMode().label() + "`", true)
-                .setFooter("Настройки сохраняются между перезапусками и применяются к активной сессии сразу")
+                .addField("Доступ к управлению", "`" + preferences.accessMode().label() + "`", true)
+                .addField("DJ-роль", djRoleLabel(preferences), true)
+                .addField("Порог vote-skip", "`" + preferences.voteSkipPercent() + "%`", true)
+                .setFooter("Настройки сохраняются между перезапусками; очередь доступна всем слушателям")
                 .build();
+    }
+
+    private static String djRoleLabel(GuildPreferences preferences) {
+        return preferences.hasDjRole() ? "<@&" + preferences.djRoleId() + ">" : "`не назначена`";
     }
 
     private GuildMusicManager activeManager(SlashCommandInteractionEvent event) {
@@ -1391,6 +1537,13 @@ public class ModernInteractions extends ListenerAdapter {
 
     private MusicControlPolicy.Decision controlDecision(Guild guild, Member member) {
         return controlPolicy.canControlPlayback(
+                member,
+                member.getVoiceState(),
+                guild.getSelfMember().getVoiceState());
+    }
+
+    private MusicControlPolicy.SkipDecision skipDecision(Guild guild, Member member) {
+        return controlPolicy.canSkip(
                 member,
                 member.getVoiceState(),
                 guild.getSelfMember().getVoiceState());
@@ -1488,7 +1641,15 @@ public class ModernInteractions extends ListenerAdapter {
                 .queue();
     }
 
-    private void skipFromButton(ButtonInteractionEvent event, Guild guild) {
+    private void skipFromButton(ButtonInteractionEvent event, Guild guild, Member member) {
+        MusicControlPolicy.SkipDecision decision = skipDecision(guild, member);
+        if (decision.access() == MusicControlPolicy.SkipAccess.DENIED) {
+            event.replyEmbeds(MusicEmbeds.error("🎧 Пропуск недоступен", decision.message()))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
         GuildMusicManager manager = playerManager.findMusicManager(guild).orElse(null);
         AudioTrack current = manager == null ? null : manager.getAudioPlayer().getPlayingTrack();
         if (current == null) {
@@ -1497,9 +1658,29 @@ public class ModernInteractions extends ListenerAdapter {
                     .queue();
             return;
         }
+
+        if (decision.access() == MusicControlPolicy.SkipAccess.VOTE) {
+            VoteSkipService.VoteResult result = castSkipVote(guild, member, current);
+            if (result.status() != VoteSkipService.VoteStatus.PASSED) {
+                String title = result.status() == VoteSkipService.VoteStatus.DUPLICATE
+                        ? "🗳️ Голос уже учтён"
+                        : "🗳️ Голос принят";
+                event.replyEmbeds(MusicEmbeds.success(
+                                title,
+                                "Голосов: `" + result.votes() + "/" + result.requiredVotes()
+                                        + "`. Слушателей: `" + result.eligibleListeners() + "`."))
+                        .setEphemeral(true)
+                        .queue();
+                return;
+            }
+        }
+
         TrackRequest next = manager.getScheduler().nextTrack();
+        voteSkipService.reset(guild.getIdLong());
         event.replyEmbeds(MusicEmbeds.success(
-                        "⏭️ Песня пропущена",
+                        decision.access() == MusicControlPolicy.SkipAccess.VOTE
+                                ? "🗳️ Голосование прошло"
+                                : "⏭️ Песня пропущена",
                         next == null ? "Очередь пуста." : "Сейчас играет: `" + next.track().getInfo().title + "`"))
                 .setEphemeral(true)
                 .queue();
@@ -1514,6 +1695,7 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
         playerManager.stopAndRelease(guild);
+        voteSkipService.reset(guild.getIdLong());
         event.replyEmbeds(MusicEmbeds.success(
                         "⏹️ Воспроизведение остановлено",
                         "Очередь очищена, бот отключён от голосового канала."))
@@ -1556,16 +1738,17 @@ public class ModernInteractions extends ListenerAdapter {
                 .setTitle("🎤 Современные команды Баскова")
                 .setDescription("Slash-команды — основной интерфейс. Старые `!`-команды пока продолжают работать.")
                 .setColor(Color.CYAN)
-                .addField("▶️ Воспроизведение", "`/play` `/search` `/pause` `/resume` `/previous` `/skip` `/stop` `/seek`", false)
+                .addField("▶️ Воспроизведение", "`/play` `/search` `/pause` `/resume` `/previous` `/skip` `/voteskip` `/stop` `/seek`", false)
                 .addField("📋 Очередь", "`/queue` `/remove` `/move` `/shuffle` `/clear`", false)
                 .addField("📚 Библиотека", "`/playlist` `/history` `/replay`", false)
                 .addField("🎚️ Режимы", "`/volume` `/repeat` `/now`", false)
-                .addField("⚙️ Настройки", "`/settings show` `/settings volume` `/settings repeat` `/settings reset`", false)
+                .addField("⚙️ Настройки", "`/settings show` `/settings access` `/settings dj-role` `/settings vote-threshold` `/settings volume` `/settings repeat` `/settings reset`", false)
                 .addField("ℹ️ Сервис", "`/version` `/status` `/help`", false)
                 .addField("🖱️ Кнопки", "Под `/now` доступны предыдущий трек, ±15 секунд, пауза, следующий трек, shuffle, repeat, очередь и stop.", false)
                 .addField("🔎 Выбор трека", "`/search` показывает до пяти результатов YouTube с кнопками выбора. Результаты живут пять минут и доступны только автору.", false)
                 .addField("💡 Autocomplete", "`/play` и `/search` предлагают недавние запросы, а `/playlist` — сохранённые названия.", false)
-                .addField("💾 Постоянное хранение", "Плейлисты и последние 50 воспроизведённых треков переживают restart контейнера.", false)
+                .addField("🎧 DJ и голосование", "Владелец или `Manage Server` может назначить DJ-роль и выбрать режим `open`, `dj` или `vote`. В режиме vote кнопка `Следующий` тоже считает голос.", false)
+                .addField("💾 Постоянное хранение", "Плейлисты, история и правила DJ переживают restart контейнера.", false)
                 .build();
     }
 }
