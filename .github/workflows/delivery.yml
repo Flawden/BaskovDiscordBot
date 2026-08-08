@@ -36,7 +36,7 @@ permissions:
 jobs:
   context:
     name: Resolve delivery context
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     outputs:
       channel: ${{ steps.resolve.outputs.channel }}
       environment: ${{ steps.resolve.outputs.environment }}
@@ -44,7 +44,7 @@ jobs:
       default_deploy_dir: ${{ steps.resolve.outputs.default_deploy_dir }}
       default_container_name: ${{ steps.resolve.outputs.default_container_name }}
     steps:
-      - name: Report self-hosted runner
+      - name: Report GitHub-hosted runner
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -93,7 +93,7 @@ jobs:
   publish:
     name: Verify and publish immutable image
     needs: context
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
       digest: ${{ steps.build.outputs.digest }}
@@ -198,7 +198,7 @@ jobs:
       - context
       - publish
     if: ${{ vars.BOT_DEPLOY_ENABLED == 'true' }}
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: ${{ needs.context.outputs.environment }}
 

@@ -31,7 +31,7 @@
 - автоматические ежемесячные проверки обновлений Maven и GitHub Actions;
 - major-обновления Spring Boot, JDA и GitHub Actions блокируются Dependabot и выполняются только отдельными migration-релизами;
 - контейнерный запуск;
-- CI на Linux self-hosted GitHub Actions runner, публикация immutable-образов в GHCR и автоматический деплой на VPS; deployment SSH-ключ живёт только во временном каталоге job.
+- CI на стандартном Linux GitHub-hosted runner (`ubuntu-latest`), публикация immutable-образов в GHCR и автоматический деплой на VPS; deployment SSH-ключ живёт только во временном каталоге job.
 
 ## Локальный запуск
 

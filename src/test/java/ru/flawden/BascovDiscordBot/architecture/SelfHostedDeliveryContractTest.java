@@ -9,19 +9,19 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class SelfHostedDeliveryContractTest {
+class GitHubHostedDeliveryContractTest {
 
     @Test
-    void deliveryJobsTargetLinuxSelfHostedRunner() throws IOException {
+    void deliveryJobsTargetGitHubHostedLinuxRunner() throws IOException {
         String workflow = Files.readString(Path.of(".github/workflows/delivery.yml"));
 
-        assertTrue(workflow.contains("runs-on: [self-hosted, linux, x64]"));
-        assertFalse(workflow.contains("runs-on: ubuntu-latest"));
-        assertTrue(workflow.contains("Report self-hosted runner"));
+        assertTrue(workflow.contains("runs-on: ubuntu-latest"));
+        assertFalse(workflow.contains("runs-on: [self-hosted, linux, x64]"));
+        assertTrue(workflow.contains("Report GitHub-hosted runner"));
     }
 
     @Test
-    void deploySshCredentialsAreEphemeralOnPersistentRunner() throws IOException {
+    void deploySshCredentialsRemainEphemeralOnHostedRunner() throws IOException {
         String workflow = Files.readString(Path.of(".github/workflows/delivery.yml"));
 
         assertTrue(workflow.contains("${RUNNER_TEMP}/baskov-ssh."));

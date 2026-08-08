@@ -13,13 +13,13 @@
 
 - `/now` получил кнопку `↻ Обновить`, которая перерисовывает текущий progress/state без повторного ввода slash-команды.
 - Пульт `/now` теперь state-aware: показывает `Пауза` или `Продолжить`, текущий repeat mode и disabled-состояния для недоступных previous/seek/shuffle/stop/skip действий.
-- Добавлен архитектурный контракт `SelfHostedDeliveryContractTest`, запрещающий случайный возврат delivery jobs на `ubuntu-latest` и постоянное хранение deploy SSH key в home runner-а.
-- В delivery context выводятся имя, OS/arch и workspace self-hosted runner-а, чтобы первый запуск сразу подтверждал фактическое исполнение на своей машине.
+- Добавлен архитектурный контракт delivery runner-а и временных SSH credentials.
+- В delivery context выводятся имя, OS/arch и workspace фактического runner-а для диагностики исполнения.
 
 ### Изменено
 
-- Все три delivery jobs (`context`, `publish`, `deploy`) переведены с `ubuntu-latest` на `[self-hosted, linux, x64]`.
-- Deployment SSH credentials на persistent runner создаются через `mktemp` внутри `${RUNNER_TEMP}`, явно передаются в `ssh/scp` и удаляются шагом `always()`.
+- После практического теста домашнего self-hosted runner все три delivery jobs (`context`, `publish`, `deploy`) возвращены на стандартный `ubuntu-latest`: медленный обязательный VPN делал Docker/BuildKit downloads неприемлемо долгими.
+- Deployment SSH credentials создаются через `mktemp` внутри `${RUNNER_TEMP}`, явно передаются в `ssh/scp` и удаляются шагом `always()`.
 - Обработка ошибок component buttons теперь возвращает ephemeral failure message даже после уже выполненного interaction acknowledgement.
 
 ### Сохранено
