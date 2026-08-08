@@ -102,6 +102,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -170,6 +172,7 @@ jobs:
             ${{ needs.context.outputs.image }}:${{ needs.context.outputs.channel }}
           build-args: |
             APP_VERSION=${{ steps.project.outputs.version }}
+            APP_REVISION=${{ github.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -206,6 +209,7 @@ jobs:
       - name: Checkout deployment files
         uses: actions/checkout@v4
         with:
+          persist-credentials: false
           sparse-checkout: |
             deploy
           sparse-checkout-cone-mode: true
@@ -256,6 +260,7 @@ jobs:
           DEPLOY_DIR: ${{ vars.BOT_DEPLOY_DIR }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           BOT_IMAGE: ${{ needs.context.outputs.image }}:sha-${{ github.sha }}
+          BOT_IMAGE_DIGEST: ${{ needs.publish.outputs.digest }}
           BOT_CONTAINER_NAME: ${{ vars.BOT_CONTAINER_NAME }}
           BOT_COMMAND_PREFIX: ${{ vars.DISCORD_BOT_PREFIX }}
           BOT_MUSIC_MAX_QUEUE_SIZE: ${{ vars.DISCORD_BOT_MUSIC_MAX_QUEUE_SIZE }}
@@ -312,6 +317,7 @@ jobs:
 
           {
             printf 'BOT_IMAGE=%s\n' "${BOT_IMAGE}"
+            printf 'BOT_IMAGE_DIGEST=%s\n' "${BOT_IMAGE_DIGEST}"
             printf 'BOT_CONTAINER_NAME=%s\n' "${container_name}"
             printf 'DISCORD_BOT_TOKEN_B64=%s\n' "$(encode "${DISCORD_BOT_TOKEN}")"
             printf 'DISCORD_BOT_PREFIX_B64=%s\n' "$(encode "${command_prefix}")"

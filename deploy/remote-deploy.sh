@@ -21,6 +21,7 @@ fi
 # shellcheck disable=SC1090
 source "${INPUT_FILE}"
 : "${BOT_IMAGE:?BOT_IMAGE is missing}"
+: "${BOT_IMAGE_DIGEST:?BOT_IMAGE_DIGEST is missing}"
 : "${BOT_CONTAINER_NAME:?BOT_CONTAINER_NAME is missing}"
 : "${DISCORD_BOT_TOKEN_B64:?DISCORD_BOT_TOKEN_B64 is missing}"
 : "${DISCORD_BOT_PREFIX_B64:?DISCORD_BOT_PREFIX_B64 is missing}"
@@ -232,8 +233,9 @@ read_env_value() {
 
 verify_runtime() {
   local expected_image="$1"
-  local require_native_dave="${2:-true}"
-  local actual_image restart_count actual_network_mode expected_network_mode container_logs
+  local expected_digest="${2:-}"
+  local require_native_dave="${3:-true}"
+  local actual_image restart_count actual_network_mode expected_network_mode container_logs repo_digests
 
   actual_image="$(docker inspect --format '{{.Config.Image}}' "${BOT_CONTAINER_NAME}")"
   restart_count="$(docker inspect --format '{{.RestartCount}}' "${BOT_CONTAINER_NAME}")"
@@ -243,6 +245,13 @@ verify_runtime() {
   if [[ "${actual_image}" != "${expected_image}" ]]; then
     echo "Container image mismatch: expected ${expected_image}, got ${actual_image}" >&2
     return 1
+  fi
+  if [[ -n "${expected_digest}" ]]; then
+    repo_digests="$(docker image inspect "${expected_image}" --format '{{range .RepoDigests}}{{println .}}{{end}}')"
+    if ! grep -Fq "@${expected_digest}" <<< "${repo_digests}"; then
+      echo "Container image digest mismatch: expected ${expected_digest}" >&2
+      return 1
+    fi
   fi
   if [[ ! "${restart_count}" =~ ^[0-9]+$ ]] || (( restart_count != 0 )); then
     echo "Container restarted during verification: count=${restart_count}" >&2
@@ -272,6 +281,10 @@ verify_runtime() {
     fi
     if ! grep -Fq "Voice recovery initialized:" <<< "${container_logs}"; then
       echo "Voice recovery startup marker is missing" >&2
+      return 1
+    fi
+    if ! grep -Fq "Persistence readiness: READY" <<< "${container_logs}"; then
+      echo "Persistence readiness startup marker is missing" >&2
       return 1
     fi
   fi
@@ -304,7 +317,7 @@ rollback() {
     health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${BOT_CONTAINER_NAME}" 2>/dev/null || true)"
     if [[ "${health}" == "healthy" ]]; then
       rollback_image="$(read_env_value BOT_IMAGE)"
-      if verify_runtime "${rollback_image}" false; then
+      if verify_runtime "${rollback_image}" "" false; then
         echo "Rollback succeeded"
         return 0
       fi
@@ -326,7 +339,7 @@ for _ in {1..24}; do
   health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${BOT_CONTAINER_NAME}" 2>/dev/null || true)"
   case "${health}" in
     healthy)
-      if verify_runtime "${BOT_IMAGE}" true; then
+      if verify_runtime "${BOT_IMAGE}" "${BOT_IMAGE_DIGEST}" true; then
         echo "Deployment is healthy: ${BOT_IMAGE}"
         docker image prune -f --filter 'until=168h' >/dev/null 2>&1 || true
         exit 0

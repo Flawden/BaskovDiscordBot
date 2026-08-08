@@ -42,6 +42,7 @@ import ru.flawden.BascovDiscordBot.library.StoredTrack;
 import ru.flawden.BascovDiscordBot.operations.JdaRuntimeInfo;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
+import ru.flawden.BascovDiscordBot.operations.PersistenceReadiness;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
 import ru.flawden.BascovDiscordBot.session.SessionRecoverySnapshot;
@@ -75,6 +76,7 @@ public class ModernInteractions extends ListenerAdapter {
     private final GuildPreferencesRepository preferencesRepository;
     private final OperationalMetrics operationalMetrics;
     private final RuntimeHealthMonitor healthMonitor;
+    private final PersistenceReadiness persistenceReadiness;
     private final DaveRuntimeInfo daveRuntimeInfo;
 
     public ModernInteractions(
@@ -90,6 +92,7 @@ public class ModernInteractions extends ListenerAdapter {
             GuildPreferencesRepository preferencesRepository,
             OperationalMetrics operationalMetrics,
             RuntimeHealthMonitor healthMonitor,
+            PersistenceReadiness persistenceReadiness,
             DaveRuntimeInfo daveRuntimeInfo) {
         this.playerManager = playerManager;
         this.controlPolicy = controlPolicy;
@@ -103,6 +106,7 @@ public class ModernInteractions extends ListenerAdapter {
         this.preferencesRepository = preferencesRepository;
         this.operationalMetrics = operationalMetrics;
         this.healthMonitor = healthMonitor;
+        this.persistenceReadiness = persistenceReadiness;
         this.daveRuntimeInfo = daveRuntimeInfo;
     }
 
@@ -445,6 +449,7 @@ public class ModernInteractions extends ListenerAdapter {
         String voiceState = StatusMessageFormatter.voice(voice);
         String voiceHistory = StatusMessageFormatter.voiceHistory(voice);
         String recoveryState = StatusMessageFormatter.recovery(recovery);
+        String storageState = StatusMessageFormatter.storage(persistenceReadiness.snapshot());
         String commandState = StatusMessageFormatter.commands(commands);
         GuildPreferences accessPreferences = preferencesRepository.get(event.getGuild().getIdLong());
         String accessState = String.join("\n",
@@ -469,6 +474,7 @@ public class ModernInteractions extends ListenerAdapter {
                         .addField("Voice history", voiceHistory, false)
                         .addField("Voice recovery", recoveryState, false)
                         .addField("Persistent library", libraryState, true)
+                        .addField("Storage readiness", storageState, true)
                         .addField("DJ & voting", accessState, true)
                         .addField("Команды с запуска", commandState, false)
                         .setFooter("Health heartbeat обновляется каждые 10 секунд")

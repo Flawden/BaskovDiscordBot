@@ -9,6 +9,7 @@ import ru.flawden.BascovDiscordBot.lavaplayer.RepeatMode;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackScheduler;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
+import ru.flawden.BascovDiscordBot.operations.PersistenceReadiness;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
 import ru.flawden.BascovDiscordBot.session.SessionRecoverySnapshot;
@@ -17,6 +18,7 @@ import java.time.Duration;
 import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -157,5 +159,19 @@ class StatusMessageFormatterTest {
                 Успешно: `18`
                 Ошибок: `6`
                 Prefix/Slash/Buttons: `4/6/8`""", StatusMessageFormatter.commands(snapshot));
+    }
+
+    @Test
+    void storageSectionDoesNotExposePaths() {
+        String section = StatusMessageFormatter.storage(new PersistenceReadiness.Snapshot(
+                "READY",
+                3,
+                2,
+                java.time.Instant.parse("2026-08-08T00:00:00Z"),
+                "ready"));
+
+        assertTrue(section.contains("Статус: `READY`"));
+        assertTrue(section.contains("Хранилищ: `3`"));
+        assertFalse(section.contains("/app/data"));
     }
 }

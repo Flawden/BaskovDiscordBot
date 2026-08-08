@@ -1,27 +1,30 @@
-# Self-hosted delivery
+# Delivery runners
 
-Начиная с `v0.16.0` production delivery выполняется Linux self-hosted GitHub Actions runner-ом.
+Начиная с `v1.0.0` основной production delivery снова выполняется стандартным Linux GitHub-hosted runner-ом `ubuntu-latest`. Self-hosted runner остаётся резервным вариантом и не является обязательной частью production topology.
 
-## Runner selection
+## Primary runner
 
-Все jobs используют:
+Все обычные CI/delivery jobs используют:
 
 ```yaml
-runs-on: [self-hosted, linux, x64]
+runs-on: ubuntu-latest
 ```
 
-Runner должен быть зарегистрирован в репозитории BaskovDiscordBot, иметь Linux/x64 default labels и постоянно запущенный runner service. GitHub остаётся orchestration layer, а Maven/Docker вычисления выполняются на собственной машине.
+GitHub-hosted машина одноразовая, поэтому workflow не рассчитывает на локальные Docker/Maven caches между разными VM и не хранит состояние runner-а.
 
-## Persistent runner hygiene
+## Credential hygiene
 
-Self-hosted workspace и home переживают jobs, поэтому deploy SSH key больше не записывается в `~/.ssh`. Workflow создаёт отдельный каталог через `mktemp` под `${RUNNER_TEMP}`, передаёт key/known_hosts в `ssh` и `scp` явно и удаляет каталог в `always()` step.
+`actions/checkout` запускается с `persist-credentials: false`. Deployment SSH key создаётся только под `${RUNNER_TEMP}` через `mktemp`, передаётся `ssh`/`scp` явно и удаляется в `always()` step.
 
-## Delivery path
+## Immutable image verification
 
-1. Resolve delivery context on self-hosted runner.
-2. Checkout, Java 17, Maven clean verify.
-3. Buildx builds and pushes immutable `sha-<commit>` plus channel image to GHCR.
-4. Deploy job uses a temporary SSH key to update the VPS.
-5. Remote deployment keeps existing rollback/healthcheck behavior.
+Delivery публикует одновременно SHA-tag и OCI digest. На VPS `remote-deploy.sh` проверяет:
 
-The runner must have Git, Java-compatible tooling required by actions, Docker Engine/Buildx access, outbound HTTPS to GitHub/GHCR/Maven repositories, and SSH access to the deployment VPS.
+1. фактический `Config.Image` контейнера равен ожидаемому `sha-<git-sha>` tag;
+2. локально pulled image имеет `RepoDigest`, совпадающий с digest из `docker/build-push-action`;
+3. контейнер не перезапускался;
+4. healthcheck и обязательные startup markers прошли.
+
+## Self-hosted fallback
+
+Резервный runner можно вернуть отдельным maintenance patch, заменив `runs-on`. Для Linux/x64 машины нужны Git, Docker Engine/Buildx, исходящий HTTPS к GitHub/GHCR/Maven repositories и SSH к deployment VPS. Persistent runner нельзя считать доверенным для untrusted fork PRs, а Docker group фактически даёт процессу runner-а root-equivalent доступ к хосту.

@@ -7,6 +7,7 @@ import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.YoutubeSourceRuntimeInfo;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
+import ru.flawden.BascovDiscordBot.operations.PersistenceReadiness;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
 import ru.flawden.BascovDiscordBot.session.SessionRecoverySnapshot;
@@ -126,6 +127,14 @@ final class StatusMessageFormatter {
     private static String inline(String value) {
         String safe = value == null ? "none" : value.replace("`", "'");
         return "`" + safe + "`";
+    }
+
+    static String storage(PersistenceReadiness.Snapshot storage) {
+        Objects.requireNonNull(storage, "storage");
+        return String.join("\n",
+                "Статус: `" + storage.status() + "`",
+                "Хранилищ: `" + storage.stores() + "`",
+                "Файлов при старте: `" + storage.existingFiles() + "`");
     }
 
     static String commands(OperationalMetrics.Snapshot commands) {

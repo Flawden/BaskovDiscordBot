@@ -37,6 +37,7 @@ public class VersionEvent implements Event {
     public MessageEmbed buildEmbed() {
         BuildProperties buildProperties = buildPropertiesProvider.getIfAvailable();
         String version = resolveVersion(buildProperties);
+        String revision = resolveRevision(buildProperties);
 
         EmbedBuilder embed = new EmbedBuilder();
         embed.setTitle("🎤 Baskov Discord Bot");
@@ -44,6 +45,9 @@ public class VersionEvent implements Event {
         embed.setColor(Color.CYAN);
         embed.addField("Версия", "`v" + version + "`", true);
         embed.addField("Java", "`" + System.getProperty("java.version") + "`", true);
+        if (!"development".equals(revision)) {
+            embed.addField("Commit", "`" + shortRevision(revision) + "`", true);
+        }
 
         Optional.ofNullable(buildProperties)
                 .map(BuildProperties::getTime)
@@ -60,6 +64,21 @@ public class VersionEvent implements Event {
             return "development";
         }
         return buildProperties.getVersion();
+    }
+
+    String resolveRevision(BuildProperties buildProperties) {
+        if (buildProperties == null) {
+            return "development";
+        }
+        String revision = buildProperties.get("revision");
+        if (revision == null || revision.isBlank()) {
+            return "development";
+        }
+        return revision.trim();
+    }
+
+    private static String shortRevision(String revision) {
+        return revision.length() <= 12 ? revision : revision.substring(0, 12);
     }
 
     @Override

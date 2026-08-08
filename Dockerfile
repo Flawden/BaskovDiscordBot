@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.7
 FROM eclipse-temurin:17-jdk-jammy AS builder
+ARG APP_REVISION=development
 WORKDIR /workspace
 
 COPY .mvn/ .mvn/
@@ -10,7 +11,7 @@ RUN --mount=type=cache,target=/root/.m2 \
 
 COPY src/ src/
 RUN --mount=type=cache,target=/root/.m2 \
-    ./mvnw --batch-mode --no-transfer-progress package -DskipTests
+    ./mvnw --batch-mode --no-transfer-progress package -DskipTests -Dbuild.revision="${APP_REVISION}"
 
 FROM eclipse-temurin:17-jre-jammy AS runtime
 ARG APP_VERSION=development

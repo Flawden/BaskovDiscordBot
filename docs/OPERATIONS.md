@@ -1,6 +1,6 @@
 # Operations & Observability
 
-Начиная с `v0.7.0`, Baskov Discord Bot публикует живой runtime heartbeat, показывает безопасный диагностический статус в Discord и ограничивает ресурсы контейнера.
+Baskov Discord Bot публикует живой runtime heartbeat, выполняет fail-fast storage preflight, показывает безопасный диагностический статус в Discord и ограничивает ресурсы контейнера.
 
 ## `/status`
 
@@ -12,9 +12,22 @@
 - число активных и реально воспроизводящих музыкальных сессий;
 - суммарное количество ожидающих треков;
 - количество session checkpoints, текущих recovery operations и transport attempts/success/fail и startup restored/failed;
-- успешные и упавшие prefix/slash/button interactions с момента запуска.
+- успешные и упавшие prefix/slash/button interactions с момента запуска;
+- storage readiness трёх постоянных файлов без публикации их абсолютных путей.
 
 Команда не выводит Discord token, имена пользователей, поисковые запросы, содержимое очереди или guild settings.
+
+## Persistence preflight
+
+До подключения JDA проверяются три долговременных storage path: guild settings, music library и music-session checkpoints. Пути обязаны быть различными; существующий объект должен быть обычным читаемым/записываемым файлом и не symlink; рядом с каждым storage выполняется реальная create/write/delete probe.
+
+Успешный preflight пишет startup marker:
+
+```text
+Persistence readiness: READY
+```
+
+При ошибке приложение fail-fast завершает startup до подключения к Discord. `/status` показывает только агрегированный статус, число storage и число файлов, существовавших при старте.
 
 ## Runtime heartbeat
 
@@ -59,9 +72,11 @@ Docker logs: 3 × 10 MiB
 После Docker `healthy` серверный deploy-скрипт дополнительно проверяет:
 
 - контейнер запущен именно из ожидаемого immutable SHA-image;
+- pulled image имеет OCI RepoDigest, совпадающий с digest, опубликованным build job;
 - `RestartCount` равен нулю;
 - внутренний `/app/healthcheck.sh` проходит;
-- heartbeat можно прочитать внутри контейнера.
+- heartbeat можно прочитать внутри контейнера;
+- в логах присутствует `Persistence readiness: READY`.
 
 При провале любой проверки запускается rollback на предыдущий `.env` и образ. Когда контейнер до начала deployment был намеренно остановлен, rollback восстанавливает окружение, но оставляет бота остановленным вместо запуска известного проблемного образа.
 

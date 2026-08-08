@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая стабильная версия: **v0.16.0**.
+Текущая стабильная версия: **v1.0.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -25,13 +25,13 @@
 - bounded queue, лимит длительности и автоматическое отключение пустых сессий;
 - stateless-ядро команд с case-insensitive реестром и защитой от дубликатов;
 - конфигурируемый префикс и cooldown для шумных команд;
-- команда `!version` с версией и метаданными сборки;
+- команда `!version` с версией, временем сборки и коротким Git revision;
 - безопасная обработка ссылок SoundCloud/YouTube без сетевой проверки пользовательского URL; текстовый поиск использует `ytsearch:` и сохраняет резервные результаты того же провайдера;
 - согласованные версии SLF4J/Logback под управлением Spring Boot BOM;
 - автоматические ежемесячные проверки обновлений Maven и GitHub Actions;
 - major-обновления Spring Boot, JDA и GitHub Actions блокируются Dependabot и выполняются только отдельными migration-релизами;
 - контейнерный запуск;
-- CI на стандартном Linux GitHub-hosted runner (`ubuntu-latest`), публикация immutable-образов в GHCR и автоматический деплой на VPS; deployment SSH-ключ живёт только во временном каталоге job.
+- CI на стандартном Linux GitHub-hosted runner (`ubuntu-latest`), публикация immutable-образов в GHCR и автоматический деплой на VPS; deployment проверяет не только immutable SHA-tag, но и опубликованный OCI digest, а SSH-ключ живёт только во временном каталоге job.
 
 ## Локальный запуск
 
@@ -54,7 +54,7 @@ docker compose up -d --build
 docker compose logs -f bot
 ```
 
-Боту не нужен входящий HTTP-порт. После подключения к Discord приложение обновляет readiness heartbeat каждые 10 секунд; Docker считает контейнер healthy только при свежем `CONNECTED`-сигнале.
+Боту не нужен входящий HTTP-порт. Перед подключением к Discord выполняется fail-fast storage preflight для guild settings, music library и session checkpoints; после подключения приложение обновляет readiness heartbeat каждые 10 секунд, а Docker считает контейнер healthy только при свежем `CONNECTED`-сигнале.
 
 ### Настройки музыкальной сессии
 
@@ -85,7 +85,7 @@ docker compose logs -f bot
 
 Live-потоки отключены. Подробные правила voice-доступа и lifecycle находятся в [`docs/MUSIC-SESSIONS.md`](docs/MUSIC-SESSIONS.md).
 Voice recovery и восстановление сессий после restart/redeploy описаны в [`docs/VOICE-RECOVERY-SESSION-RESTORATION.md`](docs/VOICE-RECOVERY-SESSION-RESTORATION.md).
-Self-hosted CI/CD и hygiene persistent runner-а описаны в [`docs/SELF-HOSTED-DELIVERY.md`](docs/SELF-HOSTED-DELIVERY.md).
+GitHub-hosted delivery и резервный self-hosted режим описаны в [`docs/SELF-HOSTED-DELIVERY.md`](docs/SELF-HOSTED-DELIVERY.md).
 Современный Discord-интерфейс описан в [`docs/MODERN-COMMANDS.md`](docs/MODERN-COMMANDS.md).
 Интерактивный поиск и безопасный выбор трека описаны в [`docs/SEARCH-TRACK-SELECTION.md`](docs/SEARCH-TRACK-SELECTION.md).
 Постоянные плейлисты, история и replay описаны в [`docs/PLAYLISTS-HISTORY-REPLAY.md`](docs/PLAYLISTS-HISTORY-REPLAY.md).
@@ -131,7 +131,7 @@ ghcr.io/<owner>/<repository>:sha-<full-git-sha>
 ghcr.io/<owner>/<repository>:dev|latest
 ```
 
-На VPS всегда разворачивается immutable SHA-тег. После Docker healthcheck workflow дополнительно сверяет фактический image, `RestartCount` и внутренний heartbeat. При любой неудаче автоматически восстанавливаются предыдущий `.env` и предыдущий образ.
+На VPS всегда разворачивается immutable SHA-тег. После Docker healthcheck workflow дополнительно сверяет фактический image, опубликованный OCI digest, `RestartCount`, storage-readiness marker и внутренний heartbeat. При любой неудаче автоматически восстанавливаются предыдущий `.env` и предыдущий образ.
 
 ## Настройка GitHub
 

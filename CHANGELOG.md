@@ -7,6 +7,29 @@
 ## [Unreleased]
 
 
+## [1.0.0] — 2026-08-08
+
+### Добавлено
+
+- Production storage preflight для `guild-settings.properties`, `music-library.tsv` и `music-sessions.tsv`: три разных пути, обычные файлы без symlink и реальная write/delete probe перед подключением к Discord.
+- Startup marker `Persistence readiness: READY`; `/status` получил безопасную секцию `Storage readiness` без раскрытия абсолютных путей.
+- Git revision в Spring Boot build-info; `/version` показывает короткий commit рядом с версией и Java.
+- Remote verification опубликованного OCI digest поверх уже существующего immutable `sha-<commit>` tag.
+
+### Hardening
+
+- `actions/checkout` больше не сохраняет GitHub credential в local git config (`persist-credentials: false`) в CI и delivery jobs.
+- Docker build получает `APP_REVISION=${github.sha}` и встраивает revision в packaged build metadata.
+- Deploy передаёт digest из `docker/build-push-action` на VPS и отклоняет image, если локальный `RepoDigest` не совпадает с опубликованным digest.
+- Post-deploy runtime gate дополнительно требует `Persistence readiness: READY`; при провале сохраняется существующий rollback path.
+- Основной pipeline закреплён обратно на `ubuntu-latest`; self-hosted runner документирован только как резервный режим.
+
+### Сохранено
+
+- Java 17, Spring Boot 3.4.3, JDA 6.5.0, LavaPlayer 2.2.3, `youtube-source 1.18.2`, native libDAVE `ce725965e`, Docker bridge default и формат persistent-файлов не меняются.
+- Voice recovery, restart restoration, playlists/history, DJ/vote и Discord UX v0.16 остаются совместимыми.
+- Новых внешних сервисов, БД, Discord permissions или Secrets не требуется.
+
 ## [0.16.0] — 2026-08-08
 
 ### Добавлено
