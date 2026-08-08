@@ -52,25 +52,50 @@ public class PersistenceReadiness {
     public synchronized Snapshot requireReady() {
         Instant checkedAt = Instant.now();
         try {
-            ensureDistinctStores();
-            int existingFiles = 0;
-            for (Path store : stores) {
-                if (checkStore(store)) {
-                    existingFiles++;
-                }
-            }
-            snapshot = new Snapshot("READY", stores.size(), existingFiles, checkedAt, "ready");
-            log.info("Persistence readiness: READY stores={} existing={}", stores.size(), existingFiles);
+            snapshot = evaluate(checkedAt);
+            log.info("Persistence readiness: READY stores={} existing={}", stores.size(), snapshot.existingFiles());
             return snapshot;
         } catch (RuntimeException exception) {
-            snapshot = new Snapshot("FAILED", stores.size(), 0, checkedAt, safeMessage(exception));
+            snapshot = failed(checkedAt, exception);
             log.error("Persistence readiness: FAILED reason={}", snapshot.details());
             throw exception;
         }
     }
 
+    /**
+     * Re-runs the storage probe for live diagnostics without terminating the
+     * process. A failed probe is reflected in the returned snapshot and can be
+     * surfaced by /status while the next successful probe can recover it.
+     */
+    public synchronized Snapshot probe() {
+        Instant checkedAt = Instant.now();
+        try {
+            snapshot = evaluate(checkedAt);
+            return snapshot;
+        } catch (RuntimeException exception) {
+            snapshot = failed(checkedAt, exception);
+            log.warn("Persistence readiness probe degraded: {}", snapshot.details());
+            return snapshot;
+        }
+    }
+
     public Snapshot snapshot() {
         return snapshot;
+    }
+
+    private Snapshot evaluate(Instant checkedAt) {
+        ensureDistinctStores();
+        int existingFiles = 0;
+        for (Path store : stores) {
+            if (checkStore(store)) {
+                existingFiles++;
+            }
+        }
+        return new Snapshot("READY", stores.size(), existingFiles, checkedAt, "ready");
+    }
+
+    private Snapshot failed(Instant checkedAt, RuntimeException exception) {
+        return new Snapshot("FAILED", stores.size(), 0, checkedAt, safeMessage(exception));
     }
 
     private void ensureDistinctStores() {

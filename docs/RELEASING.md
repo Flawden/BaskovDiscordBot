@@ -45,6 +45,17 @@ docker logs --tail 200 baskov-discord-bot
 
 Ожидаемый health status: `healthy`.
 
+Для релизов с operations/reliability дополнительно проверить startup markers и persistence backup:
+
+```bash
+docker logs --tail 300 baskov-discord-bot | grep -E \
+  'Native libDAVE ready:|Modern YouTube source ready:|Voice recovery initialized:|Persistence readiness: READY|Persistence backup (created|disabled)'
+
+docker exec baskov-discord-bot sh -c 'ls -lah /app/data/backups 2>/dev/null || true'
+```
+
+Если backups включены, должен существовать хотя бы один `baskov-persistence-*.zip`. `/status` должен показывать `Storage readiness: READY`, `Persistence backups: READY` и агрегированный `Reliability: READY`.
+
 ## Выпуск с Android
 
 Полный эквивалент PowerShell-процесса для Termux находится в [`TERMUX-RELEASE.md`](TERMUX-RELEASE.md). Он включает `/storage/emulated/0/Download/`, SHA-256, `git apply --check`, Maven verification, commit, push, tag и rollback.

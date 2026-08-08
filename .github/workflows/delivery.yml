@@ -278,6 +278,9 @@ jobs:
           BOT_MUSIC_SESSION_VOICE_RECOVERY_ENABLED: ${{ vars.DISCORD_BOT_MUSIC_SESSION_VOICE_RECOVERY_ENABLED }}
           BOT_MUSIC_SESSION_MAX_RECOVERY_ATTEMPTS: ${{ vars.DISCORD_BOT_MUSIC_SESSION_MAX_RECOVERY_ATTEMPTS }}
           BOT_MUSIC_SESSION_RECOVERY_BACKOFF: ${{ vars.DISCORD_BOT_MUSIC_SESSION_RECOVERY_BACKOFF }}
+          BOT_OPERATIONS_PERSISTENCE_BACKUP_ENABLED: ${{ vars.DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_ENABLED }}
+          BOT_OPERATIONS_PERSISTENCE_BACKUP_INTERVAL: ${{ vars.DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_INTERVAL }}
+          BOT_OPERATIONS_PERSISTENCE_BACKUP_RETENTION: ${{ vars.DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_RETENTION }}
           BOT_NETWORK_MODE: ${{ vars.BOT_NETWORK_MODE }}
           BOT_NETWORK_MODE_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && inputs.network_mode || '' }}
           BOT_VOICE_LOG_LEVEL: ${{ vars.DISCORD_BOT_VOICE_LOG_LEVEL }}
@@ -303,6 +306,9 @@ jobs:
           session_voice_recovery_enabled="${BOT_MUSIC_SESSION_VOICE_RECOVERY_ENABLED:-true}"
           session_max_recovery_attempts="${BOT_MUSIC_SESSION_MAX_RECOVERY_ATTEMPTS:-3}"
           session_recovery_backoff="${BOT_MUSIC_SESSION_RECOVERY_BACKOFF:-2s}"
+          persistence_backup_enabled="${BOT_OPERATIONS_PERSISTENCE_BACKUP_ENABLED:-true}"
+          persistence_backup_interval="${BOT_OPERATIONS_PERSISTENCE_BACKUP_INTERVAL:-6h}"
+          persistence_backup_retention="${BOT_OPERATIONS_PERSISTENCE_BACKUP_RETENTION:-14}"
           network_mode="${BOT_NETWORK_MODE:-bridge}"
           if [[ -n "${BOT_NETWORK_MODE_OVERRIDE}" && "${BOT_NETWORK_MODE_OVERRIDE}" != "environment" ]]; then
             network_mode="${BOT_NETWORK_MODE_OVERRIDE}"
@@ -336,6 +342,9 @@ jobs:
             printf 'DISCORD_BOT_MUSIC_SESSION_VOICE_RECOVERY_ENABLED_B64=%s\n' "$(encode "${session_voice_recovery_enabled}")"
             printf 'DISCORD_BOT_MUSIC_SESSION_MAX_RECOVERY_ATTEMPTS_B64=%s\n' "$(encode "${session_max_recovery_attempts}")"
             printf 'DISCORD_BOT_MUSIC_SESSION_RECOVERY_BACKOFF_B64=%s\n' "$(encode "${session_recovery_backoff}")"
+            printf 'DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_ENABLED_B64=%s\n' "$(encode "${persistence_backup_enabled}")"
+            printf 'DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_INTERVAL_B64=%s\n' "$(encode "${persistence_backup_interval}")"
+            printf 'DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_RETENTION_B64=%s\n' "$(encode "${persistence_backup_retention}")"
             printf 'BOT_NETWORK_MODE_B64=%s\n' "$(encode "${network_mode}")"
             printf 'DISCORD_BOT_VOICE_LOG_LEVEL_B64=%s\n' "$(encode "${voice_log_level}")"
             printf 'DISCORD_BOT_MUSIC_DEFAULT_VOLUME_B64=%s\n' "$(encode "${default_volume}")"

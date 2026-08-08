@@ -31,8 +31,9 @@ class PersistenceReadinessTest {
         assertEquals("READY", snapshot.status());
         assertEquals(3, snapshot.stores());
         assertEquals(1, snapshot.existingFiles());
-        assertFalse(Files.list(settings.getParent())
-                .anyMatch(path -> path.getFileName().toString().startsWith(".baskov-storage-preflight-")));
+        try (var stream = Files.list(settings.getParent())) {
+            assertFalse(stream.anyMatch(path -> path.getFileName().toString().startsWith(".baskov-storage-preflight-")));
+        }
     }
 
     @Test
@@ -61,4 +62,21 @@ class PersistenceReadinessTest {
         assertThrows(IllegalStateException.class, readiness::requireReady);
         assertEquals("FAILED", readiness.snapshot().status());
     }
+    @Test
+    void liveProbeReportsFailureWithoutThrowing() throws Exception {
+        Path settings = tempDirectory.resolve("live/settings.properties");
+        Path library = tempDirectory.resolve("live/library.tsv");
+        Path sessions = tempDirectory.resolve("live/sessions.tsv");
+        PersistenceReadiness readiness = new PersistenceReadiness(settings, library, sessions);
+
+        assertTrue(readiness.requireReady().ready());
+        Files.createDirectories(settings);
+
+        PersistenceReadiness.Snapshot snapshot = readiness.probe();
+
+        assertEquals("FAILED", snapshot.status());
+        assertFalse(snapshot.ready());
+        assertTrue(snapshot.details().contains("not a regular file"));
+    }
+
 }

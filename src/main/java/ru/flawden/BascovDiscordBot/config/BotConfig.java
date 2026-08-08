@@ -25,6 +25,7 @@ import ru.flawden.BascovDiscordBot.interactions.ModernInteractions;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 import ru.flawden.BascovDiscordBot.operations.JdaRuntimeInfo;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
+import ru.flawden.BascovDiscordBot.operations.PersistenceBackupService;
 import ru.flawden.BascovDiscordBot.operations.PersistenceReadiness;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
 
@@ -56,6 +57,7 @@ public class BotConfig {
     private final OperationalMetrics operationalMetrics;
     private final RuntimeHealthMonitor healthMonitor;
     private final PersistenceReadiness persistenceReadiness;
+    private final PersistenceBackupService persistenceBackupService;
     private final DaveRuntimeInfo daveRuntimeInfo;
     private final PlayerManager playerManager;
 
@@ -69,6 +71,7 @@ public class BotConfig {
             OperationalMetrics operationalMetrics,
             RuntimeHealthMonitor healthMonitor,
             PersistenceReadiness persistenceReadiness,
+            PersistenceBackupService persistenceBackupService,
             DaveRuntimeInfo daveRuntimeInfo,
             PlayerManager playerManager) {
         this.events = List.copyOf(events);
@@ -81,6 +84,7 @@ public class BotConfig {
         this.operationalMetrics = operationalMetrics;
         this.healthMonitor = healthMonitor;
         this.persistenceReadiness = persistenceReadiness;
+        this.persistenceBackupService = persistenceBackupService;
         this.daveRuntimeInfo = daveRuntimeInfo;
         this.playerManager = playerManager;
         log.info("BotConfig initialized: token={}, prefix='{}', commands={}",
@@ -107,6 +111,7 @@ public class BotConfig {
             }
 
             persistenceReadiness.requireReady();
+            persistenceBackupService.start();
 
             AudioModuleConfig audioModuleConfig =
                     NativeDaveBootstrap.createAudioModuleConfig(daveRuntimeInfo);

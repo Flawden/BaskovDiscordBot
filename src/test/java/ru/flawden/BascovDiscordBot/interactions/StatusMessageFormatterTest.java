@@ -9,6 +9,7 @@ import ru.flawden.BascovDiscordBot.lavaplayer.RepeatMode;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackScheduler;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
+import ru.flawden.BascovDiscordBot.operations.PersistenceBackupService;
 import ru.flawden.BascovDiscordBot.operations.PersistenceReadiness;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
@@ -28,13 +29,22 @@ class StatusMessageFormatterTest {
     @Test
     void formatsDiscordSectionWithExplicitLineBreaks() {
         RuntimeHealthMonitor.Snapshot snapshot = new RuntimeHealthMonitor.Snapshot(
-                "CONNECTED", 3, 18, Instant.parse("2026-08-04T05:30:00Z"));
+                "CONNECTED",
+                3,
+                18,
+                Instant.parse("2026-08-04T05:30:00Z"),
+                Instant.parse("2026-08-04T05:30:00Z"),
+                Instant.parse("2026-08-04T05:20:00Z"),
+                2L,
+                1L);
 
-        assertEquals("""
-                Статус: `CONNECTED`
-                JDA: `6.5.0`
-                Серверов: `3`
-                Slash-команд: `18`""", StatusMessageFormatter.discord(snapshot, "6.5.0"));
+        String rendered = StatusMessageFormatter.discord(snapshot, "6.5.0");
+        assertTrue(rendered.contains("Статус: `CONNECTED`"));
+        assertTrue(rendered.contains("JDA: `6.5.0`"));
+        assertTrue(rendered.contains("Серверов: `3`"));
+        assertTrue(rendered.contains("Slash-команд: `18`"));
+        assertTrue(rendered.contains("Gateway transitions: `2`"));
+        assertTrue(rendered.contains("Disconnected samples: `1`"));
     }
 
     @Test
@@ -153,12 +163,16 @@ class StatusMessageFormatterTest {
                 Duration.ofMinutes(30),
                 4, 1,
                 6, 2,
-                8, 3);
+                8, 3,
+                Instant.parse("2026-08-04T05:29:00Z"),
+                Instant.parse("2026-08-04T05:25:00Z"));
 
-        assertEquals("""
-                Успешно: `18`
-                Ошибок: `6`
-                Prefix/Slash/Buttons: `4/6/8`""", StatusMessageFormatter.commands(snapshot));
+        String rendered = StatusMessageFormatter.commands(snapshot);
+        assertTrue(rendered.contains("Успешно: `18`"));
+        assertTrue(rendered.contains("Ошибок: `6`"));
+        assertTrue(rendered.contains("Всего: `24`"));
+        assertTrue(rendered.contains("Failure rate: `25.00%`"));
+        assertTrue(rendered.contains("Prefix/Slash/Buttons: `4/6/8`"));
     }
 
     @Test
@@ -174,4 +188,45 @@ class StatusMessageFormatterTest {
         assertTrue(section.contains("Хранилищ: `3`"));
         assertFalse(section.contains("/app/data"));
     }
+    @Test
+    void formatsBackupAndReliabilitySectionsWithoutAbsolutePaths() {
+        PersistenceBackupService.Snapshot backup = new PersistenceBackupService.Snapshot(
+                "READY",
+                true,
+                Duration.ofHours(6),
+                14,
+                3L,
+                1L,
+                Instant.parse("2026-08-08T12:00:00Z"),
+                Instant.parse("2026-08-08T06:00:00Z"),
+                "baskov-persistence-20260808-120000-000.zip",
+                3,
+                "ready");
+        PersistenceReadiness.Snapshot storage = new PersistenceReadiness.Snapshot(
+                "READY",
+                3,
+                3,
+                Instant.parse("2026-08-08T00:00:00Z"),
+                "ready");
+        RuntimeHealthMonitor.Snapshot runtime = new RuntimeHealthMonitor.Snapshot(
+                "CONNECTED", 2, 20,
+                Instant.parse("2026-08-08T12:00:00Z"),
+                Instant.parse("2026-08-08T12:00:00Z"),
+                Instant.parse("2026-08-08T11:50:00Z"),
+                1L,
+                0L);
+        SessionRecoverySnapshot recovery = new SessionRecoverySnapshot(
+                1, 0, 4L, 4L, 0L, 1L, 0L, "ready");
+
+        String backupSection = StatusMessageFormatter.backups(backup);
+        String reliabilitySection = StatusMessageFormatter.reliability(runtime, storage, backup, recovery);
+
+        assertTrue(backupSection.contains("Статус: `READY`"));
+        assertTrue(backupSection.contains("Success/Fail: `3/1`"));
+        assertTrue(backupSection.contains("Retention: `14`"));
+        assertFalse(backupSection.contains("/app/data"));
+        assertTrue(reliabilitySection.contains("Итог: `READY`"));
+        assertTrue(reliabilitySection.contains("Recovery failures: `0`"));
+    }
+
 }

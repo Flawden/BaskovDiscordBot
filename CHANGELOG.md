@@ -6,6 +6,27 @@
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-08-08
+
+### Operations & Reliability
+- Добавлен `PersistenceBackupService`: после startup preflight создаётся atomic ZIP snapshot `guild-settings.properties`, `music-library.tsv` и `music-sessions.tsv`, затем backup повторяется по расписанию.
+- Backup хранится внутри persistent `/app/data` volume, использует формат `BASKOV_PERSISTENCE_BACKUP_V1`, temp + atomic move, POSIX `0700/0600` и bounded retention.
+- Новые параметры: `DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_ENABLED`, `..._INTERVAL` и `..._RETENTION`; каталог production backup закреплён как `/app/data/backups`.
+- `/status` получил секции `Persistence backups` и `Reliability`, live storage probe, gateway transition/disconnected counters, command invocation total, failure rate и время последней ошибки.
+- Runtime heartbeat теперь сохраняет `gatewayTransitions` и `disconnectedSamples`, а монитор помнит последнее CONNECTED и последнее изменение gateway status.
+- `PersistenceReadiness.probe()` повторно проверяет storage во время `/status` без остановки процесса: деградация отображается сразу, а следующий успешный probe возвращает READY.
+- Application file logs переведены на size+time rolling: 25 MB на файл, 14 дней, общий cap 512 MB; Docker json logs остаются ограничены 3 × 10 MB.
+
+### Delivery hardening
+- GitHub delivery передаёт backup policy в защищённый deployment input и валидирует boolean/interval/retention до записи `.env`.
+- Post-deploy runtime verification требует startup marker успешного persistence backup или явного `Persistence backup disabled`.
+- GitHub-hosted `ubuntu-latest`, immutable SHA image, OCI digest verification, health heartbeat и rollback topology сохранены.
+
+### Совместимость
+- Форматы `guild-settings.properties`, `music-library.tsv` и `music-sessions.tsv` не меняются; backup — дополнительный read-only snapshot этих файлов.
+- Java 17, Spring Boot 3.4.3, JDA 6.5.0, LavaPlayer 2.2.3, `youtube-source 1.18.2`, native libDAVE `ce725965e`, voice recovery, DJ/vote, playlists/history и Discord UX остаются без изменений.
+- Новых Discord permissions, внешней БД или Secrets не требуется.
+
 
 ## [1.0.1] — 2026-08-08
 

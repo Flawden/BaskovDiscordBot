@@ -7,15 +7,19 @@ import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.YoutubeSourceRuntimeInfo;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
+import ru.flawden.BascovDiscordBot.operations.PersistenceBackupService;
 import ru.flawden.BascovDiscordBot.operations.PersistenceReadiness;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
 import ru.flawden.BascovDiscordBot.session.SessionRecoverySnapshot;
 
+import java.time.Instant;
+import java.util.Locale;
 import java.util.Objects;
 
 /**
- * Формирует компактные многострочные секции команды /status.
+ * Formats compact multi-line /status sections without exposing secrets or
+ * absolute persistence paths.
  */
 final class StatusMessageFormatter {
 
@@ -28,7 +32,10 @@ final class StatusMessageFormatter {
                 "Статус: `" + runtime.jdaStatus() + "`",
                 "JDA: `" + (jdaVersion == null ? "unknown" : jdaVersion) + "`",
                 "Серверов: `" + runtime.guildCount() + "`",
-                "Slash-команд: `" + runtime.registeredSlashCommands() + "`");
+                "Slash-команд: `" + runtime.registeredSlashCommands() + "`",
+                "Gateway transitions: `" + runtime.gatewayStatusTransitions() + "`",
+                "Disconnected samples: `" + runtime.disconnectedHeartbeatSamples() + "`",
+                "Последний CONNECTED: " + discordTime(runtime.lastConnectedAt()));
     }
 
     static String dave(DaveRuntimeInfo.Snapshot dave) {
@@ -114,6 +121,59 @@ final class StatusMessageFormatter {
                 "Last stale callback: " + inline(voice.lastStaleCallback()));
     }
 
+    static String storage(PersistenceReadiness.Snapshot storage) {
+        Objects.requireNonNull(storage, "storage");
+        return String.join("\n",
+                "Статус: `" + storage.status() + "`",
+                "Хранилищ: `" + storage.stores() + "`",
+                "Файлов при старте: `" + storage.existingFiles() + "`",
+                "Проверено: " + discordTime(storage.checkedAt()));
+    }
+
+    static String backups(PersistenceBackupService.Snapshot backup) {
+        Objects.requireNonNull(backup, "backup");
+        return String.join("\n",
+                "Статус: `" + backup.status() + "`",
+                "Success/Fail: `" + backup.successfulBackups() + "/" + backup.failedBackups() + "`",
+                "Retention: `" + backup.retention() + "`",
+                "Последний backup: " + discordTime(backup.lastSuccessAt()),
+                "Файлов в snapshot: `" + backup.lastIncludedStores() + "/3`");
+    }
+
+    static String commands(OperationalMetrics.Snapshot commands) {
+        Objects.requireNonNull(commands, "commands");
+        return String.join("\n",
+                "Успешно: `" + commands.totalSuccesses() + "`",
+                "Ошибок: `" + commands.totalFailures() + "`",
+                "Всего: `" + commands.totalInvocations() + "`",
+                "Failure rate: `" + String.format(Locale.ROOT, "%.2f%%", commands.failureRatePercent()) + "`",
+                "Prefix/Slash/Buttons: `"
+                        + commands.prefixSuccesses() + "/"
+                        + commands.slashSuccesses() + "/"
+                        + commands.buttonSuccesses() + "`",
+                "Последняя ошибка: " + discordTime(commands.lastFailureAt()));
+    }
+
+    static String reliability(
+            RuntimeHealthMonitor.Snapshot runtime,
+            PersistenceReadiness.Snapshot storage,
+            PersistenceBackupService.Snapshot backup,
+            SessionRecoverySnapshot recovery) {
+        Objects.requireNonNull(runtime, "runtime");
+        Objects.requireNonNull(storage, "storage");
+        Objects.requireNonNull(backup, "backup");
+        Objects.requireNonNull(recovery, "recovery");
+
+        boolean connected = "CONNECTED".equals(runtime.jdaStatus());
+        boolean ready = connected && storage.ready() && backup.healthy();
+        return String.join("\n",
+                "Итог: `" + (ready ? "READY" : "DEGRADED") + "`",
+                "Gateway: `" + (connected ? "READY" : "DEGRADED") + "`",
+                "Storage: `" + storage.status() + "`",
+                "Backups: `" + backup.status() + "`",
+                "Recovery failures: `" + recovery.transportFailures() + "`");
+    }
+
     private static String frameState(VoiceDiagnosticSnapshot voice) {
         if (voice.frameRequestCount() == 0L) {
             return "never";
@@ -129,22 +189,7 @@ final class StatusMessageFormatter {
         return "`" + safe + "`";
     }
 
-    static String storage(PersistenceReadiness.Snapshot storage) {
-        Objects.requireNonNull(storage, "storage");
-        return String.join("\n",
-                "Статус: `" + storage.status() + "`",
-                "Хранилищ: `" + storage.stores() + "`",
-                "Файлов при старте: `" + storage.existingFiles() + "`");
-    }
-
-    static String commands(OperationalMetrics.Snapshot commands) {
-        Objects.requireNonNull(commands, "commands");
-        return String.join("\n",
-                "Успешно: `" + commands.totalSuccesses() + "`",
-                "Ошибок: `" + commands.totalFailures() + "`",
-                "Prefix/Slash/Buttons: `"
-                        + commands.prefixSuccesses() + "/"
-                        + commands.slashSuccesses() + "/"
-                        + commands.buttonSuccesses() + "`");
+    private static String discordTime(Instant instant) {
+        return instant == null ? "`never`" : "<t:" + instant.getEpochSecond() + ":R>";
     }
 }

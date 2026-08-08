@@ -42,6 +42,7 @@ import ru.flawden.BascovDiscordBot.library.StoredTrack;
 import ru.flawden.BascovDiscordBot.operations.JdaRuntimeInfo;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
+import ru.flawden.BascovDiscordBot.operations.PersistenceBackupService;
 import ru.flawden.BascovDiscordBot.operations.PersistenceReadiness;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
@@ -77,6 +78,7 @@ public class ModernInteractions extends ListenerAdapter {
     private final OperationalMetrics operationalMetrics;
     private final RuntimeHealthMonitor healthMonitor;
     private final PersistenceReadiness persistenceReadiness;
+    private final PersistenceBackupService persistenceBackupService;
     private final DaveRuntimeInfo daveRuntimeInfo;
 
     public ModernInteractions(
@@ -93,6 +95,7 @@ public class ModernInteractions extends ListenerAdapter {
             OperationalMetrics operationalMetrics,
             RuntimeHealthMonitor healthMonitor,
             PersistenceReadiness persistenceReadiness,
+            PersistenceBackupService persistenceBackupService,
             DaveRuntimeInfo daveRuntimeInfo) {
         this.playerManager = playerManager;
         this.controlPolicy = controlPolicy;
@@ -107,6 +110,7 @@ public class ModernInteractions extends ListenerAdapter {
         this.operationalMetrics = operationalMetrics;
         this.healthMonitor = healthMonitor;
         this.persistenceReadiness = persistenceReadiness;
+        this.persistenceBackupService = persistenceBackupService;
         this.daveRuntimeInfo = daveRuntimeInfo;
     }
 
@@ -449,7 +453,11 @@ public class ModernInteractions extends ListenerAdapter {
         String voiceState = StatusMessageFormatter.voice(voice);
         String voiceHistory = StatusMessageFormatter.voiceHistory(voice);
         String recoveryState = StatusMessageFormatter.recovery(recovery);
-        String storageState = StatusMessageFormatter.storage(persistenceReadiness.snapshot());
+        PersistenceReadiness.Snapshot storage = persistenceReadiness.probe();
+        PersistenceBackupService.Snapshot backups = persistenceBackupService.snapshot();
+        String storageState = StatusMessageFormatter.storage(storage);
+        String backupState = StatusMessageFormatter.backups(backups);
+        String reliabilityState = StatusMessageFormatter.reliability(runtime, storage, backups, recovery);
         String commandState = StatusMessageFormatter.commands(commands);
         GuildPreferences accessPreferences = preferencesRepository.get(event.getGuild().getIdLong());
         String accessState = String.join("\n",
@@ -465,7 +473,9 @@ public class ModernInteractions extends ListenerAdapter {
         event.replyEmbeds(new EmbedBuilder()
                         .setTitle("🩺 Состояние Baskov Discord Bot")
                         .setDescription("Uptime: `" + formatDuration(commands.uptime()) + "`")
-                        .setColor("CONNECTED".equals(runtime.jdaStatus()) ? Color.GREEN : Color.ORANGE)
+                        .setColor("CONNECTED".equals(runtime.jdaStatus())
+                                && storage.ready()
+                                && backups.healthy() ? Color.GREEN : Color.ORANGE)
                         .addField("Discord gateway", discord, true)
                         .addField("DAVE / E2EE", daveState, true)
                         .addField("Музыка", musicState, true)
@@ -475,7 +485,9 @@ public class ModernInteractions extends ListenerAdapter {
                         .addField("Voice recovery", recoveryState, false)
                         .addField("Persistent library", libraryState, true)
                         .addField("Storage readiness", storageState, true)
+                        .addField("Persistence backups", backupState, true)
                         .addField("DJ & voting", accessState, true)
+                        .addField("Reliability", reliabilityState, true)
                         .addField("Команды с запуска", commandState, false)
                         .setFooter("Health heartbeat обновляется каждые 10 секунд")
                         .build())

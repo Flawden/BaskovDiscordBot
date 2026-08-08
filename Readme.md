@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.0.1**.
+Текущая версия релизной ветки: **v1.1.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -14,7 +14,9 @@
 - requester, ETA для каждой позиции, постраничная очередь с кнопками навигации, bounded history, previous, repeat mode, shuffle, seek, remove/move/clear и управление громкостью;
 - постоянные настройки громкости, повтора, access mode, DJ-роли и порога vote-skip отдельно для каждого Discord-сервера;
 - `/now` с визуальным прогрессом, state-aware двухрядным пультом previous/±15s/pause/next/shuffle/repeat, disabled-состояниями и кнопкой refresh; `/status` с активными playback modes, uptime, Discord gateway, voice transport snapshot и последними voice/source ошибками;
-- динамический Docker heartbeat, который подтверждает свежее подключение к Discord, а не только факт старта;
+- динамический Docker heartbeat, который подтверждает свежее подключение к Discord, считает gateway transitions/disconnected samples и показывает последнее CONNECTED;
+- atomic persistence backups трёх storage-файлов внутри `/app/data/backups` с bounded retention и owner-only permissions;
+- live storage probe в `/status`, агрегированный reliability state и command failure rate/последняя ошибка;
 - JDA 6.5.0 с настоящей JNI libDAVE `ce725965e`, положительной protocol version и подтверждением playback только после реального запроса аудиофрейма Discord media transport;
 - bounded voice recovery: отключённый JDA auto-reconnect, до трёх контролируемых повторных подключений с backoff и сохранением checkpoint при исчерпании попыток;
 - восстановление активной музыкальной сессии после restart/redeploy: voice channel, текущий трек и позиция, очередь, pause, volume и repeat сохраняются в atomic checkpoint;
@@ -82,6 +84,10 @@ docker compose logs -f bot
 | `DISCORD_BOT_MUSIC_SESSION_VOICE_RECOVERY_ENABLED` | `true` | bounded recovery при неожиданном LEAVE или пропаже frame polling |
 | `DISCORD_BOT_MUSIC_SESSION_MAX_RECOVERY_ATTEMPTS` | `3` | максимум transport-recovery попыток |
 | `DISCORD_BOT_MUSIC_SESSION_RECOVERY_BACKOFF` | `2s` | базовый линейный backoff между попытками |
+| `DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_ENABLED` | `true` | включает periodic snapshot трёх persistent storage |
+| `DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_DIRECTORY` | `data/backups` | локальный каталог backup; в Docker принудительно `/app/data/backups` |
+| `DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_INTERVAL` | `6h` | период между backup snapshot |
+| `DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_RETENTION` | `14` | максимальное число ZIP-backup, старые удаляются |
 
 Live-потоки отключены. Подробные правила voice-доступа и lifecycle находятся в [`docs/MUSIC-SESSIONS.md`](docs/MUSIC-SESSIONS.md).
 Voice recovery и восстановление сессий после restart/redeploy описаны в [`docs/VOICE-RECOVERY-SESSION-RESTORATION.md`](docs/VOICE-RECOVERY-SESSION-RESTORATION.md).
@@ -131,7 +137,7 @@ ghcr.io/<owner>/<repository>:sha-<full-git-sha>
 ghcr.io/<owner>/<repository>:dev|latest
 ```
 
-На VPS всегда разворачивается immutable SHA-тег. После Docker healthcheck workflow дополнительно сверяет фактический image, опубликованный OCI digest, `RestartCount`, storage-readiness marker и внутренний heartbeat. При любой неудаче автоматически восстанавливаются предыдущий `.env` и предыдущий образ.
+На VPS всегда разворачивается immutable SHA-тег. После Docker healthcheck workflow дополнительно сверяет фактический image, опубликованный OCI digest, `RestartCount`, storage-readiness marker, persistence-backup marker и внутренний heartbeat. При любой неудаче автоматически восстанавливаются предыдущий `.env` и предыдущий образ.
 
 ## Настройка GitHub
 
@@ -168,6 +174,9 @@ ghcr.io/<owner>/<repository>:dev|latest
 | `DISCORD_BOT_MUSIC_DEFAULT_VOLUME` | `100` | начальная громкость |
 | `DISCORD_BOT_MUSIC_MAX_VOLUME` | `150` | максимальная громкость |
 | `DISCORD_BOT_MUSIC_LIBRARY_FILE` | `data/music-library.tsv` | файл постоянных плейлистов и истории |
+| `DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_ENABLED` | `true` | включить backup persistent storage |
+| `DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_INTERVAL` | `6h` | интервал backup |
+| `DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_RETENTION` | `14` | число сохраняемых backup |
 
 Workflow кодирует эти значения перед SSH-передачей, а серверный deploy-скрипт проверяет формат до перезаписи защищённого `.env`.
 

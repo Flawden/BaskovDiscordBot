@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class OperationalMetricsTest {
 
@@ -17,10 +18,12 @@ class OperationalMetricsTest {
         OperationalMetrics metrics = new OperationalMetrics(clock);
 
         metrics.recordSuccess(OperationalMetrics.Channel.PREFIX);
+        clock.advance(Duration.ofMinutes(1));
         metrics.recordSuccess(OperationalMetrics.Channel.SLASH);
         metrics.recordSuccess(OperationalMetrics.Channel.SLASH);
+        clock.advance(Duration.ofMinutes(1));
         metrics.recordFailure(OperationalMetrics.Channel.BUTTON);
-        clock.advance(Duration.ofMinutes(5));
+        clock.advance(Duration.ofMinutes(3));
 
         OperationalMetrics.Snapshot snapshot = metrics.snapshot();
         assertEquals(1, snapshot.prefixSuccesses());
@@ -28,6 +31,10 @@ class OperationalMetricsTest {
         assertEquals(1, snapshot.buttonFailures());
         assertEquals(3, snapshot.totalSuccesses());
         assertEquals(1, snapshot.totalFailures());
+        assertEquals(4, snapshot.totalInvocations());
+        assertEquals(25.0d, snapshot.failureRatePercent(), 0.001d);
+        assertEquals(Instant.parse("2026-08-04T00:01:00Z"), snapshot.lastSuccessAt());
+        assertEquals(Instant.parse("2026-08-04T00:02:00Z"), snapshot.lastFailureAt());
         assertEquals(Duration.ofMinutes(5), snapshot.uptime());
     }
 
@@ -39,6 +46,10 @@ class OperationalMetricsTest {
         OperationalMetrics.Snapshot snapshot = metrics.snapshot();
         assertEquals(0, snapshot.totalSuccesses());
         assertEquals(0, snapshot.totalFailures());
+        assertEquals(0, snapshot.totalInvocations());
+        assertEquals(0.0d, snapshot.failureRatePercent(), 0.001d);
+        assertNull(snapshot.lastSuccessAt());
+        assertNull(snapshot.lastFailureAt());
         assertEquals(Duration.ZERO, snapshot.uptime());
     }
 

@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
@@ -20,7 +21,8 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Обновляет динамический readiness heartbeat только пока Discord gateway подключён.
+ * Updates the dynamic readiness heartbeat only while the Discord gateway is
+ * connected and keeps a compact lifecycle history for operational diagnosis.
  */
 @Slf4j
 @Component
@@ -32,18 +34,29 @@ public class RuntimeHealthMonitor {
     private static final Duration HEARTBEAT_INTERVAL = Duration.ofSeconds(10);
 
     private final Path healthFile;
+    private final Clock clock;
     private final ScheduledExecutorService scheduler;
     private volatile JDA jda;
     private volatile int registeredSlashCommands;
     private volatile Instant lastHealthyAt;
+    private volatile Instant lastConnectedAt;
+    private volatile Instant lastStatusChangeAt;
+    private volatile String lastObservedStatus = "STARTING";
+    private volatile long gatewayStatusTransitions;
+    private volatile long disconnectedHeartbeatSamples;
     private volatile ScheduledFuture<?> heartbeatTask;
 
     public RuntimeHealthMonitor() {
-        this(DEFAULT_HEALTH_FILE);
+        this(DEFAULT_HEALTH_FILE, Clock.systemUTC());
     }
 
     RuntimeHealthMonitor(Path healthFile) {
+        this(healthFile, Clock.systemUTC());
+    }
+
+    RuntimeHealthMonitor(Path healthFile, Clock clock) {
         this.healthFile = Objects.requireNonNull(healthFile, "healthFile");
+        this.clock = Objects.requireNonNull(clock, "clock");
         this.scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable, "baskov-runtime-health");
             thread.setDaemon(true);
@@ -70,14 +83,16 @@ public class RuntimeHealthMonitor {
 
     public Snapshot snapshot() {
         JDA current = jda;
-        if (current == null) {
-            return new Snapshot("STARTING", 0, registeredSlashCommands, lastHealthyAt);
-        }
+        String status = current == null ? "STARTING" : current.getStatus().name();
         return new Snapshot(
-                current.getStatus().name(),
-                current.getGuilds().size(),
+                status,
+                current == null ? 0 : current.getGuilds().size(),
                 registeredSlashCommands,
-                lastHealthyAt);
+                lastHealthyAt,
+                lastConnectedAt,
+                lastStatusChangeAt,
+                gatewayStatusTransitions,
+                disconnectedHeartbeatSamples);
     }
 
     private void heartbeatSafely() {
@@ -89,20 +104,44 @@ public class RuntimeHealthMonitor {
         }
     }
 
-    private void heartbeat() {
+    synchronized void heartbeat() {
         JDA current = jda;
-        if (current == null || current.getStatus() != JDA.Status.CONNECTED) {
+        Instant now = clock.instant();
+        if (current == null) {
+            observeStatus("STARTING", now);
             deleteHealthFile();
             return;
         }
 
-        Instant now = Instant.now();
+        JDA.Status currentStatus = current.getStatus();
+        String status = currentStatus.name();
+        observeStatus(status, now);
+        if (currentStatus != JDA.Status.CONNECTED) {
+            disconnectedHeartbeatSamples++;
+            deleteHealthFile();
+            return;
+        }
+
+        lastConnectedAt = now;
         String payload = "status=CONNECTED\n"
                 + "timestamp=" + now + "\n"
                 + "guilds=" + current.getGuilds().size() + "\n"
-                + "slashCommands=" + registeredSlashCommands + "\n";
+                + "slashCommands=" + registeredSlashCommands + "\n"
+                + "gatewayTransitions=" + gatewayStatusTransitions + "\n"
+                + "disconnectedSamples=" + disconnectedHeartbeatSamples + "\n";
         writeAtomically(payload);
         lastHealthyAt = now;
+    }
+
+    private void observeStatus(String status, Instant now) {
+        if (!Objects.equals(lastObservedStatus, status)) {
+            if (!"STARTING".equals(lastObservedStatus)) {
+                gatewayStatusTransitions++;
+            }
+            log.info("Discord gateway status transition: {} -> {}", lastObservedStatus, status);
+            lastObservedStatus = status;
+            lastStatusChangeAt = now;
+        }
     }
 
     private void writeAtomically(String payload) {
@@ -156,6 +195,10 @@ public class RuntimeHealthMonitor {
             String jdaStatus,
             int guildCount,
             int registeredSlashCommands,
-            Instant lastHealthyAt) {
+            Instant lastHealthyAt,
+            Instant lastConnectedAt,
+            Instant lastStatusChangeAt,
+            long gatewayStatusTransitions,
+            long disconnectedHeartbeatSamples) {
     }
 }
