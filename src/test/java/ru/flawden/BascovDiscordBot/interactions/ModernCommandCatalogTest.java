@@ -23,7 +23,7 @@ class ModernCommandCatalogTest {
         assertEquals(Set.of(
                 "help", "version", "status", "play", "search", "history", "replay", "playlist",
                 "pause", "resume", "previous", "skip", "voteskip", "stop", "queue", "now", "seek",
-                "volume", "repeat", "shuffle", "remove", "move", "clear", "settings"), names);
+                "volume", "repeat", "shuffle", "remove", "move", "clear", "queue-manage", "settings"), names);
     }
 
     @Test
@@ -54,6 +54,20 @@ class ModernCommandCatalogTest {
         assertEquals(Set.of("page"), queue.getOptions().stream()
                 .map(option -> option.getName())
                 .collect(Collectors.toSet()));
+    }
+
+    @Test
+    void queueManagerExposesStatsAndSafeBatchMutations() {
+        SlashCommandData queueManager = command("queue-manage");
+        assertEquals(Set.of("stats", "remove-range", "dedupe", "remove-mine"),
+                queueManager.getSubcommands().stream()
+                        .map(subcommand -> subcommand.getName())
+                        .collect(Collectors.toSet()));
+
+        assertTrue(queueManager.getSubcommands().stream()
+                .filter(subcommand -> !"stats".equals(subcommand.getName()))
+                .flatMap(subcommand -> subcommand.getOptions().stream())
+                .anyMatch(option -> option.getName().equals("revision")));
     }
 
     @Test

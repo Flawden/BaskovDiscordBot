@@ -150,6 +150,7 @@ public class ModernInteractions extends ListenerAdapter {
                 case "remove" -> remove(event);
                 case "move" -> move(event);
                 case "clear" -> clear(event);
+                case "queue-manage" -> queueManage(event);
                 case "settings" -> settings(event);
                 default -> event.replyEmbeds(MusicEmbeds.error(
                                 "❌ Неизвестная slash-команда",
@@ -1382,6 +1383,182 @@ public class ModernInteractions extends ListenerAdapter {
                 .queue();
     }
 
+    private void queueManage(SlashCommandInteractionEvent event) {
+        String subcommand = event.getSubcommandName();
+        if (subcommand == null || "stats".equals(subcommand)) {
+            GuildMusicManager manager = playerManager.findMusicManager(event.getGuild()).orElse(null);
+            event.replyEmbeds(MusicEmbeds.queueStats(manager)).setEphemeral(true).queue();
+            return;
+        }
+
+        OptionalLong expectedRevision = queueRevisionOption(event);
+        if (expectedRevision.isPresent() && expectedRevision.getAsLong() < 0L) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🔢 Неверная ревизия",
+                            "Ревизия очереди должна быть неотрицательным числом из `/queue` или `/queue-manage stats`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        switch (subcommand) {
+            case "remove-range" -> removeQueueRange(event, expectedRevision);
+            case "dedupe" -> deduplicateQueue(event, expectedRevision);
+            case "remove-mine" -> removeOwnQueueEntries(event, expectedRevision);
+            default -> event.replyEmbeds(MusicEmbeds.error(
+                            "📋 Неизвестная операция",
+                            "Используй `/queue-manage stats`, `remove-range`, `dedupe` или `remove-mine`."))
+                    .setEphemeral(true)
+                    .queue();
+        }
+    }
+
+    private void removeQueueRange(
+            SlashCommandInteractionEvent event,
+            OptionalLong expectedRevision) {
+        if (!allowControl(event)) {
+            return;
+        }
+        GuildMusicManager manager = activeManager(event);
+        if (manager == null) {
+            return;
+        }
+
+        long rawStart = event.getOption("start", -1L, OptionMapping::getAsLong);
+        long rawEnd = event.getOption("end", -1L, OptionMapping::getAsLong);
+        if (rawStart < 1L || rawEnd < rawStart
+                || rawStart > Integer.MAX_VALUE || rawEnd > Integer.MAX_VALUE) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🗑️ Неверный диапазон",
+                            "Укажи позиции `start..end`, где обе позиции существуют в текущей очереди."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        TrackScheduler.QueueMutationResult result = manager.getScheduler().removeRange(
+                Math.toIntExact(rawStart),
+                Math.toIntExact(rawEnd),
+                expectedRevision);
+        if (!replyQueueMutationFailure(event, result)) {
+            return;
+        }
+        event.replyEmbeds(MusicEmbeds.success(
+                        "🗑️ Диапазон удалён",
+                        "Удалено треков: `" + result.removedCount() + "`\n"
+                                + "Освобождено времени: `"
+                                + MusicEmbeds.humanMillis(result.removedDurationMillis()) + "`\n"
+                                + "Осталось в очереди: `" + result.queueSize() + "`\n"
+                                + "Новая ревизия: `" + result.revision() + "`."))
+                .queue();
+    }
+
+    private void deduplicateQueue(
+            SlashCommandInteractionEvent event,
+            OptionalLong expectedRevision) {
+        if (!allowControl(event)) {
+            return;
+        }
+        GuildMusicManager manager = activeManager(event);
+        if (manager == null) {
+            return;
+        }
+
+        TrackScheduler.QueueMutationResult result = manager.getScheduler()
+                .deduplicateQueue(expectedRevision);
+        if (result.status() == TrackScheduler.QueueMutationStatus.NO_CHANGES) {
+            event.replyEmbeds(MusicEmbeds.success(
+                            "✨ Очередь уже чистая",
+                            "Повторных ожидающих треков не найдено. Ревизия: `"
+                                    + result.revision() + "`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        if (!replyQueueMutationFailure(event, result)) {
+            return;
+        }
+        event.replyEmbeds(MusicEmbeds.success(
+                        "✨ Дубликаты удалены",
+                        "Удалено повторов: `" + result.removedCount() + "`\n"
+                                + "Освобождено времени: `"
+                                + MusicEmbeds.humanMillis(result.removedDurationMillis()) + "`\n"
+                                + "Осталось в очереди: `" + result.queueSize() + "`\n"
+                                + "Новая ревизия: `" + result.revision() + "`."))
+                .queue();
+    }
+
+    private void removeOwnQueueEntries(
+            SlashCommandInteractionEvent event,
+            OptionalLong expectedRevision) {
+        GuildMusicManager manager = playerManager.findMusicManager(event.getGuild()).orElse(null);
+        if (manager == null) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🎵 Музыкальной сессии нет",
+                            "Сейчас нет ожидающей очереди."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        TrackScheduler.QueueMutationResult result = manager.getScheduler().removeRequester(
+                event.getUser().getIdLong(),
+                expectedRevision);
+        if (result.status() == TrackScheduler.QueueMutationStatus.NO_CHANGES) {
+            event.replyEmbeds(MusicEmbeds.success(
+                            "🧹 Твоих треков нет",
+                            "В ожидающей очереди нет треков, добавленных тобой. Ревизия: `"
+                                    + result.revision() + "`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        if (!replyQueueMutationFailure(event, result)) {
+            return;
+        }
+        event.replyEmbeds(MusicEmbeds.success(
+                        "🧹 Твои треки удалены",
+                        "Удалено твоих ожидающих треков: `" + result.removedCount() + "`\n"
+                                + "Освобождено времени: `"
+                                + MusicEmbeds.humanMillis(result.removedDurationMillis()) + "`\n"
+                                + "Осталось в очереди: `" + result.queueSize() + "`\n"
+                                + "Новая ревизия: `" + result.revision() + "`."))
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private boolean replyQueueMutationFailure(
+            SlashCommandInteractionEvent event,
+            TrackScheduler.QueueMutationResult result) {
+        if (result.status() == TrackScheduler.QueueMutationStatus.APPLIED) {
+            return true;
+        }
+        if (result.status() == TrackScheduler.QueueMutationStatus.STALE_REVISION) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "♻️ Очередь уже изменилась",
+                            "Переданная ревизия устарела. Текущая ревизия: `" + result.revision()
+                                    + "`. Обнови `/queue` и повтори команду."))
+                    .setEphemeral(true)
+                    .queue();
+            return false;
+        }
+        if (result.status() == TrackScheduler.QueueMutationStatus.INVALID_ARGUMENT) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "📋 Операция не выполнена",
+                            "Позиции больше не существуют или параметры команды некорректны. "
+                                    + "Сейчас в очереди `" + result.queueSize() + "` треков."))
+                    .setEphemeral(true)
+                    .queue();
+            return false;
+        }
+        return false;
+    }
+
+    private static OptionalLong queueRevisionOption(SlashCommandInteractionEvent event) {
+        OptionMapping revision = event.getOption("revision");
+        return revision == null ? OptionalLong.empty() : OptionalLong.of(revision.getAsLong());
+    }
+
     private void settings(SlashCommandInteractionEvent event) {
         String subcommand = event.getSubcommandName();
         if (subcommand == null || "show".equals(subcommand)) {
@@ -1774,7 +1951,7 @@ public class ModernInteractions extends ListenerAdapter {
                 .setDescription("Slash-команды — основной интерфейс. Старые `!`-команды пока продолжают работать.")
                 .setColor(Color.CYAN)
                 .addField("▶️ Воспроизведение", "`/play` `/search` `/pause` `/resume` `/previous` `/skip` `/voteskip` `/stop` `/seek`", false)
-                .addField("📋 Очередь", "`/queue` `/remove` `/move` `/shuffle` `/clear`", false)
+                .addField("📋 Очередь", "`/queue` `/remove` `/move` `/shuffle` `/clear` `/queue-manage`", false)
                 .addField("📚 Библиотека", "`/playlist` `/history` `/replay`", false)
                 .addField("🎚️ Режимы", "`/volume` `/repeat` `/now`", false)
                 .addField("⚙️ Настройки", "`/settings show` `/settings access` `/settings dj-role` `/settings vote-threshold` `/settings volume` `/settings repeat` `/settings reset`", false)
@@ -1783,6 +1960,7 @@ public class ModernInteractions extends ListenerAdapter {
                 .addField("🔎 Выбор трека", "`/search` показывает до пяти результатов YouTube с кнопками выбора. Результаты живут пять минут и доступны только автору.", false)
                 .addField("💡 Autocomplete", "`/play` и `/search` предлагают недавние запросы, а `/playlist` — сохранённые названия.", false)
                 .addField("🎧 DJ и голосование", "Владелец или `Manage Server` может назначить DJ-роль и выбрать режим `open`, `dj` или `vote`. В режиме vote кнопка `Следующий` тоже считает голос.", false)
+                .addField("🧰 Queue Manager", "`/queue-manage` показывает ревизию, удаляет диапазон, чистит дубликаты и позволяет удалить только свои ожидающие треки.", false)
                 .addField("💾 Постоянное хранение", "Плейлисты, история и правила DJ переживают restart контейнера.", false)
                 .build();
     }

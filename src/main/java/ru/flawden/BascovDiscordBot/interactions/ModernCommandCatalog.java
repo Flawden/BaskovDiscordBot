@@ -146,6 +146,17 @@ public final class ModernCommandCatalog {
                         .addOption(OptionType.INTEGER, "from", "Текущая позиция", true)
                         .addOption(OptionType.INTEGER, "to", "Новая позиция", true),
                 Commands.slash("clear", "Очищает ожидающие треки, не останавливая текущий"),
+                Commands.slash("queue-manage", "Расширенное управление ожидающей очередью")
+                        .addSubcommands(
+                                new SubcommandData("stats", "Показывает ревизию и сводку очереди"),
+                                new SubcommandData("remove-range", "Удаляет непрерывный диапазон позиций")
+                                        .addOption(OptionType.INTEGER, "start", "Первая позиция диапазона", true)
+                                        .addOption(OptionType.INTEGER, "end", "Последняя позиция диапазона", true)
+                                        .addOption(OptionType.INTEGER, "revision", "Ревизия из /queue; защищает от устаревших позиций", false),
+                                new SubcommandData("dedupe", "Удаляет повторные копии ожидающих треков")
+                                        .addOption(OptionType.INTEGER, "revision", "Ревизия из /queue; защищает от устаревших позиций", false),
+                                new SubcommandData("remove-mine", "Удаляет только твои ожидающие треки")
+                                        .addOption(OptionType.INTEGER, "revision", "Ревизия из /queue; защищает от устаревших позиций", false)),
                 Commands.slash("settings", "Показывает и изменяет постоянные настройки сервера")
                         .addSubcommands(
                                 new SubcommandData("show", "Показывает сохранённые настройки"),

@@ -10,6 +10,7 @@ import ru.flawden.BascovDiscordBot.lavaplayer.BatchMusicLoadResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.MusicLoadResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlaybackReadinessResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.QueuePage;
+import ru.flawden.BascovDiscordBot.lavaplayer.TrackScheduler;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
 import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
@@ -349,10 +350,17 @@ public final class MusicEmbeds {
     public static QueueView queueView(GuildMusicManager musicManager, int requestedPage) {
         AudioPlayer audioPlayer = musicManager == null ? null : musicManager.getAudioPlayer();
         AudioTrack playingTrack = audioPlayer == null ? null : audioPlayer.getPlayingTrack();
-        List<TrackRequest> requests = musicManager == null
-                ? List.of()
-                : musicManager.getScheduler().queuedRequests();
+        TrackScheduler.QueueSnapshot queueSnapshot = musicManager == null
+                ? new TrackScheduler.QueueSnapshot(0L, List.of(), 0L, 0, 0)
+                : musicManager.getScheduler().queueSnapshot();
+        List<TrackRequest> requests = queueSnapshot.requests();
         QueuePage page = QueuePage.of(requests, requestedPage);
+        TrackScheduler.QueueStats queueStats = new TrackScheduler.QueueStats(
+                queueSnapshot.revision(),
+                queueSnapshot.requests().size(),
+                queueSnapshot.totalDurationMillis(),
+                queueSnapshot.uniqueRequesters(),
+                queueSnapshot.duplicateCount());
 
         if (playingTrack == null && requests.isEmpty()) {
             return new QueueView(
@@ -408,16 +416,22 @@ public final class MusicEmbeds {
                     .append("Громкость: `").append(audioPlayer.getVolume()).append("%` • ")
                     .append("Повтор: `").append(musicManager.getScheduler().getRepeatMode().label()).append("` • ")
                     .append("Предыдущих: `").append(musicManager.getScheduler().historySize()).append("`\n")
+                    .append("Ревизия очереди: `").append(queueStats.revision()).append("` • ")
+                    .append("Заказчиков: `").append(queueStats.uniqueRequesters()).append("` • ")
+                    .append("Дубликатов: `").append(queueStats.duplicateCount()).append("`\n")
+                    .append("Длительность ожидания: `")
+                    .append(humanMillis(queueStats.totalDurationMillis())).append("` • ")
                     .append("До конца текущей очереди: `")
                     .append(humanMillis(musicManager.getScheduler().estimatedWaitMillis())).append('`');
         }
 
         String footer = requests.isEmpty()
-                ? "Страница 1/1"
+                ? "Страница 1/1 • Ревизия " + queueStats.revision()
                 : "Показано " + page.firstPosition() + "–" + page.lastPosition()
                 + " из " + page.totalItems() + " • Страница "
                 + page.number() + "/" + page.totalPages()
-                + " • Номера подходят для /remove и /move";
+                + " • Ревизия " + queueStats.revision()
+                + " • Номера подходят для /remove и /move; диапазоны — /queue-manage remove-range";
 
         MessageEmbed embed = new EmbedBuilder()
                 .setTitle("🎶 Список треков • страница " + page.number() + "/" + page.totalPages())
@@ -429,6 +443,22 @@ public final class MusicEmbeds {
     }
 
     public record QueueView(MessageEmbed embed, int page, int totalPages) {
+    }
+
+    public static MessageEmbed queueStats(GuildMusicManager musicManager) {
+        TrackScheduler.QueueStats stats = musicManager == null
+                ? new TrackScheduler.QueueStats(0L, 0, 0L, 0, 0)
+                : musicManager.getScheduler().queueStats();
+        return new EmbedBuilder()
+                .setTitle("📊 Сводка очереди")
+                .setDescription("**Ожидающих треков:** `" + stats.size() + "`\n"
+                        + "**Общая длительность:** `" + humanMillis(stats.totalDurationMillis()) + "`\n"
+                        + "**Заказчиков:** `" + stats.uniqueRequesters() + "`\n"
+                        + "**Дубликатов:** `" + stats.duplicateCount() + "`\n"
+                        + "**Ревизия:** `" + stats.revision() + "`\n\n"
+                        + "Перед изменением очереди можно передать эту ревизию в `/queue-manage`.")
+                .setColor(Color.CYAN)
+                .build();
     }
 
     public static MessageEmbed success(String title, String description) {
@@ -517,7 +547,7 @@ public final class MusicEmbeds {
         return humanMillis(duration.toMillis());
     }
 
-    private static String humanMillis(long millis) {
+    public static String humanMillis(long millis) {
         long totalSeconds = Math.max(0L, millis) / 1000L;
         long hours = totalSeconds / 3600L;
         long minutes = (totalSeconds % 3600L) / 60L;

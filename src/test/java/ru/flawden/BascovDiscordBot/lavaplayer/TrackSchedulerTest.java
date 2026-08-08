@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -100,6 +101,96 @@ class TrackSchedulerTest {
         assertEquals(List.of(second, first), scheduler.queuedTracks());
         assertEquals(2, scheduler.clearQueue());
         assertEquals(0, scheduler.queueSize());
+    }
+
+    @Test
+    void queueRevisionTracksWaitingQueueMutations() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        TrackScheduler scheduler = new TrackScheduler(
+                player, 10, Duration.ofHours(4), () -> { }, () -> { });
+        AudioTrack first = track("First", Duration.ofMinutes(1));
+        AudioTrack second = track("Second", Duration.ofMinutes(2));
+        when(player.startTrack(first, true)).thenReturn(true);
+        when(player.startTrack(second, true)).thenReturn(false);
+
+        scheduler.queue(first);
+        assertEquals(0L, scheduler.queueRevision());
+
+        scheduler.queue(second);
+        assertEquals(1L, scheduler.queueRevision());
+
+        scheduler.removeAt(1);
+        assertEquals(2L, scheduler.queueRevision());
+    }
+
+    @Test
+    void staleRevisionRejectsRangeRemovalWithoutChangingQueue() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        TrackScheduler scheduler = new TrackScheduler(
+                player, 10, Duration.ofHours(4), () -> { }, () -> { });
+        AudioTrack first = trackWithIdentifier("First", "one", Duration.ofMinutes(1));
+        AudioTrack second = trackWithIdentifier("Second", "two", Duration.ofMinutes(2));
+        when(player.startTrack(first, true)).thenReturn(false);
+        when(player.startTrack(second, true)).thenReturn(false);
+        scheduler.queue(first);
+        scheduler.queue(second);
+
+        TrackScheduler.QueueMutationResult result = scheduler.removeRange(
+                1, 2, OptionalLong.of(1L));
+
+        assertEquals(TrackScheduler.QueueMutationStatus.STALE_REVISION, result.status());
+        assertEquals(List.of(first, second), scheduler.queuedTracks());
+        assertEquals(2L, result.revision());
+    }
+
+    @Test
+    void deduplicatePreservesFirstOccurrenceAndReportsRemovedDuration() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        TrackScheduler scheduler = new TrackScheduler(
+                player, 10, Duration.ofHours(4), () -> { }, () -> { });
+        AudioTrack first = trackWithIdentifier("First", "same-id", Duration.ofMinutes(1));
+        AudioTrack duplicate = trackWithIdentifier("Duplicate", "same-id", Duration.ofMinutes(3));
+        AudioTrack unique = trackWithIdentifier("Unique", "unique-id", Duration.ofMinutes(2));
+        when(player.startTrack(first, true)).thenReturn(false);
+        when(player.startTrack(duplicate, true)).thenReturn(false);
+        when(player.startTrack(unique, true)).thenReturn(false);
+        scheduler.queue(first);
+        scheduler.queue(duplicate);
+        scheduler.queue(unique);
+        long revision = scheduler.queueRevision();
+
+        TrackScheduler.QueueMutationResult result = scheduler.deduplicateQueue(
+                OptionalLong.of(revision));
+
+        assertEquals(TrackScheduler.QueueMutationStatus.APPLIED, result.status());
+        assertEquals(1, result.removedCount());
+        assertEquals(Duration.ofMinutes(3).toMillis(), result.removedDurationMillis());
+        assertEquals(List.of(first, unique), scheduler.queuedTracks());
+        assertEquals(revision + 1L, result.revision());
+    }
+
+    @Test
+    void removeRequesterOnlyDeletesOwnedWaitingTracks() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        TrackScheduler scheduler = new TrackScheduler(
+                player, 10, Duration.ofHours(4), () -> { }, () -> { });
+        AudioTrack mine1 = trackWithIdentifier("Mine 1", "mine-1", Duration.ofMinutes(1));
+        AudioTrack other = trackWithIdentifier("Other", "other", Duration.ofMinutes(2));
+        AudioTrack mine2 = trackWithIdentifier("Mine 2", "mine-2", Duration.ofMinutes(3));
+        when(player.startTrack(mine1, true)).thenReturn(false);
+        when(player.startTrack(other, true)).thenReturn(false);
+        when(player.startTrack(mine2, true)).thenReturn(false);
+        scheduler.queue(mine1, new TrackRequester(42L, "Me"));
+        scheduler.queue(other, new TrackRequester(7L, "Other"));
+        scheduler.queue(mine2, new TrackRequester(42L, "Me"));
+
+        TrackScheduler.QueueMutationResult result = scheduler.removeRequester(
+                42L, OptionalLong.of(scheduler.queueRevision()));
+
+        assertEquals(TrackScheduler.QueueMutationStatus.APPLIED, result.status());
+        assertEquals(2, result.removedCount());
+        assertEquals(List.of(other), scheduler.queuedTracks());
+        assertEquals(1, scheduler.queueStats().uniqueRequesters());
     }
 
     @Test
@@ -369,9 +460,14 @@ class TrackSchedulerTest {
     }
 
     private static AudioTrack track(String title, Duration duration) {
+        return trackWithIdentifier(title, title.toLowerCase(), duration);
+    }
+
+    private static AudioTrack trackWithIdentifier(String title, String identifier, Duration duration) {
         AudioTrack track = mock(AudioTrack.class);
         AudioTrackInfo info = mock(AudioTrackInfo.class);
         when(track.getInfo()).thenReturn(info);
+        when(track.getIdentifier()).thenReturn(identifier);
         when(track.getDuration()).thenReturn(duration.toMillis());
         return track;
     }

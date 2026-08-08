@@ -6,6 +6,20 @@
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-08-08
+
+### Queue Management 2.0
+- `/queue` показывает session-local ревизию ожидающей очереди, число уникальных заказчиков, число повторов и суммарную длительность ожидающих треков.
+- Добавлена группа `/queue-manage`: `stats`, `remove-range`, `dedupe` и `remove-mine`. Старые `/remove`, `/move`, `/shuffle` и `/clear` сохранены без переименования.
+- `remove-range` удаляет непрерывный диапазон позиций атомарно; `dedupe` сохраняет первую копию каждого трека и удаляет последующие; `remove-mine` удаляет только ожидающие треки самого автора команды.
+- Mutating subcommands принимают необязательный `revision`; если очередь успела измениться, операция отклоняется как stale вместо применения к уже другим позициям.
+- `TrackScheduler` получил monotonic queue revision, immutable queue stats и атомарные batch-mutation результаты с количеством удалённых треков, освобождённой длительностью и новой ревизией.
+
+### Безопасность и совместимость
+- `remove-range` и `dedupe` проходят существующую `MusicControlPolicy`; `remove-mine` не даёт доступа к чужим позициям и работает только по Discord user ID requester-а.
+- Текущий трек batch-операции не затрагивают: меняется только bounded waiting queue.
+- Форматы persistence, session checkpoint, guild settings, playlists/history, voice recovery, DAVE/YouTube stack и deployment topology не меняются.
+
 ## [1.1.0] — 2026-08-08
 
 ### Operations & Reliability

@@ -12,8 +12,11 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.OptionalLong;
+import java.util.Set;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.function.Consumer;
 
@@ -34,6 +37,7 @@ public class TrackScheduler extends AudioEventAdapter {
     private final Diagnostics diagnostics;
     private final Consumer<TrackRequest> historyListener;
     private final Object mutationLock = new Object();
+    private long queueRevision;
 
     private volatile TrackRequest currentRequest;
     private volatile long currentTrackStartedAtNanos;
@@ -154,6 +158,7 @@ public class TrackScheduler extends AudioEventAdapter {
                 return new QueueResult(QueueStatus.QUEUE_FULL, queue.size(), estimatedWaitMillis, request);
             }
 
+            markQueueMutationLocked();
             int position = queue.size();
             log.info("Track queued at position {}: {} (requested by {})",
                     position, track.getInfo().title, request.requester().displayName());
@@ -213,6 +218,8 @@ public class TrackScheduler extends AudioEventAdapter {
                 if (!queue.offer(repeated)) {
                     log.warn("Could not append repeated track because queue is full: {}",
                             track.getInfo().title);
+                } else {
+                    markQueueMutationLocked();
                 }
             }
         }
@@ -236,6 +243,7 @@ public class TrackScheduler extends AudioEventAdapter {
                 return null;
             }
 
+            markQueueMutationLocked();
             currentRequest = next;
             onActivity.run();
             audioPlayer.startTrack(next.track(), false);
@@ -262,6 +270,7 @@ public class TrackScheduler extends AudioEventAdapter {
                     history.addFirst(previous);
                     return new PreviousResult(PreviousStatus.QUEUE_CAPACITY_EXCEEDED, null, false);
                 }
+                markQueueMutationLocked();
             }
 
             TrackRequest restarted = cloneRequest(previous);
@@ -285,6 +294,10 @@ public class TrackScheduler extends AudioEventAdapter {
         synchronized (mutationLock) {
             int removed = queue.size();
             queue.clear();
+            if (removed > 0) {
+                markQueueMutationLocked();
+                onActivity.run();
+            }
             return removed;
         }
     }
@@ -298,6 +311,7 @@ public class TrackScheduler extends AudioEventAdapter {
             }
             TrackRequest removed = tracks.remove(index);
             replaceQueueLocked(tracks);
+            markQueueMutationLocked();
             onActivity.run();
             return removed;
         }
@@ -317,6 +331,7 @@ public class TrackScheduler extends AudioEventAdapter {
             TrackRequest moved = tracks.remove(from);
             tracks.add(to, moved);
             replaceQueueLocked(tracks);
+            markQueueMutationLocked();
             onActivity.run();
             return true;
         }
@@ -330,9 +345,173 @@ public class TrackScheduler extends AudioEventAdapter {
             }
             Collections.shuffle(tracks);
             replaceQueueLocked(tracks);
+            markQueueMutationLocked();
             onActivity.run();
             return tracks.size();
         }
+    }
+
+    public QueueSnapshot queueSnapshot() {
+        synchronized (mutationLock) {
+            List<TrackRequest> tracks = List.copyOf(queue);
+            Set<String> requesters = new HashSet<>();
+            Set<String> uniqueTracks = new HashSet<>();
+            int duplicates = 0;
+            long totalDurationMillis = 0L;
+            for (TrackRequest request : tracks) {
+                TrackRequester requester = request.requester();
+                requesters.add(requester.userId() > 0
+                        ? "user:" + requester.userId()
+                        : "name:" + requester.displayName());
+                if (!uniqueTracks.add(queueIdentity(request))) {
+                    duplicates++;
+                }
+                totalDurationMillis += safeDuration(request.track());
+            }
+            return new QueueSnapshot(
+                    queueRevision,
+                    tracks,
+                    totalDurationMillis,
+                    requesters.size(),
+                    duplicates);
+        }
+    }
+
+    public QueueStats queueStats() {
+        QueueSnapshot snapshot = queueSnapshot();
+        return new QueueStats(
+                snapshot.revision(),
+                snapshot.requests().size(),
+                snapshot.totalDurationMillis(),
+                snapshot.uniqueRequesters(),
+                snapshot.duplicateCount());
+    }
+
+    public QueueMutationResult removeRange(
+            int startOneBased,
+            int endOneBased,
+            OptionalLong expectedRevision) {
+        synchronized (mutationLock) {
+            QueueMutationResult stale = staleRevisionResult(expectedRevision);
+            if (stale != null) {
+                return stale;
+            }
+            List<TrackRequest> tracks = new ArrayList<>(queue);
+            if (startOneBased < 1
+                    || endOneBased < startOneBased
+                    || endOneBased > tracks.size()) {
+                return mutationResult(
+                        QueueMutationStatus.INVALID_ARGUMENT,
+                        List.of());
+            }
+
+            List<TrackRequest> removed = new ArrayList<>(
+                    tracks.subList(startOneBased - 1, endOneBased));
+            tracks.subList(startOneBased - 1, endOneBased).clear();
+            replaceQueueLocked(tracks);
+            markQueueMutationLocked();
+            onActivity.run();
+            return mutationResult(QueueMutationStatus.APPLIED, removed);
+        }
+    }
+
+    public QueueMutationResult deduplicateQueue(OptionalLong expectedRevision) {
+        synchronized (mutationLock) {
+            QueueMutationResult stale = staleRevisionResult(expectedRevision);
+            if (stale != null) {
+                return stale;
+            }
+            List<TrackRequest> kept = new ArrayList<>();
+            List<TrackRequest> removed = new ArrayList<>();
+            Set<String> seen = new HashSet<>();
+            for (TrackRequest request : queue) {
+                if (seen.add(queueIdentity(request))) {
+                    kept.add(request);
+                } else {
+                    removed.add(request);
+                }
+            }
+            if (removed.isEmpty()) {
+                return mutationResult(QueueMutationStatus.NO_CHANGES, List.of());
+            }
+            replaceQueueLocked(kept);
+            markQueueMutationLocked();
+            onActivity.run();
+            return mutationResult(QueueMutationStatus.APPLIED, removed);
+        }
+    }
+
+    public QueueMutationResult removeRequester(
+            long requesterUserId,
+            OptionalLong expectedRevision) {
+        synchronized (mutationLock) {
+            QueueMutationResult stale = staleRevisionResult(expectedRevision);
+            if (stale != null) {
+                return stale;
+            }
+            if (requesterUserId <= 0L) {
+                return mutationResult(QueueMutationStatus.INVALID_ARGUMENT, List.of());
+            }
+            List<TrackRequest> kept = new ArrayList<>();
+            List<TrackRequest> removed = new ArrayList<>();
+            for (TrackRequest request : queue) {
+                if (request.requester().userId() == requesterUserId) {
+                    removed.add(request);
+                } else {
+                    kept.add(request);
+                }
+            }
+            if (removed.isEmpty()) {
+                return mutationResult(QueueMutationStatus.NO_CHANGES, List.of());
+            }
+            replaceQueueLocked(kept);
+            markQueueMutationLocked();
+            onActivity.run();
+            return mutationResult(QueueMutationStatus.APPLIED, removed);
+        }
+    }
+
+    private QueueMutationResult staleRevisionResult(OptionalLong expectedRevision) {
+        OptionalLong safeExpected = expectedRevision == null ? OptionalLong.empty() : expectedRevision;
+        if (safeExpected.isPresent() && safeExpected.getAsLong() != queueRevision) {
+            return mutationResult(QueueMutationStatus.STALE_REVISION, List.of());
+        }
+        return null;
+    }
+
+    private QueueMutationResult mutationResult(
+            QueueMutationStatus status,
+            List<TrackRequest> removed) {
+        List<TrackRequest> safeRemoved = List.copyOf(removed);
+        long removedDurationMillis = safeRemoved.stream()
+                .mapToLong(request -> safeDuration(request.track()))
+                .sum();
+        return new QueueMutationResult(
+                status,
+                safeRemoved.size(),
+                removedDurationMillis,
+                queue.size(),
+                queueRevision,
+                safeRemoved);
+    }
+
+    private static String queueIdentity(TrackRequest request) {
+        AudioTrack track = request.track();
+        String identifier = track.getIdentifier();
+        if (identifier != null && !identifier.isBlank()) {
+            return "id:" + identifier.trim();
+        }
+        if (track.getInfo() != null) {
+            String uri = track.getInfo().uri;
+            if (uri != null && !uri.isBlank()) {
+                return "uri:" + uri.trim();
+            }
+            return "meta:"
+                    + Objects.toString(track.getInfo().title, "") + '\u0000'
+                    + Objects.toString(track.getInfo().author, "") + '\u0000'
+                    + safeDuration(track);
+        }
+        return "track:" + System.identityHashCode(track);
     }
 
     public RepeatMode setRepeatMode(RepeatMode mode) {
@@ -351,6 +530,12 @@ public class TrackScheduler extends AudioEventAdapter {
 
     public TrackRequest getCurrentRequest() {
         return currentRequest;
+    }
+
+    public long queueRevision() {
+        synchronized (mutationLock) {
+            return queueRevision;
+        }
     }
 
     public List<TrackRequest> queuedRequests() {
@@ -471,6 +656,10 @@ public class TrackScheduler extends AudioEventAdapter {
         return request.withTrack(request.track().makeClone());
     }
 
+    private void markQueueMutationLocked() {
+        queueRevision++;
+    }
+
     private void replaceQueueLocked(List<TrackRequest> tracks) {
         queue.clear();
         for (TrackRequest track : tracks) {
@@ -554,6 +743,46 @@ public class TrackScheduler extends AudioEventAdapter {
             PreviousStatus status,
             TrackRequest request,
             boolean returnedCurrentToQueue) {
+    }
+
+    public enum QueueMutationStatus {
+        APPLIED,
+        NO_CHANGES,
+        STALE_REVISION,
+        INVALID_ARGUMENT
+    }
+
+    public record QueueSnapshot(
+            long revision,
+            List<TrackRequest> requests,
+            long totalDurationMillis,
+            int uniqueRequesters,
+            int duplicateCount) {
+
+        public QueueSnapshot {
+            requests = List.copyOf(requests);
+        }
+    }
+
+    public record QueueStats(
+            long revision,
+            int size,
+            long totalDurationMillis,
+            int uniqueRequesters,
+            int duplicateCount) {
+    }
+
+    public record QueueMutationResult(
+            QueueMutationStatus status,
+            int removedCount,
+            long removedDurationMillis,
+            int queueSize,
+            long revision,
+            List<TrackRequest> removed) {
+
+        public QueueMutationResult {
+            removed = List.copyOf(removed);
+        }
     }
 
     public enum QueueStatus {
