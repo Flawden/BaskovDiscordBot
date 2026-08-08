@@ -27,13 +27,24 @@ Source failures, premature preview, `404`, `stuck`, cleanup recovery и неус
 /playlist list
 /playlist create name
 /playlist show name [page]
+/playlist search query
 /playlist add name
+/playlist add-history name position
+/playlist capture-queue name [include-current]
 /playlist play name
 /playlist remove name position
+/playlist move name from to
+/playlist rename name new-name
+/playlist copy name new-name
+/playlist dedupe name
 /playlist delete name
 ```
 
-`/playlist add` сохраняет текущий воспроизводимый трек. `show`, `add`, `play`, `remove` и `delete` поддерживают autocomplete имени плейлиста.
+`/playlist add` сохраняет текущий воспроизводимый трек. `add-history` берёт запись из постоянной `/history`, а `capture-queue` атомарно добавляет текущую музыкальную сессию в уже существующий плейлист. По умолчанию в capture включается текущий трек; `include-current:false` сохраняет только ожидающую очередь.
+
+`rename`, `move`, `dedupe`, `capture-queue`, `add-history` и старые mutating-команды доступны владельцу плейлиста или участнику с `Manage Server`. `copy` не изменяет исходник: создаётся независимая копия, владельцем которой становится автор команды.
+
+`/playlist search` ищет без учёта регистра по названию плейлиста, названию трека и исполнителю и показывает позиции совпавших треков. Все subcommands с параметром `name` поддерживают autocomplete имени плейлиста.
 
 Ограничения:
 
@@ -45,6 +56,8 @@ Source failures, premature preview, `404`, `stuck`, cleanup recovery и неус
 - смотреть и запускать плейлист могут участники сервера, имеющие доступ к музыкальному управлению.
 
 `/playlist play` повторно загружает сохранённые URL в исходном порядке. Недоступная запись считается отклонённой, но не мешает загрузке остальных треков. Итоговое сообщение показывает количество запущенных, поставленных в очередь и отклонённых записей.
+
+`capture-queue` сначала преобразует все доступные TrackRequest в replayable `StoredTrack` и проверяет общий лимит. Если целиком набор не помещается в 50 треков, операция отклоняется без частичной записи. `dedupe` определяет повтор как одинаковую пару provider + playback URL/identifier и сохраняет первую копию.
 
 ## Хранилище
 

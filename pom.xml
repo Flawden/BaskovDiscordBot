@@ -9,14 +9,14 @@
     </parent>
     <groupId>ru.flawden</groupId>
     <artifactId>BascovDiscordBot</artifactId>
-    <version>1.2.0</version>
+    <version>1.3.0</version>
     <name>BaskovDiscordBot</name>
     <description>Bot kissing hands and loving tea from golden cups</description>
     <properties>
         <java.version>17</java.version>
         <libdave-jvm.version>ce725965e</libdave-jvm.version>
         <youtube-source.version>1.18.2</youtube-source.version>
-        <project.build.outputTimestamp>2026-08-08T17:04:33Z</project.build.outputTimestamp>
+        <project.build.outputTimestamp>2026-08-08T18:30:21Z</project.build.outputTimestamp>
         <build.revision>development</build.revision>
     </properties>
 

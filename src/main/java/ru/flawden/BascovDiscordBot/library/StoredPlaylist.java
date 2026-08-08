@@ -1,5 +1,6 @@
 package ru.flawden.BascovDiscordBot.library;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -26,14 +27,28 @@ public record StoredPlaylist(
         return PlaylistName.key(name);
     }
 
+    public StoredPlaylist withName(String newName) {
+        return new StoredPlaylist(newName, ownerUserId, createdAtEpochMillis, tracks);
+    }
+
     public StoredPlaylist withAddedTrack(StoredTrack track) {
-        List<StoredTrack> updated = new java.util.ArrayList<>(tracks);
+        List<StoredTrack> updated = new ArrayList<>(tracks);
         updated.add(track);
         return new StoredPlaylist(name, ownerUserId, createdAtEpochMillis, updated);
     }
 
+    public StoredPlaylist withAddedTracks(List<StoredTrack> additions) {
+        List<StoredTrack> updated = new ArrayList<>(tracks);
+        updated.addAll(additions);
+        return new StoredPlaylist(name, ownerUserId, createdAtEpochMillis, updated);
+    }
+
+    public StoredPlaylist withTracks(List<StoredTrack> updatedTracks) {
+        return new StoredPlaylist(name, ownerUserId, createdAtEpochMillis, updatedTracks);
+    }
+
     public StoredPlaylist withoutTrack(int zeroBasedIndex) {
-        List<StoredTrack> updated = new java.util.ArrayList<>(tracks);
+        List<StoredTrack> updated = new ArrayList<>(tracks);
         updated.remove(zeroBasedIndex);
         return new StoredPlaylist(name, ownerUserId, createdAtEpochMillis, updated);
     }

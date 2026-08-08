@@ -52,6 +52,7 @@ import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
 import ru.flawden.BascovDiscordBot.settings.PlaybackAccessMode;
 
 import java.awt.Color;
+import java.util.ArrayList;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
@@ -618,10 +619,17 @@ public class ModernInteractions extends ListenerAdapter {
                 case "add" -> addCurrentTrackToPlaylist(event, name);
                 case "play" -> playPlaylist(event, name);
                 case "remove" -> removeTrackFromPlaylist(event, name);
+                case "move" -> moveTrackInPlaylist(event, name);
+                case "rename" -> renamePlaylist(event, name);
+                case "copy" -> copyPlaylist(event, name);
+                case "dedupe" -> dedupePlaylist(event, name);
+                case "capture-queue" -> captureQueueToPlaylist(event, name);
+                case "add-history" -> addHistoryTrackToPlaylist(event, name);
+                case "search" -> searchPlaylists(event);
                 case "delete" -> deletePlaylist(event, name);
                 default -> event.replyEmbeds(MusicEmbeds.error(
                                 "📚 Неизвестная операция",
-                                "Используй `/playlist list`, `create`, `show`, `add`, `play`, `remove` или `delete`."))
+                                "Используй `/playlist list`, `show`, `search` и команды управления библиотекой."))
                         .setEphemeral(true)
                         .queue();
             }
@@ -723,6 +731,121 @@ public class ModernInteractions extends ListenerAdapter {
         replyPlaylistMutation(event, result);
     }
 
+    private void moveTrackInPlaylist(SlashCommandInteractionEvent event, String name) {
+        long from = event.getOption("from", -1L, OptionMapping::getAsLong);
+        long to = event.getOption("to", -1L, OptionMapping::getAsLong);
+        if (from < 1L || to < 1L || from > Integer.MAX_VALUE || to > Integer.MAX_VALUE) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "↕️ Неверная позиция",
+                            "Позиции должны быть положительными целыми числами."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        PlaylistOperationResult result = musicLibraryRepository.moveTrack(
+                event.getGuild().getIdLong(),
+                name,
+                event.getUser().getIdLong(),
+                isLibraryAdministrator(event.getMember()),
+                Math.toIntExact(from),
+                Math.toIntExact(to));
+        replyPlaylistMutation(event, result);
+    }
+
+    private void renamePlaylist(SlashCommandInteractionEvent event, String name) {
+        String newName = event.getOption("new-name", "", OptionMapping::getAsString);
+        PlaylistOperationResult result = musicLibraryRepository.renamePlaylist(
+                event.getGuild().getIdLong(),
+                name,
+                newName,
+                event.getUser().getIdLong(),
+                isLibraryAdministrator(event.getMember()));
+        replyPlaylistMutation(event, result);
+    }
+
+    private void copyPlaylist(SlashCommandInteractionEvent event, String name) {
+        String newName = event.getOption("new-name", "", OptionMapping::getAsString);
+        PlaylistOperationResult result = musicLibraryRepository.copyPlaylist(
+                event.getGuild().getIdLong(),
+                name,
+                newName,
+                event.getUser().getIdLong());
+        replyPlaylistMutation(event, result);
+    }
+
+    private void dedupePlaylist(SlashCommandInteractionEvent event, String name) {
+        PlaylistOperationResult result = musicLibraryRepository.dedupePlaylist(
+                event.getGuild().getIdLong(),
+                name,
+                event.getUser().getIdLong(),
+                isLibraryAdministrator(event.getMember()));
+        replyPlaylistMutation(event, result);
+    }
+
+    private void captureQueueToPlaylist(SlashCommandInteractionEvent event, String name) {
+        if (!allowControl(event)) {
+            return;
+        }
+        GuildMusicManager manager = playerManager.findMusicManager(event.getGuild()).orElse(null);
+        if (manager == null) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "📭 Очередь пуста",
+                            "Сейчас нет музыкальной сессии, которую можно сохранить."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        boolean includeCurrent = event.getOption("include-current", true, OptionMapping::getAsBoolean);
+        ArrayList<StoredTrack> tracks = new ArrayList<>();
+        if (includeCurrent) {
+            StoredTrack.from(manager.getScheduler().getCurrentRequest()).ifPresent(tracks::add);
+        }
+        manager.getScheduler().queuedRequests().stream()
+                .map(StoredTrack::from)
+                .flatMap(java.util.Optional::stream)
+                .forEach(tracks::add);
+
+        PlaylistOperationResult result = musicLibraryRepository.addTracks(
+                event.getGuild().getIdLong(),
+                name,
+                event.getUser().getIdLong(),
+                isLibraryAdministrator(event.getMember()),
+                tracks);
+        replyPlaylistMutation(event, result);
+    }
+
+    private void addHistoryTrackToPlaylist(SlashCommandInteractionEvent event, String name) {
+        long requestedPosition = event.getOption("position", -1L, OptionMapping::getAsLong);
+        List<StoredTrack> history = musicLibraryRepository.history(event.getGuild().getIdLong());
+        if (requestedPosition < 1L || requestedPosition > history.size()) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🕘 Позиция истории не найдена",
+                            history.isEmpty()
+                                    ? "История пока пуста."
+                                    : "Укажи номер из диапазона `1.." + history.size() + "`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        PlaylistOperationResult result = musicLibraryRepository.addTrack(
+                event.getGuild().getIdLong(),
+                name,
+                event.getUser().getIdLong(),
+                isLibraryAdministrator(event.getMember()),
+                history.get(Math.toIntExact(requestedPosition - 1L)));
+        replyPlaylistMutation(event, result);
+    }
+
+    private void searchPlaylists(SlashCommandInteractionEvent event) {
+        String query = event.getOption("query", "", OptionMapping::getAsString);
+        event.replyEmbeds(MusicEmbeds.playlistSearch(
+                        query,
+                        musicLibraryRepository.search(event.getGuild().getIdLong(), query)))
+                .setEphemeral(true)
+                .queue();
+    }
+
     private void deletePlaylist(SlashCommandInteractionEvent event, String name) {
         PlaylistOperationResult result = musicLibraryRepository.deletePlaylist(
                 event.getGuild().getIdLong(),
@@ -743,6 +866,26 @@ public class ModernInteractions extends ListenerAdapter {
                     "➕ Трек сохранён",
                     "`" + result.track().title() + "` добавлен в `" + result.playlist().name()
                             + "`. Треков: `" + result.playlist().tracks().size() + "`.");
+            case BULK_ADDED -> MusicEmbeds.success(
+                    "📥 Очередь сохранена",
+                    "В `" + result.playlist().name() + "` добавлено `" + result.affectedTracks()
+                            + "` треков. Всего: `" + result.playlist().tracks().size() + "`.");
+            case MOVED -> MusicEmbeds.success(
+                    "↕️ Трек перемещён",
+                    "`" + result.track().title() + "` перемещён внутри `" + result.playlist().name() + "`.");
+            case DEDUPED -> MusicEmbeds.success(
+                    "🧹 Дубликаты обработаны",
+                    result.affectedTracks() == 0
+                            ? "В `" + result.playlist().name() + "` дубликатов не найдено."
+                            : "Удалено повторов: `" + result.affectedTracks() + "`. Осталось: `"
+                                    + result.playlist().tracks().size() + "`.");
+            case RENAMED -> MusicEmbeds.success(
+                    "✏️ Плейлист переименован",
+                    "Новое название: `" + result.playlist().name() + "`.");
+            case COPIED -> MusicEmbeds.success(
+                    "📑 Плейлист скопирован",
+                    "Создана твоя копия `" + result.playlist().name() + "` с `"
+                            + result.playlist().tracks().size() + "` треками.");
             case REMOVED -> MusicEmbeds.success(
                     "🗑️ Трек удалён из плейлиста",
                     "Удалён `" + result.track().title() + "`. Осталось: `"

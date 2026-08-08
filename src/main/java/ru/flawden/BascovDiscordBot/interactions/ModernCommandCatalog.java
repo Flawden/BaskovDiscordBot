@@ -94,6 +94,56 @@ public final class ModernCommandCatalog {
                                                 "position",
                                                 "Позиция трека в плейлисте",
                                                 true),
+                                new SubcommandData("move", "Перемещает трек внутри плейлиста")
+                                        .addOptions(new OptionData(
+                                                OptionType.STRING,
+                                                "name",
+                                                "Название плейлиста",
+                                                true)
+                                                .setAutoComplete(true))
+                                        .addOption(OptionType.INTEGER, "from", "Текущая позиция", true)
+                                        .addOption(OptionType.INTEGER, "to", "Новая позиция", true),
+                                new SubcommandData("rename", "Переименовывает плейлист")
+                                        .addOptions(new OptionData(
+                                                OptionType.STRING,
+                                                "name",
+                                                "Текущее название",
+                                                true)
+                                                .setAutoComplete(true))
+                                        .addOption(OptionType.STRING, "new-name", "Новое название", true),
+                                new SubcommandData("copy", "Создаёт твою копию плейлиста")
+                                        .addOptions(new OptionData(
+                                                OptionType.STRING,
+                                                "name",
+                                                "Исходный плейлист",
+                                                true)
+                                                .setAutoComplete(true))
+                                        .addOption(OptionType.STRING, "new-name", "Название копии", true),
+                                new SubcommandData("dedupe", "Удаляет повторные треки, сохраняя первую копию")
+                                        .addOptions(new OptionData(
+                                                OptionType.STRING,
+                                                "name",
+                                                "Название плейлиста",
+                                                true)
+                                                .setAutoComplete(true)),
+                                new SubcommandData("capture-queue", "Сохраняет текущую музыкальную очередь в плейлист")
+                                        .addOptions(new OptionData(
+                                                OptionType.STRING,
+                                                "name",
+                                                "Название плейлиста",
+                                                true)
+                                                .setAutoComplete(true))
+                                        .addOption(OptionType.BOOLEAN, "include-current", "Включить текущий трек", false),
+                                new SubcommandData("add-history", "Добавляет трек из истории в плейлист")
+                                        .addOptions(new OptionData(
+                                                OptionType.STRING,
+                                                "name",
+                                                "Название плейлиста",
+                                                true)
+                                                .setAutoComplete(true))
+                                        .addOption(OptionType.INTEGER, "position", "Позиция из /history", true),
+                                new SubcommandData("search", "Ищет по названиям плейлистов, треков и исполнителей")
+                                        .addOption(OptionType.STRING, "query", "Что искать в библиотеке", true),
                                 new SubcommandData("delete", "Удаляет плейлист")
                                         .addOptions(new OptionData(
                                                 OptionType.STRING,

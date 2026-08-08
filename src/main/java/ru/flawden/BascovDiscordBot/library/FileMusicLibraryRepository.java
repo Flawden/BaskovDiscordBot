@@ -20,7 +20,9 @@ import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -190,6 +192,251 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
             replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history()));
             return PlaylistOperationResult.of(PlaylistOperationResult.Status.ADDED, updated, track);
         }
+    }
+
+    @Override
+    public PlaylistOperationResult addTracks(
+            long guildId,
+            String name,
+            long actorUserId,
+            boolean administrator,
+            List<StoredTrack> tracks) {
+        validateGuildId(guildId);
+        validateActor(actorUserId);
+        String key = PlaylistName.key(name);
+        List<StoredTrack> safeTracks = tracks == null
+                ? List.of()
+                : tracks.stream().filter(java.util.Objects::nonNull).toList();
+        if (safeTracks.isEmpty()) {
+            return PlaylistOperationResult.of(
+                    PlaylistOperationResult.Status.UNREPLAYABLE_TRACK,
+                    null);
+        }
+
+        synchronized (mutationLock) {
+            GuildLibrary previous = libraries.getOrDefault(guildId, GuildLibrary.empty());
+            StoredPlaylist playlist = previous.playlists().get(key);
+            if (playlist == null) {
+                return PlaylistOperationResult.of(PlaylistOperationResult.Status.NOT_FOUND, null);
+            }
+            if (!canModify(playlist, actorUserId, administrator)) {
+                return PlaylistOperationResult.of(PlaylistOperationResult.Status.FORBIDDEN, playlist);
+            }
+            if (playlist.tracks().size() + safeTracks.size() > MAX_TRACKS_PER_PLAYLIST) {
+                return PlaylistOperationResult.of(
+                        PlaylistOperationResult.Status.TRACK_LIMIT_REACHED,
+                        playlist);
+            }
+
+            StoredPlaylist updated = playlist.withAddedTracks(safeTracks);
+            LinkedHashMap<String, StoredPlaylist> playlists = new LinkedHashMap<>(previous.playlists());
+            playlists.put(key, updated);
+            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history()));
+            return PlaylistOperationResult.of(
+                    PlaylistOperationResult.Status.BULK_ADDED,
+                    updated,
+                    safeTracks.get(safeTracks.size() - 1),
+                    safeTracks.size());
+        }
+    }
+
+    @Override
+    public PlaylistOperationResult renamePlaylist(
+            long guildId,
+            String name,
+            String newName,
+            long actorUserId,
+            boolean administrator) {
+        validateGuildId(guildId);
+        validateActor(actorUserId);
+        String key = PlaylistName.key(name);
+        String displayNewName = PlaylistName.display(newName);
+        String newKey = PlaylistName.key(displayNewName);
+
+        synchronized (mutationLock) {
+            GuildLibrary previous = libraries.getOrDefault(guildId, GuildLibrary.empty());
+            StoredPlaylist playlist = previous.playlists().get(key);
+            if (playlist == null) {
+                return PlaylistOperationResult.of(PlaylistOperationResult.Status.NOT_FOUND, null);
+            }
+            if (!canModify(playlist, actorUserId, administrator)) {
+                return PlaylistOperationResult.of(PlaylistOperationResult.Status.FORBIDDEN, playlist);
+            }
+            if (!key.equals(newKey) && previous.playlists().containsKey(newKey)) {
+                return PlaylistOperationResult.of(
+                        PlaylistOperationResult.Status.ALREADY_EXISTS,
+                        previous.playlists().get(newKey));
+            }
+
+            StoredPlaylist updated = playlist.withName(displayNewName);
+            LinkedHashMap<String, StoredPlaylist> playlists = new LinkedHashMap<>(previous.playlists());
+            playlists.remove(key);
+            playlists.put(newKey, updated);
+            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history()));
+            return PlaylistOperationResult.of(PlaylistOperationResult.Status.RENAMED, updated);
+        }
+    }
+
+    @Override
+    public PlaylistOperationResult copyPlaylist(
+            long guildId,
+            String sourceName,
+            String newName,
+            long actorUserId) {
+        validateGuildId(guildId);
+        validateActor(actorUserId);
+        String sourceKey = PlaylistName.key(sourceName);
+        String displayNewName = PlaylistName.display(newName);
+        String newKey = PlaylistName.key(displayNewName);
+
+        synchronized (mutationLock) {
+            GuildLibrary previous = libraries.getOrDefault(guildId, GuildLibrary.empty());
+            StoredPlaylist source = previous.playlists().get(sourceKey);
+            if (source == null) {
+                return PlaylistOperationResult.of(PlaylistOperationResult.Status.NOT_FOUND, null);
+            }
+            if (previous.playlists().containsKey(newKey)) {
+                return PlaylistOperationResult.of(
+                        PlaylistOperationResult.Status.ALREADY_EXISTS,
+                        previous.playlists().get(newKey));
+            }
+            if (previous.playlists().size() >= MAX_PLAYLISTS_PER_GUILD) {
+                return PlaylistOperationResult.of(
+                        PlaylistOperationResult.Status.PLAYLIST_LIMIT_REACHED,
+                        null);
+            }
+
+            StoredPlaylist copied = new StoredPlaylist(
+                    displayNewName,
+                    actorUserId,
+                    System.currentTimeMillis(),
+                    source.tracks());
+            LinkedHashMap<String, StoredPlaylist> playlists = new LinkedHashMap<>(previous.playlists());
+            playlists.put(newKey, copied);
+            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history()));
+            return PlaylistOperationResult.of(
+                    PlaylistOperationResult.Status.COPIED,
+                    copied,
+                    null,
+                    copied.tracks().size());
+        }
+    }
+
+    @Override
+    public PlaylistOperationResult moveTrack(
+            long guildId,
+            String name,
+            long actorUserId,
+            boolean administrator,
+            int fromOneBasedPosition,
+            int toOneBasedPosition) {
+        validateGuildId(guildId);
+        validateActor(actorUserId);
+        String key = PlaylistName.key(name);
+
+        synchronized (mutationLock) {
+            GuildLibrary previous = libraries.getOrDefault(guildId, GuildLibrary.empty());
+            StoredPlaylist playlist = previous.playlists().get(key);
+            if (playlist == null) {
+                return PlaylistOperationResult.of(PlaylistOperationResult.Status.NOT_FOUND, null);
+            }
+            if (!canModify(playlist, actorUserId, administrator)) {
+                return PlaylistOperationResult.of(PlaylistOperationResult.Status.FORBIDDEN, playlist);
+            }
+            int fromIndex = fromOneBasedPosition - 1;
+            int toIndex = toOneBasedPosition - 1;
+            if (fromIndex < 0 || fromIndex >= playlist.tracks().size()
+                    || toIndex < 0 || toIndex >= playlist.tracks().size()) {
+                return PlaylistOperationResult.of(
+                        PlaylistOperationResult.Status.INVALID_POSITION,
+                        playlist);
+            }
+
+            ArrayList<StoredTrack> tracks = new ArrayList<>(playlist.tracks());
+            StoredTrack moved = tracks.remove(fromIndex);
+            tracks.add(toIndex, moved);
+            StoredPlaylist updated = playlist.withTracks(tracks);
+            LinkedHashMap<String, StoredPlaylist> playlists = new LinkedHashMap<>(previous.playlists());
+            playlists.put(key, updated);
+            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history()));
+            return PlaylistOperationResult.of(PlaylistOperationResult.Status.MOVED, updated, moved);
+        }
+    }
+
+    @Override
+    public PlaylistOperationResult dedupePlaylist(
+            long guildId,
+            String name,
+            long actorUserId,
+            boolean administrator) {
+        validateGuildId(guildId);
+        validateActor(actorUserId);
+        String key = PlaylistName.key(name);
+
+        synchronized (mutationLock) {
+            GuildLibrary previous = libraries.getOrDefault(guildId, GuildLibrary.empty());
+            StoredPlaylist playlist = previous.playlists().get(key);
+            if (playlist == null) {
+                return PlaylistOperationResult.of(PlaylistOperationResult.Status.NOT_FOUND, null);
+            }
+            if (!canModify(playlist, actorUserId, administrator)) {
+                return PlaylistOperationResult.of(PlaylistOperationResult.Status.FORBIDDEN, playlist);
+            }
+
+            LinkedHashSet<String> seen = new LinkedHashSet<>();
+            ArrayList<StoredTrack> unique = new ArrayList<>();
+            for (StoredTrack track : playlist.tracks()) {
+                String identity = track.provider().name() + "|"
+                        + track.playbackIdentifier().trim().toLowerCase(Locale.ROOT);
+                if (seen.add(identity)) {
+                    unique.add(track);
+                }
+            }
+            int removed = playlist.tracks().size() - unique.size();
+            StoredPlaylist updated = removed == 0 ? playlist : playlist.withTracks(unique);
+            if (removed > 0) {
+                LinkedHashMap<String, StoredPlaylist> playlists = new LinkedHashMap<>(previous.playlists());
+                playlists.put(key, updated);
+                replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history()));
+            }
+            return PlaylistOperationResult.of(
+                    PlaylistOperationResult.Status.DEDUPED,
+                    updated,
+                    null,
+                    removed);
+        }
+    }
+
+    @Override
+    public List<PlaylistSearchHit> search(long guildId, String query) {
+        validateGuildId(guildId);
+        String normalized = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        if (normalized.isBlank()) {
+            throw new IllegalArgumentException("Поисковый запрос не может быть пустым");
+        }
+
+        return playlists(guildId).stream()
+                .map(playlist -> {
+                    ArrayList<Integer> positions = new ArrayList<>();
+                    for (int index = 0; index < playlist.tracks().size(); index++) {
+                        StoredTrack track = playlist.tracks().get(index);
+                        if (containsIgnoreCase(track.title(), normalized)
+                                || containsIgnoreCase(track.author(), normalized)) {
+                            positions.add(index + 1);
+                        }
+                    }
+                    boolean playlistNameMatches = containsIgnoreCase(playlist.name(), normalized);
+                    return playlistNameMatches || !positions.isEmpty()
+                            ? new PlaylistSearchHit(playlist, positions)
+                            : null;
+                })
+                .filter(java.util.Objects::nonNull)
+                .limit(20)
+                .toList();
+    }
+
+    private static boolean containsIgnoreCase(String value, String normalizedQuery) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains(normalizedQuery);
     }
 
     @Override

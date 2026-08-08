@@ -6,6 +6,22 @@
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-08-08
+
+### Library & Playlists 2.0
+- `/playlist` получил lifecycle-операции `rename`, `copy`, `move` и `dedupe` без изменения существующего TSV-формата `BASKOV_MUSIC_LIBRARY_V1`.
+- Добавлен `/playlist capture-queue`: текущий трек и ожидающая очередь преобразуются в replayable `StoredTrack` и добавляются в целевой плейлист одной atomic persistence mutation; `include-current:false` сохраняет только ожидающие треки.
+- Добавлен `/playlist add-history`: любой replayable трек из постоянной `/history` можно повторно сохранить в плейлист по его позиции.
+- Добавлен `/playlist search`: поиск без учёта регистра по названию плейлиста, названию трека и исполнителю; результат показывает совпавшие позиции внутри плейлистов.
+- `copy` создаёт независимую копию с новым владельцем — автором команды; исходный плейлист не изменяется.
+- `dedupe` сохраняет первую копию каждого `provider + playbackIdentifier`, удаляет последующие и сообщает число удалённых повторов.
+
+### Безопасность и совместимость
+- Изменяющие операции (`rename`, `move`, `dedupe`, `capture-queue`, `add-history`) сохраняют существующую модель owner-or-`Manage Server`; `copy` не требует права изменения исходника, потому что создаёт новый объект пользователя.
+- Bulk capture заранее проверяет лимит 50 треков и либо сохраняет весь набор, либо ничего не меняет; частичных плейлистов после переполнения нет.
+- Форматы `music-library.tsv`, history, guild settings, session checkpoints, backup ZIP, queue revision, voice recovery и deployment topology не меняются.
+- Java 17, Spring Boot 3.4.3, JDA 6.5.0, LavaPlayer 2.2.3, `youtube-source 1.18.2` и native libDAVE `ce725965e` остаются закреплены.
+
 ## [1.2.0] — 2026-08-08
 
 ### Queue Management 2.0

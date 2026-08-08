@@ -14,6 +14,7 @@ import ru.flawden.BascovDiscordBot.lavaplayer.TrackScheduler;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
 import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
+import ru.flawden.BascovDiscordBot.library.PlaylistSearchHit;
 import ru.flawden.BascovDiscordBot.library.StoredPlaylist;
 import ru.flawden.BascovDiscordBot.library.StoredTrack;
 
@@ -249,6 +250,36 @@ public final class MusicEmbeds {
                 .setDescription(description.toString())
                 .setColor(Color.CYAN)
                 .setFooter("До 20 плейлистов на сервер и до 50 треков в каждом")
+                .build();
+    }
+
+    public static MessageEmbed playlistSearch(String query, List<PlaylistSearchHit> hits) {
+        if (hits == null || hits.isEmpty()) {
+            return error(
+                    "🔎 В библиотеке ничего не найдено",
+                    "По запросу `" + shortText(query, 80) + "` совпадений нет.");
+        }
+        StringBuilder description = new StringBuilder();
+        for (PlaylistSearchHit hit : hits) {
+            StoredPlaylist playlist = hit.playlist();
+            description.append("• **").append(shortText(playlist.name(), 60)).append("**")
+                    .append(" — `").append(playlist.tracks().size()).append(" треков`");
+            if (!hit.matchingPositions().isEmpty()) {
+                description.append(" • позиции `")
+                        .append(hit.matchingPositions().stream()
+                                .limit(8)
+                                .map(String::valueOf)
+                                .collect(java.util.stream.Collectors.joining(", ")))
+                        .append(hit.matchingPositions().size() > 8 ? ", …" : "")
+                        .append("`");
+            }
+            description.append("\n");
+        }
+        return new EmbedBuilder()
+                .setTitle("🔎 Поиск по библиотеке")
+                .setDescription("Запрос: `" + shortText(query, 80) + "`\n\n" + description)
+                .setColor(Color.CYAN)
+                .setFooter("Позиции можно открыть через /playlist show")
                 .build();
     }
 

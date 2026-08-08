@@ -25,6 +25,42 @@ public interface MusicLibraryRepository {
             boolean administrator,
             StoredTrack track);
 
+    PlaylistOperationResult addTracks(
+            long guildId,
+            String name,
+            long actorUserId,
+            boolean administrator,
+            List<StoredTrack> tracks);
+
+    PlaylistOperationResult renamePlaylist(
+            long guildId,
+            String name,
+            String newName,
+            long actorUserId,
+            boolean administrator);
+
+    PlaylistOperationResult copyPlaylist(
+            long guildId,
+            String sourceName,
+            String newName,
+            long actorUserId);
+
+    PlaylistOperationResult moveTrack(
+            long guildId,
+            String name,
+            long actorUserId,
+            boolean administrator,
+            int fromOneBasedPosition,
+            int toOneBasedPosition);
+
+    PlaylistOperationResult dedupePlaylist(
+            long guildId,
+            String name,
+            long actorUserId,
+            boolean administrator);
+
+    List<PlaylistSearchHit> search(long guildId, String query);
+
     PlaylistOperationResult removeTrack(
             long guildId,
             String name,

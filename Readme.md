@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.2.0**.
+Текущая версия релизной ветки: **v1.3.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -8,7 +8,7 @@
 
 - slash-команды воспроизведения и полноценного управления очередью;
 - `/search` с пятью результатами YouTube, одноразовыми кнопками выбора и пятиминутной owner-bound сессией; autocomplete последних запросов работает в `/play` и `/search`;
-- постоянная история до 50 треков на сервер, `/history`, `/replay` и серверные плейлисты с owner/admin-управлением, autocomplete и ordered batch playback;
+- постоянная история до 50 треков на сервер, `/history`, `/replay` и серверные плейлисты с owner/admin-управлением, autocomplete, lifecycle-операциями, поиском, capture queue и ordered batch playback;
 - legacy `!`-команды как compatibility layer;
 - воспроизведение музыки, пауза, остановка, пропуск и возврат к предыдущим трекам;
 - requester, ETA для каждой позиции, постраничная очередь с кнопками навигации, bounded history, previous, repeat mode, shuffle, seek, remove/move/clear и управление громкостью;

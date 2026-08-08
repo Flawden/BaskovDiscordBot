@@ -73,12 +73,16 @@ class ModernCommandCatalogTest {
     @Test
     void playlistCommandExposesPersistentLibrarySubcommands() {
         SlashCommandData playlist = command("playlist");
-        assertEquals(Set.of("list", "create", "show", "add", "play", "remove", "delete"),
+        assertEquals(Set.of(
+                        "list", "create", "show", "add", "play", "remove", "move",
+                        "rename", "copy", "dedupe", "capture-queue", "add-history", "search", "delete"),
                 playlist.getSubcommands().stream()
                         .map(subcommand -> subcommand.getName())
                         .collect(Collectors.toSet()));
         assertTrue(playlist.getSubcommands().stream()
-                .filter(subcommand -> Set.of("show", "add", "play", "remove", "delete")
+                .filter(subcommand -> Set.of(
+                                "show", "add", "play", "remove", "move", "rename",
+                                "copy", "dedupe", "capture-queue", "add-history", "delete")
                         .contains(subcommand.getName()))
                 .flatMap(subcommand -> subcommand.getOptions().stream())
                 .filter(option -> option.getName().equals("name"))
