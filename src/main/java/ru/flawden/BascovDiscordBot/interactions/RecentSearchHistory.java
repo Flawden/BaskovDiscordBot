@@ -8,6 +8,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -26,6 +27,10 @@ public class RecentSearchHistory {
             return;
         }
         String normalized = query.trim();
+        String lowered = normalized.toLowerCase(Locale.ROOT);
+        if (lowered.startsWith("http://") || lowered.startsWith("https://")) {
+            return;
+        }
         Deque<String> queries = queriesByUser.computeIfAbsent(userId, ignored -> new ArrayDeque<>());
         synchronized (queries) {
             queries.removeIf(existing -> existing.equalsIgnoreCase(normalized));
@@ -33,6 +38,36 @@ public class RecentSearchHistory {
             while (queries.size() > MAX_PER_USER) {
                 queries.removeLast();
             }
+        }
+    }
+
+    public List<String> recent(long userId, int limit) {
+        if (limit < 1) {
+            return List.of();
+        }
+        Deque<String> queries = queriesByUser.get(userId);
+        if (queries == null) {
+            return List.of();
+        }
+        List<String> result = new ArrayList<>();
+        synchronized (queries) {
+            for (String query : queries) {
+                result.add(query);
+                if (result.size() == limit) {
+                    break;
+                }
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    public Optional<String> last(long userId) {
+        Deque<String> queries = queriesByUser.get(userId);
+        if (queries == null) {
+            return Optional.empty();
+        }
+        synchronized (queries) {
+            return Optional.ofNullable(queries.peekFirst());
         }
     }
 

@@ -35,6 +35,17 @@ public final class ModernCommandCatalog {
                                 "Название песни для поиска на YouTube",
                                 true)
                                 .setAutoComplete(true)),
+                Commands.slash("discover", "Помогает продолжить поиск по недавним и знакомым трекам")
+                        .addSubcommands(
+                                new SubcommandData("recent", "Показывает твои недавние поисковые запросы"),
+                                new SubcommandData("again", "Повторяет твой последний интерактивный поиск"),
+                                new SubcommandData("related", "Ищет варианты по исполнителю и названию текущего трека"),
+                                new SubcommandData("history", "Ищет варианты по треку из истории")
+                                        .addOption(
+                                                OptionType.INTEGER,
+                                                "position",
+                                                "Позиция трека из /history",
+                                                true)),
                 Commands.slash("history", "Показывает недавнюю историю воспроизведения")
                         .addOption(
                                 OptionType.INTEGER,

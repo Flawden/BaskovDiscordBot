@@ -21,7 +21,7 @@ class ModernCommandCatalogTest {
 
         assertEquals(commands.size(), names.size());
         assertEquals(Set.of(
-                "help", "version", "status", "play", "search", "history", "replay", "playlist",
+                "help", "version", "status", "play", "search", "discover", "history", "replay", "playlist",
                 "pause", "resume", "previous", "skip", "voteskip", "stop", "queue", "now", "seek",
                 "volume", "repeat", "shuffle", "remove", "move", "clear", "queue-manage", "settings"), names);
     }
@@ -33,6 +33,19 @@ class ModernCommandCatalogTest {
             assertTrue(command.getOptions().stream()
                     .anyMatch(option -> option.getName().equals("query") && option.isAutoComplete()));
         }
+    }
+
+    @Test
+    void discoverCommandExposesSearchContinuationModes() {
+        SlashCommandData discover = command("discover");
+        assertEquals(Set.of("recent", "again", "related", "history"),
+                discover.getSubcommands().stream()
+                        .map(subcommand -> subcommand.getName())
+                        .collect(Collectors.toSet()));
+        assertTrue(discover.getSubcommands().stream()
+                .filter(subcommand -> "history".equals(subcommand.getName()))
+                .flatMap(subcommand -> subcommand.getOptions().stream())
+                .anyMatch(option -> "position".equals(option.getName())));
     }
 
     @Test

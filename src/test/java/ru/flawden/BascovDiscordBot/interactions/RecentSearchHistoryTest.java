@@ -31,6 +31,27 @@ class RecentSearchHistoryTest {
     }
 
     @Test
+    void directUrlsDoNotPolluteDiscoveryHistory() {
+        RecentSearchHistory history = new RecentSearchHistory();
+        history.remember(10L, "https://youtu.be/example");
+        history.remember(10L, "Sabaton Bismarck");
+
+        assertEquals(List.of("Sabaton Bismarck"), history.recent(10L, 10));
+    }
+
+    @Test
+    void exposesRecentQueriesAndLastQuery() {
+        RecentSearchHistory history = new RecentSearchHistory();
+        history.remember(10L, "First");
+        history.remember(10L, "Second");
+        history.remember(10L, "Third");
+
+        assertEquals(List.of("Third", "Second"), history.recent(10L, 2));
+        assertEquals("Third", history.last(10L).orElseThrow());
+        assertTrue(history.last(11L).isEmpty());
+    }
+
+    @Test
     void isolatesUsers() {
         RecentSearchHistory history = new RecentSearchHistory();
         history.remember(10L, "First user song");

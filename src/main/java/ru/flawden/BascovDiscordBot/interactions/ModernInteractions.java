@@ -133,6 +133,7 @@ public class ModernInteractions extends ListenerAdapter {
                 case "status" -> status(event);
                 case "play" -> play(event);
                 case "search" -> search(event);
+                case "discover" -> discover(event);
                 case "history" -> history(event);
                 case "replay" -> replay(event);
                 case "playlist" -> playlist(event);
@@ -187,8 +188,18 @@ public class ModernInteractions extends ListenerAdapter {
 
         if (("play".equals(event.getName()) || "search".equals(event.getName()))
                 && "query".equals(focusedName)) {
-            List<Command.Choice> choices = searchHistory
-                    .suggest(event.getUser().getIdLong(), focusedValue)
+            List<StoredTrack> history = List.of();
+            List<StoredPlaylist> playlists = List.of();
+            if (event.getGuild() != null) {
+                long guildId = event.getGuild().getIdLong();
+                history = musicLibraryRepository.history(guildId);
+                playlists = musicLibraryRepository.playlists(guildId);
+            }
+            List<Command.Choice> choices = DiscoverySuggestions.suggest(
+                            focusedValue,
+                            searchHistory.recent(event.getUser().getIdLong(), 20),
+                            history,
+                            playlists)
                     .stream()
                     .map(query -> new Command.Choice(query, query))
                     .toList();
@@ -499,9 +510,80 @@ public class ModernInteractions extends ListenerAdapter {
 
     private void search(SlashCommandInteractionEvent event) {
         String rawQuery = event.getOption("query", "", OptionMapping::getAsString).trim();
+        startInteractiveSearch(event, rawQuery);
+    }
+
+    private void discover(SlashCommandInteractionEvent event) {
+        String subcommand = event.getSubcommandName();
+        if (subcommand == null || "recent".equals(subcommand)) {
+            event.replyEmbeds(MusicEmbeds.discoveryRecent(
+                            searchHistory.recent(event.getUser().getIdLong(), 10)))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        switch (subcommand) {
+            case "again" -> {
+                String query = searchHistory.last(event.getUser().getIdLong()).orElse(null);
+                if (query == null) {
+                    event.replyEmbeds(MusicEmbeds.error(
+                                    "🧭 Пока нечего повторять",
+                                    "Сначала выполни `/search` или `/play` с текстовым запросом."))
+                            .setEphemeral(true)
+                            .queue();
+                    return;
+                }
+                startInteractiveSearch(event, query);
+            }
+            case "related" -> {
+                GuildMusicManager manager = playerManager.findMusicManager(event.getGuild()).orElse(null);
+                AudioTrack current = manager == null ? null : manager.getAudioPlayer().getPlayingTrack();
+                if (current == null) {
+                    event.replyEmbeds(MusicEmbeds.error(
+                                    "🧭 Нет текущего трека",
+                                    "Запусти музыку, затем повтори `/discover related`."))
+                            .setEphemeral(true)
+                            .queue();
+                    return;
+                }
+                startInteractiveSearch(event, DiscoverySuggestions.discoveryQuery(
+                        current.getInfo().author,
+                        current.getInfo().title));
+            }
+            case "history" -> {
+                long position = event.getOption("position", -1L, OptionMapping::getAsLong);
+                List<StoredTrack> history = musicLibraryRepository.history(event.getGuild().getIdLong());
+                if (position < 1L || position > history.size()) {
+                    event.replyEmbeds(MusicEmbeds.error(
+                                    "🧭 Трек истории не найден",
+                                    history.isEmpty()
+                                            ? "История пока пуста."
+                                            : "Укажи номер из диапазона `1.." + history.size() + "` из `/history`."))
+                            .setEphemeral(true)
+                            .queue();
+                    return;
+                }
+                StoredTrack track = history.get(Math.toIntExact(position - 1L));
+                startInteractiveSearch(event, DiscoverySuggestions.discoveryQuery(
+                        track.author(),
+                        track.title()));
+            }
+            default -> event.replyEmbeds(MusicEmbeds.error(
+                            "🧭 Неизвестный режим discovery",
+                            "Используй `/discover recent`, `again`, `related` или `history`."))
+                    .setEphemeral(true)
+                    .queue();
+        }
+    }
+
+    private void startInteractiveSearch(
+            SlashCommandInteractionEvent event,
+            String rawQuery) {
+        String safeQuery = rawQuery == null ? "" : rawQuery.trim();
         String identifier;
         try {
-            identifier = queryResolver.resolve(rawQuery);
+            identifier = queryResolver.resolve(safeQuery);
         } catch (IllegalArgumentException exception) {
             event.replyEmbeds(MusicEmbeds.error("🔒 Запрос отклонён", exception.getMessage()))
                     .setEphemeral(true)
@@ -512,19 +594,19 @@ public class ModernInteractions extends ListenerAdapter {
         if (!identifier.startsWith(MediaQueryResolver.YOUTUBE_SEARCH_PREFIX)) {
             event.replyEmbeds(MusicEmbeds.error(
                             "🔎 Для ссылок используй /play",
-                            "`/search` показывает варианты только для текстового поиска YouTube. "
+                            "Интерактивный поиск показывает варианты только для текстового поиска YouTube. "
                                     + "Прямую ссылку можно сразу добавить через `/play`."))
                     .setEphemeral(true)
                     .queue();
             return;
         }
 
-        searchHistory.remember(event.getUser().getIdLong(), rawQuery);
+        searchHistory.remember(event.getUser().getIdLong(), safeQuery);
         event.deferReply(true).queue(hook -> playerManager.search(
                 event.getGuild(),
                 identifier,
                 SearchSelectionStore.MAX_CANDIDATES,
-                result -> editSearchResult(hook, event, rawQuery, result)));
+                result -> editSearchResult(hook, event, safeQuery, result)));
     }
 
     private void editSearchResult(
@@ -2093,7 +2175,7 @@ public class ModernInteractions extends ListenerAdapter {
                 .setTitle("🎤 Современные команды Баскова")
                 .setDescription("Slash-команды — основной интерфейс. Старые `!`-команды пока продолжают работать.")
                 .setColor(Color.CYAN)
-                .addField("▶️ Воспроизведение", "`/play` `/search` `/pause` `/resume` `/previous` `/skip` `/voteskip` `/stop` `/seek`", false)
+                .addField("▶️ Воспроизведение", "`/play` `/search` `/discover` `/pause` `/resume` `/previous` `/skip` `/voteskip` `/stop` `/seek`", false)
                 .addField("📋 Очередь", "`/queue` `/remove` `/move` `/shuffle` `/clear` `/queue-manage`", false)
                 .addField("📚 Библиотека", "`/playlist` `/history` `/replay`", false)
                 .addField("🎚️ Режимы", "`/volume` `/repeat` `/now`", false)
@@ -2101,7 +2183,8 @@ public class ModernInteractions extends ListenerAdapter {
                 .addField("ℹ️ Сервис", "`/version` `/status` `/help`", false)
                 .addField("🖱️ Кнопки", "Под `/now` доступны предыдущий трек, ±15 секунд, пауза, следующий трек, shuffle, repeat, очередь и stop.", false)
                 .addField("🔎 Выбор трека", "`/search` показывает до пяти результатов YouTube с кнопками выбора. Результаты живут пять минут и доступны только автору.", false)
-                .addField("💡 Autocomplete", "`/play` и `/search` предлагают недавние запросы, а `/playlist` — сохранённые названия.", false)
+                .addField("💡 Autocomplete", "`/play` и `/search` объединяют твои недавние запросы с треками из истории и плейлистов; `/playlist` предлагает сохранённые названия.", false)
+                .addField("🧭 Discovery", "`/discover recent` показывает недавние запросы, `again` повторяет последний поиск, а `related`/`history` запускают новый поиск по данным знакомого трека.", false)
                 .addField("🎧 DJ и голосование", "Владелец или `Manage Server` может назначить DJ-роль и выбрать режим `open`, `dj` или `vote`. В режиме vote кнопка `Следующий` тоже считает голос.", false)
                 .addField("🧰 Queue Manager", "`/queue-manage` показывает ревизию, удаляет диапазон, чистит дубликаты и позволяет удалить только свои ожидающие треки.", false)
                 .addField("💾 Постоянное хранение", "Плейлисты, история и правила DJ переживают restart контейнера.", false)

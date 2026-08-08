@@ -193,6 +193,26 @@ public final class MusicEmbeds {
                 .build();
     }
 
+    public static MessageEmbed discoveryRecent(List<String> queries) {
+        if (queries == null || queries.isEmpty()) {
+            return error(
+                    "🧭 Недавних поисков пока нет",
+                    "Выполни `/search` или `/play` с текстовым запросом, и Басков запомнит его до перезапуска.");
+        }
+        StringBuilder description = new StringBuilder();
+        for (int index = 0; index < queries.size(); index++) {
+            description.append("**").append(index + 1).append(".** `")
+                    .append(shortText(queries.get(index), 100))
+                    .append("`\n");
+        }
+        return new EmbedBuilder()
+                .setTitle("🧭 Твои недавние поиски")
+                .setDescription(description.toString())
+                .setColor(Color.CYAN)
+                .setFooter("/discover again повторит последний запрос • история поиска хранится в памяти процесса")
+                .build();
+    }
+
     public static MessageEmbed playbackHistory(List<StoredTrack> history, int requestedPage) {
         if (history == null || history.isEmpty()) {
             return error(

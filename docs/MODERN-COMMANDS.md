@@ -9,6 +9,7 @@
 |---|---|
 | `/play query` | Сразу добавляет первый результат YouTube или принимает прямую ссылку SoundCloud/YouTube |
 | `/search query` | Показывает до пяти результатов YouTube и кнопки выбора |
+| `/discover recent|again|related|history` | Продолжает поиск по недавним запросам, текущему треку или истории |
 | `/history [page]` | Показывает до 50 последних успешно завершённых или пропущенных треков |
 | `/replay position` | Повторно загружает трек по номеру из постоянной истории |
 | `/playlist ...` | Управляет постоянной библиотекой: create/show/search/add/add-history/capture-queue/play/remove/move/rename/copy/dedupe/delete |
@@ -37,7 +38,7 @@
 
 ## Autocomplete
 
-Параметр `query` команд `/play` и `/search` использует локальную in-memory историю последних запросов пользователя. Параметр `name` операций `/playlist show|add|play|remove|move|rename|copy|dedupe|capture-queue|add-history|delete` предлагает имена постоянных плейлистов текущего сервера.
+Параметр `query` команд `/play` и `/search` объединяет локальную in-memory историю последних запросов пользователя с persistent playback history и треками плейлистов текущего сервера. Autocomplete не делает сетевых запросов. Параметр `name` операций `/playlist show|add|play|remove|move|rename|copy|dedupe|capture-queue|add-history|delete` предлагает имена постоянных плейлистов текущего сервера.
 История:
 
 - не сохраняется между перезапусками контейнера;
@@ -74,3 +75,8 @@ Legacy prefix-команды не удалены. Это позволяет пе
 Постоянные плейлисты, история и replay описаны в [`PLAYLISTS-HISTORY-REPLAY.md`](PLAYLISTS-HISTORY-REPLAY.md).
 
 DJ-роли и голосование описаны в [`DJ-ROLES-AND-VOTING.md`](DJ-ROLES-AND-VOTING.md).
+
+
+## Discovery
+
+`/discover recent` показывает локальную историю поиска пользователя, `/discover again` повторяет последний запрос, а `related` и `history` строят новый текстовый запрос из уже известных `author + title`. Все эти режимы используют тот же интерактивный `/search` pipeline и не обходят существующие ограничения загрузки и voice-policy.

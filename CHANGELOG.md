@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-08-08
+
+### Search & Discovery 2.0
+
+- Добавлена `/discover` с режимами `recent`, `again`, `related` и `history`.
+- `/discover again` повторяет последний текстовый интерактивный поиск без копирования команды вручную.
+- `/discover related` строит новый безопасный YouTube-поиск из исполнителя и названия текущего трека; `/discover history` делает то же для позиции из `/history`. Это контекстный поиск, а не персональная рекомендационная модель.
+- `/discover recent` показывает до 10 последних запросов пользователя; история остаётся in-memory и очищается при restart процесса.
+- Autocomplete `/play` и `/search` теперь объединяет недавние запросы пользователя с треками из persistent history и плейлистов сервера, дедуплицирует их и остаётся полностью локальным — без сетевых запросов во время набора.
+- Общий `startInteractiveSearch` переиспользует прежние ограничения `MediaQueryResolver`, пятиминутные одноразовые search sessions и максимум пять кандидатов.
+- Добавлены unit/contract tests для discovery query derivation, merged autocomplete, recent/last history и каталога slash-команд.
+
 ## [1.3.0] — 2026-08-08
 
 ### Library & Playlists 2.0
