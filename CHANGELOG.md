@@ -7,6 +7,27 @@
 ## [Unreleased]
 
 
+## [0.16.0] — 2026-08-08
+
+### Добавлено
+
+- `/now` получил кнопку `↻ Обновить`, которая перерисовывает текущий progress/state без повторного ввода slash-команды.
+- Пульт `/now` теперь state-aware: показывает `Пауза` или `Продолжить`, текущий repeat mode и disabled-состояния для недоступных previous/seek/shuffle/stop/skip действий.
+- Добавлен архитектурный контракт `SelfHostedDeliveryContractTest`, запрещающий случайный возврат delivery jobs на `ubuntu-latest` и постоянное хранение deploy SSH key в home runner-а.
+- В delivery context выводятся имя, OS/arch и workspace self-hosted runner-а, чтобы первый запуск сразу подтверждал фактическое исполнение на своей машине.
+
+### Изменено
+
+- Все три delivery jobs (`context`, `publish`, `deploy`) переведены с `ubuntu-latest` на `[self-hosted, linux, x64]`.
+- Deployment SSH credentials на persistent runner создаются через `mktemp` внутри `${RUNNER_TEMP}`, явно передаются в `ssh/scp` и удаляются шагом `always()`.
+- Обработка ошибок component buttons теперь возвращает ephemeral failure message даже после уже выполненного interaction acknowledgement.
+
+### Сохранено
+
+- Build/publish/deploy topology, immutable GHCR SHA image, Maven `clean verify`, Docker Buildx, healthcheck, rollback и protected deployment input сохраняются.
+- Java 17, Spring Boot 3.4.3, JDA 6.5.0, LavaPlayer 2.2.3, `youtube-source 1.18.2`, native libDAVE `ce725965e`, voice recovery, checkpoint format и DJ/vote runtime не меняются.
+
+
 ## [0.15.1] — 2026-08-06
 
 ### Исправлено

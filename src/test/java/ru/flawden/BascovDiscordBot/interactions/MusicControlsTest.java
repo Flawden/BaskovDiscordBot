@@ -1,6 +1,10 @@
 package ru.flawden.BascovDiscordBot.interactions;
 
+import net.dv8tion.jda.api.components.buttons.Button;
 import org.junit.jupiter.api.Test;
+import ru.flawden.BascovDiscordBot.lavaplayer.RepeatMode;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -33,12 +37,49 @@ class MusicControlsTest {
     }
 
     @Test
-    void nowControlsExposePreviousRelativeSeekAndShuffle() {
+    void nowControlsExposePreviousRelativeSeekShuffleAndRefresh() {
         assertEquals(2, MusicControls.nowRows().size());
         assertTrue(MusicControls.supports(MusicControls.PREVIOUS));
         assertTrue(MusicControls.supports(MusicControls.SEEK_BACKWARD));
         assertTrue(MusicControls.supports(MusicControls.SEEK_FORWARD));
         assertTrue(MusicControls.supports(MusicControls.SHUFFLE));
+        assertTrue(MusicControls.supports(MusicControls.REFRESH));
+    }
+
+    @Test
+    void nowControlsReflectPlaybackState() {
+        var rows = MusicControls.nowRows(new MusicControls.NowControlState(
+                true,
+                true,
+                true,
+                true,
+                3,
+                RepeatMode.QUEUE));
+        List<Button> buttons = rows.stream()
+                .flatMap(row -> row.getButtons().stream())
+                .toList();
+
+        assertFalse(button(buttons, MusicControls.PREVIOUS).isDisabled());
+        assertFalse(button(buttons, MusicControls.SEEK_BACKWARD).isDisabled());
+        assertEquals("▶ Продолжить", button(buttons, MusicControls.TOGGLE).getLabel());
+        assertFalse(button(buttons, MusicControls.SHUFFLE).isDisabled());
+        assertEquals("Повтор: " + RepeatMode.QUEUE.label(), button(buttons, MusicControls.REPEAT).getLabel());
+        assertFalse(button(buttons, MusicControls.REFRESH).isDisabled());
+    }
+
+    @Test
+    void emptyNowControlsDisableMutationsButKeepRefreshAndQueue() {
+        var rows = MusicControls.nowRows(MusicControls.NowControlState.empty());
+        List<Button> buttons = rows.stream()
+                .flatMap(row -> row.getButtons().stream())
+                .toList();
+
+        assertTrue(button(buttons, MusicControls.TOGGLE).isDisabled());
+        assertTrue(button(buttons, MusicControls.SEEK_FORWARD).isDisabled());
+        assertTrue(button(buttons, MusicControls.SHUFFLE).isDisabled());
+        assertTrue(button(buttons, MusicControls.STOP).isDisabled());
+        assertFalse(button(buttons, MusicControls.QUEUE).isDisabled());
+        assertFalse(button(buttons, MusicControls.REFRESH).isDisabled());
     }
 
     @Test
@@ -65,6 +106,13 @@ class MusicControlsTest {
         assertFalse(MusicControls.searchAction("baskov:search:pick:abcdef1234567890:0").isPresent());
         assertFalse(MusicControls.searchAction("baskov:search:pick:abcdef1234567890:nope").isPresent());
         assertFalse(MusicControls.searchAction("baskov:search:cancel:bad token").isPresent());
+    }
+
+    private static Button button(List<Button> buttons, String id) {
+        return buttons.stream()
+                .filter(button -> id.equals(button.getCustomId()))
+                .findFirst()
+                .orElseThrow();
     }
 
 }

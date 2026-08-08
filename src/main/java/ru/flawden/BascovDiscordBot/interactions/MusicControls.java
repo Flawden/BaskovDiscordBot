@@ -1,7 +1,10 @@
 package ru.flawden.BascovDiscordBot.interactions;
 
 import net.dv8tion.jda.api.components.actionrow.ActionRow;
+import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import net.dv8tion.jda.api.components.buttons.Button;
+import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
+import ru.flawden.BascovDiscordBot.lavaplayer.RepeatMode;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,6 +25,7 @@ public final class MusicControls {
     public static final String SHUFFLE = "baskov:music:shuffle";
     public static final String SEEK_BACKWARD = "baskov:music:seek:-15";
     public static final String SEEK_FORWARD = "baskov:music:seek:+15";
+    public static final String REFRESH = "baskov:music:refresh";
     private static final String QUEUE_PAGE_PREFIX = "baskov:queue:page:";
     private static final String SEARCH_PICK_PREFIX = "baskov:search:pick:";
     private static final String SEARCH_CANCEL_PREFIX = "baskov:search:cancel:";
@@ -44,18 +48,40 @@ public final class MusicControls {
      * операции над очередью без повторного ввода slash-команд.
      */
     public static List<ActionRow> nowRows() {
+        return nowRows(NowControlState.empty());
+    }
+
+    public static List<ActionRow> nowRows(GuildMusicManager manager) {
+        return nowRows(NowControlState.from(manager));
+    }
+
+    static List<ActionRow> nowRows(NowControlState state) {
+        NowControlState safeState = state == null ? NowControlState.empty() : state;
+        Button previous = disabled(Button.secondary(PREVIOUS, "⏮ Предыдущий"), !safeState.hasPrevious());
+        Button seekBackward = disabled(Button.secondary(SEEK_BACKWARD, "−15 сек"), !safeState.seekable());
+        Button toggle = disabled(Button.primary(
+                TOGGLE,
+                safeState.paused() ? "▶ Продолжить" : "⏸ Пауза"), !safeState.hasTrack());
+        Button seekForward = disabled(Button.secondary(SEEK_FORWARD, "+15 сек"), !safeState.seekable());
+        Button skip = disabled(Button.secondary(SKIP, "Следующий ⏭"), !safeState.hasTrack());
+        Button shuffle = disabled(Button.secondary(SHUFFLE, "Перемешать"), safeState.queueSize() < 2);
+        Button repeat = disabled(Button.secondary(
+                REPEAT,
+                "Повтор: " + safeState.repeatMode().label()), !safeState.hasTrack());
+        Button stop = disabled(Button.danger(STOP, "Стоп"), !safeState.hasTrack());
+
         return List.of(
-                ActionRow.of(
-                        Button.secondary(PREVIOUS, "⏮ Предыдущий"),
-                        Button.secondary(SEEK_BACKWARD, "−15 сек"),
-                        Button.primary(TOGGLE, "Пауза / играть"),
-                        Button.secondary(SEEK_FORWARD, "+15 сек"),
-                        Button.secondary(SKIP, "Следующий ⏭")),
+                ActionRow.of(previous, seekBackward, toggle, seekForward, skip),
                 ActionRow.of(
                         Button.secondary(QUEUE, "Очередь"),
-                        Button.secondary(SHUFFLE, "Перемешать"),
-                        Button.secondary(REPEAT, "Повтор"),
-                        Button.danger(STOP, "Стоп")));
+                        shuffle,
+                        repeat,
+                        Button.secondary(REFRESH, "↻ Обновить"),
+                        stop));
+    }
+
+    private static Button disabled(Button button, boolean disabled) {
+        return disabled ? button.asDisabled() : button;
     }
 
     public static List<ActionRow> queueRows(int page, int totalPages) {
@@ -174,6 +200,7 @@ public final class MusicControls {
                 || SHUFFLE.equals(componentId)
                 || SEEK_BACKWARD.equals(componentId)
                 || SEEK_FORWARD.equals(componentId)
+                || REFRESH.equals(componentId)
                 || queuePage(componentId).isPresent()
                 || searchAction(componentId).isPresent();
     }
@@ -185,4 +212,36 @@ public final class MusicControls {
 
     public record SearchAction(SearchActionType type, String token, int oneBasedIndex) {
     }
+    static record NowControlState(
+            boolean hasTrack,
+            boolean paused,
+            boolean seekable,
+            boolean hasPrevious,
+            int queueSize,
+            RepeatMode repeatMode) {
+
+        NowControlState {
+            queueSize = Math.max(0, queueSize);
+            repeatMode = repeatMode == null ? RepeatMode.OFF : repeatMode;
+        }
+
+        static NowControlState from(GuildMusicManager manager) {
+            if (manager == null) {
+                return empty();
+            }
+            AudioTrack track = manager.getAudioPlayer().getPlayingTrack();
+            return new NowControlState(
+                    track != null,
+                    track != null && manager.getAudioPlayer().isPaused(),
+                    track != null && track.isSeekable(),
+                    manager.getScheduler().historySize() > 0,
+                    manager.getScheduler().queueSize(),
+                    manager.getScheduler().getRepeatMode());
+        }
+
+        static NowControlState empty() {
+            return new NowControlState(false, false, false, false, 0, RepeatMode.OFF);
+        }
+    }
+
 }

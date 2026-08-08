@@ -36,7 +36,7 @@ permissions:
 jobs:
   context:
     name: Resolve delivery context
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     outputs:
       channel: ${{ steps.resolve.outputs.channel }}
       environment: ${{ steps.resolve.outputs.environment }}
@@ -44,6 +44,14 @@ jobs:
       default_deploy_dir: ${{ steps.resolve.outputs.default_deploy_dir }}
       default_container_name: ${{ steps.resolve.outputs.default_container_name }}
     steps:
+      - name: Report self-hosted runner
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "Runner: ${RUNNER_NAME}"
+          echo "OS/arch: ${RUNNER_OS}/${RUNNER_ARCH}"
+          echo "Workspace: ${GITHUB_WORKSPACE}"
+
       - name: Resolve branch, environment and image
         id: resolve
         shell: bash
@@ -85,7 +93,7 @@ jobs:
   publish:
     name: Verify and publish immutable image
     needs: context
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 30
     outputs:
       digest: ${{ steps.build.outputs.digest }}
@@ -190,7 +198,7 @@ jobs:
       - context
       - publish
     if: ${{ vars.BOT_DEPLOY_ENABLED == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 15
     environment: ${{ needs.context.outputs.environment }}
 
@@ -202,18 +210,25 @@ jobs:
             deploy
           sparse-checkout-cone-mode: true
 
-      - name: Configure SSH
+      - name: Configure ephemeral SSH credentials
         shell: bash
         env:
           SSH_PRIVATE_KEY: ${{ secrets.BOT_DEPLOY_SSH_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.BOT_DEPLOY_KNOWN_HOSTS }}
         run: |
           set -Eeuo pipefail
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "${SSH_PRIVATE_KEY}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          printf '%s\n' "${SSH_KNOWN_HOSTS}" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
+          ssh_dir="$(mktemp -d "${RUNNER_TEMP}/baskov-ssh.XXXXXX")"
+          key_file="${ssh_dir}/id_ed25519"
+          known_hosts_file="${ssh_dir}/known_hosts"
+          printf '%s\n' "${SSH_PRIVATE_KEY}" > "${key_file}"
+          chmod 600 "${key_file}"
+          printf '%s\n' "${SSH_KNOWN_HOSTS}" > "${known_hosts_file}"
+          chmod 600 "${known_hosts_file}"
+          {
+            echo "BASKOV_SSH_DIR=${ssh_dir}"
+            echo "BASKOV_SSH_KEY=${key_file}"
+            echo "BASKOV_KNOWN_HOSTS=${known_hosts_file}"
+          } >> "${GITHUB_ENV}"
 
       - name: Copy deployment definition
         shell: bash
@@ -225,9 +240,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           deploy_dir="${DEPLOY_DIR:-${{ needs.context.outputs.default_deploy_dir }}}"
-          ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+          ssh -i "${BASKOV_SSH_KEY}" -o UserKnownHostsFile="${BASKOV_KNOWN_HOSTS}" -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "install -d -m 700 '${deploy_dir}'"
-          scp -P "${DEPLOY_PORT:-22}" \
+          scp -i "${BASKOV_SSH_KEY}" -o UserKnownHostsFile="${BASKOV_KNOWN_HOSTS}" -P "${DEPLOY_PORT:-22}" \
             deploy/docker-compose.yml deploy/docker-compose.host-network.yml \
             deploy/remote-deploy.sh \
             "${DEPLOY_USER}@${DEPLOY_HOST}:${deploy_dir}/"
@@ -319,7 +334,7 @@ jobs:
             printf 'DISCORD_BOT_VOICE_LOG_LEVEL_B64=%s\n' "$(encode "${voice_log_level}")"
             printf 'DISCORD_BOT_MUSIC_DEFAULT_VOLUME_B64=%s\n' "$(encode "${default_volume}")"
             printf 'DISCORD_BOT_MUSIC_MAX_VOLUME_B64=%s\n' "$(encode "${max_volume}")"
-          } | ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+          } | ssh -i "${BASKOV_SSH_KEY}" -o UserKnownHostsFile="${BASKOV_KNOWN_HOSTS}" -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "umask 077; cat > '${deploy_dir}/.deploy-input'"
 
       - name: Log in to GHCR on VPS
@@ -332,7 +347,7 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -Eeuo pipefail
-          printf '%s' "${GHCR_TOKEN}" | ssh -p "${DEPLOY_PORT:-22}" \
+          printf '%s' "${GHCR_TOKEN}" | ssh -i "${BASKOV_SSH_KEY}" -o UserKnownHostsFile="${BASKOV_KNOWN_HOSTS}" -p "${DEPLOY_PORT:-22}" \
             "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "docker login ghcr.io --username '${GHCR_USERNAME}' --password-stdin"
 
@@ -346,8 +361,17 @@ jobs:
         run: |
           set -Eeuo pipefail
           deploy_dir="${DEPLOY_DIR:-${{ needs.context.outputs.default_deploy_dir }}}"
-          ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+          ssh -i "${BASKOV_SSH_KEY}" -o UserKnownHostsFile="${BASKOV_KNOWN_HOSTS}" -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "chmod 700 '${deploy_dir}/remote-deploy.sh' && '${deploy_dir}/remote-deploy.sh' '${deploy_dir}'"
+
+      - name: Remove ephemeral SSH credentials
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ -n "${BASKOV_SSH_DIR:-}" && -d "${BASKOV_SSH_DIR}" ]]; then
+            rm -rf -- "${BASKOV_SSH_DIR}"
+          fi
 
       - name: Publish deployment summary
         shell: bash

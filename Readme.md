@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая стабильная версия: **v0.15.1**.
+Текущая стабильная версия: **v0.16.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -13,7 +13,7 @@
 - воспроизведение музыки, пауза, остановка, пропуск и возврат к предыдущим трекам;
 - requester, ETA для каждой позиции, постраничная очередь с кнопками навигации, bounded history, previous, repeat mode, shuffle, seek, remove/move/clear и управление громкостью;
 - постоянные настройки громкости, повтора, access mode, DJ-роли и порога vote-skip отдельно для каждого Discord-сервера;
-- `/now` с визуальным прогрессом, оставшимся временем и двухрядным пультом previous/±15s/pause/next/shuffle/repeat; `/status` с активными playback modes, uptime, Discord gateway, voice transport snapshot и последними voice/source ошибками;
+- `/now` с визуальным прогрессом, state-aware двухрядным пультом previous/±15s/pause/next/shuffle/repeat, disabled-состояниями и кнопкой refresh; `/status` с активными playback modes, uptime, Discord gateway, voice transport snapshot и последними voice/source ошибками;
 - динамический Docker heartbeat, который подтверждает свежее подключение к Discord, а не только факт старта;
 - JDA 6.5.0 с настоящей JNI libDAVE `ce725965e`, положительной protocol version и подтверждением playback только после реального запроса аудиофрейма Discord media transport;
 - bounded voice recovery: отключённый JDA auto-reconnect, до трёх контролируемых повторных подключений с backoff и сохранением checkpoint при исчерпании попыток;
@@ -31,7 +31,7 @@
 - автоматические ежемесячные проверки обновлений Maven и GitHub Actions;
 - major-обновления Spring Boot, JDA и GitHub Actions блокируются Dependabot и выполняются только отдельными migration-релизами;
 - контейнерный запуск;
-- CI, публикация immutable-образов в GHCR и автоматический деплой на VPS.
+- CI на Linux self-hosted GitHub Actions runner, публикация immutable-образов в GHCR и автоматический деплой на VPS; deployment SSH-ключ живёт только во временном каталоге job.
 
 ## Локальный запуск
 
@@ -85,6 +85,7 @@ docker compose logs -f bot
 
 Live-потоки отключены. Подробные правила voice-доступа и lifecycle находятся в [`docs/MUSIC-SESSIONS.md`](docs/MUSIC-SESSIONS.md).
 Voice recovery и восстановление сессий после restart/redeploy описаны в [`docs/VOICE-RECOVERY-SESSION-RESTORATION.md`](docs/VOICE-RECOVERY-SESSION-RESTORATION.md).
+Self-hosted CI/CD и hygiene persistent runner-а описаны в [`docs/SELF-HOSTED-DELIVERY.md`](docs/SELF-HOSTED-DELIVERY.md).
 Современный Discord-интерфейс описан в [`docs/MODERN-COMMANDS.md`](docs/MODERN-COMMANDS.md).
 Интерактивный поиск и безопасный выбор трека описаны в [`docs/SEARCH-TRACK-SELECTION.md`](docs/SEARCH-TRACK-SELECTION.md).
 Постоянные плейлисты, история и replay описаны в [`docs/PLAYLISTS-HISTORY-REPLAY.md`](docs/PLAYLISTS-HISTORY-REPLAY.md).

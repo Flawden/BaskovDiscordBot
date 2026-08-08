@@ -30,7 +30,9 @@ class AdvancedPlaybackControlsContractTest {
         assertTrue(controls.contains("SEEK_BACKWARD"));
         assertTrue(controls.contains("SEEK_FORWARD"));
         assertTrue(controls.contains("SHUFFLE"));
-        assertTrue(interactions.contains("setComponents(MusicControls.nowRows())"));
+        assertTrue(controls.contains("public static List<ActionRow> nowRows(GuildMusicManager manager)"));
+        assertTrue(controls.contains("REFRESH"));
+        assertTrue(interactions.contains("setComponents(MusicControls.nowRows(manager))"));
     }
 
     @Test

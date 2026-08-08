@@ -247,10 +247,15 @@ public class ModernInteractions extends ListenerAdapter {
             operationalMetrics.recordFailure(OperationalMetrics.Channel.BUTTON);
             log.error("Music button '{}' failed for user {}",
                     event.getComponentId(), event.getUser().getId(), exception);
+            MessageEmbed failureEmbed = MusicEmbeds.error(
+                    "💥 Кнопка не сработала",
+                    "Произошла внутренняя ошибка. Попробуй ещё раз чуть позже.");
             if (!event.isAcknowledged()) {
-                event.replyEmbeds(MusicEmbeds.error(
-                                "💥 Кнопка не сработала",
-                                "Произошла внутренняя ошибка. Попробуй ещё раз чуть позже."))
+                event.replyEmbeds(failureEmbed)
+                        .setEphemeral(true)
+                        .queue();
+            } else {
+                event.getHook().sendMessageEmbeds(failureEmbed)
                         .setEphemeral(true)
                         .queue();
             }
@@ -279,6 +284,14 @@ public class ModernInteractions extends ListenerAdapter {
             event.replyEmbeds(view.embed())
                     .setComponents(MusicControls.queueRows(view.page(), view.totalPages()))
                     .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        if (MusicControls.REFRESH.equals(event.getComponentId())) {
+            GuildMusicManager manager = playerManager.findMusicManager(guild).orElse(null);
+            event.editMessageEmbeds(MusicEmbeds.nowPlaying(manager))
+                    .setComponents(MusicControls.nowRows(manager))
                     .queue();
             return;
         }
@@ -1003,7 +1016,7 @@ public class ModernInteractions extends ListenerAdapter {
                                 + (result.returnedCurrentToQueue()
                                 ? "\nПрерванный трек поставлен первым в очередь."
                                 : "")))
-                .setComponents(MusicControls.nowRows())
+                .setComponents(MusicControls.nowRows(manager))
                 .queue();
     }
 
