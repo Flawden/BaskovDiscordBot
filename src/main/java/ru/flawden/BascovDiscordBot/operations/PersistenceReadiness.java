@@ -1,6 +1,7 @@
 package ru.flawden.BascovDiscordBot.operations;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.MusicLibraryProperties;
 import ru.flawden.BascovDiscordBot.config.MusicSessionProperties;
@@ -30,6 +31,7 @@ public class PersistenceReadiness {
     private final List<Path> stores;
     private volatile Snapshot snapshot = Snapshot.notChecked();
 
+    @Autowired
     public PersistenceReadiness(
             PersistenceProperties persistenceProperties,
             MusicLibraryProperties musicLibraryProperties,

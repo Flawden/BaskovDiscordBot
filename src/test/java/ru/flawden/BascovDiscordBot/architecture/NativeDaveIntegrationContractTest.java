@@ -79,8 +79,8 @@ class NativeDaveIntegrationContractTest {
 
         assertTrue(deploy.contains("Native libDAVE ready:"));
         assertTrue(deploy.contains("Native libDAVE startup marker is missing"));
-        assertTrue(compact(deploy).contains("verify_runtime\"${BOT_IMAGE}\"true"));
-        assertTrue(compact(deploy).contains("verify_runtime\"${rollback_image}\"false"));
+        assertTrue(deploy.contains("verify_runtime \"${BOT_IMAGE}\" \"${BOT_IMAGE_DIGEST}\" true"));
+        assertTrue(deploy.contains("verify_runtime \"${rollback_image}\" \"\" false"));
     }
 
     @Test

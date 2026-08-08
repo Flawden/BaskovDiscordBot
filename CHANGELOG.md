@@ -7,6 +7,16 @@
 ## [Unreleased]
 
 
+## [1.0.1] — 2026-08-08
+
+### Fixed
+- Исправлена Spring wiring-ошибка `PersistenceReadiness`: production-конструктор явно помечен `@Autowired`, поэтому `@SpringBootTest(discordBot.enabled=false)` снова поднимает ApplicationContext при наличии тестового package-private конструктора.
+- Обновлён `NativeDaveIntegrationContractTest` под digest-aware сигнатуру `verify_runtime <image> <digest> <require_native_dave>`; контракт теперь проверяет и основной deployment, и rollback-вызов без устаревшей двухаргументной формы.
+
+### Scope
+- Runtime-поведение Discord, libDAVE, YouTube source, voice recovery, persistence formats и deployment topology не менялись.
+- `v1.0.0` остаётся нетегированным красным кандидатом; тег ставится только после зелёного CI/CD и runtime smoke-test `v1.0.1`.
+
 ## [1.0.0] — 2026-08-08
 
 ### Добавлено
