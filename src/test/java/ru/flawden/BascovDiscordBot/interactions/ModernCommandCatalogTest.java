@@ -105,7 +105,9 @@ class ModernCommandCatalogTest {
     @Test
     void settingsCommandExposesPersistentPreferenceSubcommands() {
         SlashCommandData settings = command("settings");
-        assertEquals(Set.of("show", "volume", "repeat", "access", "dj-role", "vote-threshold", "reset"),
+        assertEquals(Set.of(
+                        "show", "volume", "repeat", "access", "request-access", "dj-role", "manager-role",
+                        "voice-channel", "vote-threshold", "permissions", "audit", "export", "import", "reset"),
                 settings.getSubcommands().stream()
                 .map(subcommand -> subcommand.getName())
                 .collect(Collectors.toSet()));

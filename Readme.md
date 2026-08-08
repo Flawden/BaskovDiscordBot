@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.4.0**.
+Текущая версия релизной ветки: **v1.5.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -13,7 +13,7 @@
 - воспроизведение музыки, пауза, остановка, пропуск и возврат к предыдущим трекам;
 - requester, ETA для каждой позиции, постраничная очередь с кнопками навигации, bounded history, previous, repeat mode, shuffle, seek, remove/move/clear и управление громкостью;
 - Queue Manager 2.0: ревизия ожидающей очереди, stale-safe batch mutations, `/queue-manage stats|remove-range|dedupe|remove-mine`, сводка длительности/заказчиков/дубликатов и self-service очистка собственных ожидающих треков;
-- постоянные настройки громкости, повтора, access mode, DJ-роли и порога vote-skip отдельно для каждого Discord-сервера;
+- постоянные guild settings: громкость, repeat, playback/request access, DJ/manager roles, voice-channel restriction и vote-skip;
 - `/now` с визуальным прогрессом, state-aware двухрядным пультом previous/±15s/pause/next/shuffle/repeat, disabled-состояниями и кнопкой refresh; `/status` с активными playback modes, uptime, Discord gateway, voice transport snapshot и последними voice/source ошибками;
 - динамический Docker heartbeat, который подтверждает свежее подключение к Discord, считает gateway transitions/disconnected samples и показывает последнее CONNECTED;
 - atomic persistence backups трёх storage-файлов внутри `/app/data/backups` с bounded retention и owner-only permissions;
@@ -24,7 +24,7 @@
 - YouTube как основной провайдер текстового поиска через отдельный modern `youtube-source 1.18.2`; встроенный legacy extractor LavaPlayer отключён, а SoundCloud остаётся только для прямых ссылок и совместимости;
 - переключаемый diagnostic network mode `bridge|host` для A/B-проверки Docker UDP/NAT;
 - ограничения CPU, памяти, PID и ротация Docker-логов;
-- режимы `open`, `dj` и `vote`: общий voice control, назначаемая DJ-роль или голосование за пропуск с административным override;
+- раздельные политики playback и music requests, manager-role для администрирования, voice/stage restriction, аудит последних изменений и переносимые settings profiles;
 - bounded queue, лимит длительности и автоматическое отключение пустых сессий;
 - stateless-ядро команд с case-insensitive реестром и защитой от дубликатов;
 - конфигурируемый префикс и cooldown для шумных команд;
@@ -96,7 +96,7 @@ GitHub-hosted delivery и резервный self-hosted режим описан
 Современный Discord-интерфейс описан в [`docs/MODERN-COMMANDS.md`](docs/MODERN-COMMANDS.md).
 Интерактивный поиск и безопасный выбор трека описаны в [`docs/SEARCH-TRACK-SELECTION.md`](docs/SEARCH-TRACK-SELECTION.md).
 Постоянные плейлисты, история и replay описаны в [`docs/PLAYLISTS-HISTORY-REPLAY.md`](docs/PLAYLISTS-HISTORY-REPLAY.md).
-DJ-роли, access modes и vote-skip описаны в [`docs/DJ-ROLES-AND-VOTING.md`](docs/DJ-ROLES-AND-VOTING.md).
+DJ-роли, access modes и vote-skip описаны в [`docs/DJ-ROLES-AND-VOTING.md`](docs/DJ-ROLES-AND-VOTING.md), а guild administration — в [`docs/GUILD-ADMINISTRATION.md`](docs/GUILD-ADMINISTRATION.md).
 Очередь и новые команды управления описаны в [`docs/QUEUE-EXPERIENCE.md`](docs/QUEUE-EXPERIENCE.md).
 Расширенный пульт, история и `/previous` описаны в [`docs/ADVANCED-PLAYBACK-CONTROLS.md`](docs/ADVANCED-PLAYBACK-CONTROLS.md).
 Маршрутизация источников и переход на YouTube primary описаны в [`docs/YOUTUBE-PRIMARY-PROVIDER.md`](docs/YOUTUBE-PRIMARY-PROVIDER.md).

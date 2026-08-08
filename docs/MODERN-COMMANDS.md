@@ -29,7 +29,7 @@
 | `/move from to` | Перемещает трек в очереди |
 | `/clear` | Очищает ожидание, не останавливая текущий трек |
 | `/queue-manage ...` | Сводка ревизии, batch remove-range, dedupe и удаление собственных ожидающих треков |
-| `/settings ...` | Настраивает volume, repeat, access mode, DJ-роль и vote-skip threshold |
+| `/settings ...` | Guild administration: playback/request access, DJ/manager roles, voice restriction, profiles, audit и reset |
 | `/help` | Показывает краткую помощь |
 | `/version` | Показывает версию production-сборки |
 | `/status` | Показывает uptime, Discord gateway, музыкальные сессии и агрегированные счётчики |
@@ -74,7 +74,7 @@ Legacy prefix-команды не удалены. Это позволяет пе
 Подробности интерактивного поиска описаны в [`SEARCH-TRACK-SELECTION.md`](SEARCH-TRACK-SELECTION.md).
 Постоянные плейлисты, история и replay описаны в [`PLAYLISTS-HISTORY-REPLAY.md`](PLAYLISTS-HISTORY-REPLAY.md).
 
-DJ-роли и голосование описаны в [`DJ-ROLES-AND-VOTING.md`](DJ-ROLES-AND-VOTING.md).
+DJ-роли и голосование описаны в [`DJ-ROLES-AND-VOTING.md`](DJ-ROLES-AND-VOTING.md), а административная матрица — в [`GUILD-ADMINISTRATION.md`](GUILD-ADMINISTRATION.md).
 
 
 ## Discovery

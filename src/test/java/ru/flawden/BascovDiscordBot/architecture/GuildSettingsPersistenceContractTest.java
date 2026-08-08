@@ -30,13 +30,15 @@ class GuildSettingsPersistenceContractTest {
     void slashCatalogExposesAdminManagedSettings() throws IOException {
         String catalog = read("interactions/ModernCommandCatalog.java");
         String interactions = read("interactions/ModernInteractions.java");
+        String adminPolicy = read("settings/GuildAdministrationPolicy.java");
 
         assertTrue(catalog.contains("Commands.slash(\"settings\""));
         assertTrue(catalog.contains("new SubcommandData(\"show\""));
         assertTrue(catalog.contains("new SubcommandData(\"volume\""));
         assertTrue(catalog.contains("new SubcommandData(\"repeat\""));
         assertTrue(catalog.contains("new SubcommandData(\"reset\""));
-        assertTrue(interactions.contains("Permission.MANAGE_SERVER"));
+        assertTrue(interactions.contains("administrationPolicy.canManage"));
+        assertTrue(adminPolicy.contains("Permission.MANAGE_SERVER"));
     }
 
     @Test

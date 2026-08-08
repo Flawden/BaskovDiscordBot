@@ -1,5 +1,6 @@
 package ru.flawden.BascovDiscordBot.interactions;
 
+import net.dv8tion.jda.api.entities.channel.ChannelType;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.CommandData;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
@@ -245,19 +246,54 @@ public final class ModernCommandCatalog {
                                                 .addChoice("Открытый доступ", "open")
                                                 .addChoice("Только DJ", "dj")
                                                 .addChoice("DJ + голосование за пропуск", "vote")),
+                                new SubcommandData("request-access", "Выбирает, кто может добавлять музыку")
+                                        .addOptions(new OptionData(
+                                                OptionType.STRING,
+                                                "mode",
+                                                "Кто может добавлять треки, искать и запускать плейлисты",
+                                                true)
+                                                .addChoice("Все слушатели", "open")
+                                                .addChoice("Только DJ", "dj")),
                                 new SubcommandData("dj-role", "Назначает или очищает DJ-роль")
                                         .addOption(
                                                 OptionType.ROLE,
                                                 "role",
                                                 "DJ-роль; оставь пустым, чтобы очистить",
                                                 false),
+                                new SubcommandData("manager-role", "Назначает или очищает роль менеджера Баскова")
+                                        .addOption(
+                                                OptionType.ROLE,
+                                                "role",
+                                                "Роль для администрирования Баскова; пусто = очистить",
+                                                false),
+                                new SubcommandData("voice-channel", "Ограничивает новые музыкальные запросы одним voice/stage каналом")
+                                        .addOptions(new OptionData(
+                                                OptionType.CHANNEL,
+                                                "channel",
+                                                "Voice/stage канал; оставь пустым, чтобы снять ограничение",
+                                                false)
+                                                .setChannelTypes(ChannelType.VOICE, ChannelType.STAGE)),
                                 new SubcommandData("vote-threshold", "Настраивает процент голосов для пропуска")
                                         .addOption(
                                                 OptionType.INTEGER,
                                                 "percent",
                                                 "От 25 до 100 процентов слушателей",
                                                 true),
-                                new SubcommandData("reset", "Возвращает настройки сервера к значениям по умолчанию"))
+                                new SubcommandData("permissions", "Показывает матрицу доступа и административные роли"),
+                                new SubcommandData("audit", "Показывает последние изменения guild settings"),
+                                new SubcommandData("export", "Экспортирует переносимый профиль guild settings"),
+                                new SubcommandData("import", "Импортирует профиль guild settings атомарно")
+                                        .addOption(
+                                                OptionType.STRING,
+                                                "profile",
+                                                "Строка BASKOV_SETTINGS_V1 из /settings export",
+                                                true),
+                                new SubcommandData("reset", "Возвращает настройки сервера к значениям по умолчанию")
+                                        .addOption(
+                                                OptionType.BOOLEAN,
+                                                "confirm",
+                                                "Подтверди полный сброс постоянных guild settings",
+                                                true))
         );
     }
 }

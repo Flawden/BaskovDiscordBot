@@ -1,54 +1,60 @@
 # Постоянные настройки Discord-серверов
 
-Начиная с `v0.6.0`, бот сохраняет музыкальные предпочтения отдельно для каждой Discord-гильдии. В `v0.14.0` то же хранилище расширено правилами DJ и vote-skip.
+Начиная с `v0.6.0`, бот сохраняет музыкальные предпочтения отдельно для каждой Discord-гильдии. `v0.14.0` добавил DJ/vote-skip, а `v1.5.0` расширяет тот же backwards-compatible properties-файл административными ролями, request policy, voice restriction и bounded audit.
 
 ## Сохраняемые значения
 
 - громкость новых музыкальных сессий;
-- режим повтора новых музыкальных сессий: `off`, `track` или `queue`;
-- режим доступа к playback: `open`, `dj` или `vote`;
-- Discord role ID назначенной DJ-роли либо `0`, если роль не выбрана;
-- порог vote-skip от 25 до 100 процентов.
+- repeat mode: `off`, `track` или `queue`;
+- playback access: `open`, `dj` или `vote`;
+- request access: `open` или `dj`;
+- DJ role ID либо `0`;
+- manager role ID либо `0`;
+- разрешённый voice/stage channel ID либо `0`;
+- vote-skip threshold 25..100%;
+- последние 10 audit entries изменений guild settings.
 
-Громкость и repeat применяются к новой сессии при первом `/play`. Изменение через `/settings` также немедленно обновляет активную сессию. Access mode, DJ-роль и порог начинают действовать сразу для следующих команд и кнопок.
+Громкость и repeat применяются к новой сессии и обновляют активную. Access/role/channel политики действуют сразу для следующих команд.
 
 ## Slash-команды
 
 ```text
 /settings show
+/settings permissions
 /settings volume level:<0..max>
 /settings repeat mode:<off|track|queue>
 /settings access mode:<open|dj|vote>
+/settings request-access mode:<open|dj>
 /settings dj-role role:<@role>
-/settings dj-role
+/settings manager-role role:<@role>
+/settings voice-channel channel:<voice-or-stage>
 /settings vote-threshold percent:<25..100>
-/settings reset
+/settings export
+/settings import profile:<BASKOV_SETTINGS_V1...>
+/settings audit
+/settings reset confirm:<true|false>
 ```
 
-Просматривать настройки может любой участник. Изменять и сбрасывать их может владелец сервера либо участник с Discord permission `Manage Server`.
+`show` можно просматривать всем. Изменение/administration разрешено owner, `Manage Server` или настроенной manager-role.
 
-Обычные `/volume` и `/repeat` продолжают менять только текущую музыкальную сессию. Это не позволяет любому участнику незаметно переписать постоянные значения сервера.
-
-Правила access mode и голосования описаны отдельно в [`DJ-ROLES-AND-VOTING.md`](DJ-ROLES-AND-VOTING.md).
+Подробная матрица прав, export/import и audit описаны в [`GUILD-ADMINISTRATION.md`](GUILD-ADMINISTRATION.md).
 
 ## Хранилище
 
-Используется небольшой properties-файл без внешней базы данных. Запись выполняется через временный файл и атомарную замену, поэтому прерванная запись не должна оставлять частично записанный файл.
+Используется один properties-файл без внешней БД. Запись выполняется через temporary file + atomic replace.
 
-Локальный путь по умолчанию:
+Локально:
 
 ```text
 data/guild-settings.properties
 ```
 
-В Docker:
+Docker:
 
 ```text
 /app/data/guild-settings.properties
 ```
 
-Каталог `/app/data` подключён к именованному Docker volume `<container-name>-data`. Обновление или пересоздание контейнера не удаляет сохранённые настройки.
+`/app/data` находится в named Docker volume. Existing persistence backup снимает snapshot этого файла целиком, поэтому новые административные поля и audit автоматически резервируются.
 
-Файл содержит только Discord guild ID, громкость, repeat mode, access mode, ID DJ-роли и порог vote-skip. Discord token, имена пользователей, список проголосовавших и история прослушивания туда не записываются.
-
-Старые файлы с ключами только `volume` и `repeat` читаются без миграции: для них автоматически используются безопасные значения `open`, DJ-роль не назначена, vote-skip `50%`.
+Старые файлы читаются без миграции: отсутствующие administrative поля получают безопасные defaults (`request-access=open`, роли/канал = `0`, audit пустой).

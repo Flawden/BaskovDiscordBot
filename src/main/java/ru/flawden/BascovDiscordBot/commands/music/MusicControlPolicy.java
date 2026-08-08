@@ -9,6 +9,7 @@ import ru.flawden.BascovDiscordBot.lavaplayer.RepeatMode;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferences;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
 import ru.flawden.BascovDiscordBot.settings.PlaybackAccessMode;
+import ru.flawden.BascovDiscordBot.settings.RequestAccessMode;
 
 /**
  * Единые правила доступа к управлению музыкальной сессией.
@@ -34,9 +35,12 @@ public class MusicControlPolicy {
             Member member,
             GuildVoiceState memberVoiceState,
             GuildVoiceState botVoiceState) {
-        return decide(
-                Mode.START_OR_QUEUE,
-                isAdministrator(member),
+        GuildPreferences preferences = preferences(member);
+        return requestDecision(
+                preferences.requestAccessMode(),
+                isAdministrator(member) || hasManagerRole(member, preferences),
+                hasDjRole(member, preferences),
+                preferences.musicChannelId(),
                 channelId(memberVoiceState),
                 channelId(botVoiceState));
     }
@@ -48,7 +52,7 @@ public class MusicControlPolicy {
         GuildPreferences preferences = preferences(member);
         return controlDecision(
                 preferences.accessMode(),
-                isAdministrator(member),
+                isAdministrator(member) || hasManagerRole(member, preferences),
                 hasDjRole(member, preferences),
                 channelId(memberVoiceState),
                 channelId(botVoiceState));
@@ -61,7 +65,7 @@ public class MusicControlPolicy {
         GuildPreferences preferences = preferences(member);
         return skipDecision(
                 preferences.accessMode(),
-                isAdministrator(member),
+                isAdministrator(member) || hasManagerRole(member, preferences),
                 hasDjRole(member, preferences),
                 channelId(memberVoiceState),
                 channelId(botVoiceState));
@@ -95,6 +99,36 @@ public class MusicControlPolicy {
         return Decision.granted();
     }
 
+    static Decision requestDecision(
+            RequestAccessMode requestAccessMode,
+            boolean administrator,
+            boolean dj,
+            long configuredMusicChannelId,
+            Long memberChannelId,
+            Long botChannelId) {
+        Decision base = decide(
+                Mode.START_OR_QUEUE,
+                administrator,
+                memberChannelId,
+                botChannelId);
+        if (!base.allowed()) {
+            return base;
+        }
+
+        Long targetChannelId = botChannelId != null ? botChannelId : memberChannelId;
+        if (configuredMusicChannelId > 0
+                && (targetChannelId == null || targetChannelId.longValue() != configuredMusicChannelId)) {
+            return Decision.denied("Добавлять музыку можно только в настроенном голосовом канале <#"
+                    + configuredMusicChannelId + ">.");
+        }
+
+        if (requestAccessMode == RequestAccessMode.DJ_ONLY && !administrator && !dj) {
+            return Decision.denied("Добавлять треки и запускать поиск может DJ, владелец сервера, "
+                    + "участник с `Manage Server` или настроенной manager-role.");
+        }
+        return Decision.granted();
+    }
+
     static Decision controlDecision(
             PlaybackAccessMode accessMode,
             boolean administrator,
@@ -116,8 +150,8 @@ public class MusicControlPolicy {
             return Decision.denied("Прямое управление доступно DJ. Для пропуска используй `/voteskip` "
                     + "или кнопку `Следующий` под `/now`.");
         }
-        return Decision.denied("Прямое управление доступно владельцу сервера, участникам с `Manage Server` "
-                + "или настроенной DJ-роли.");
+        return Decision.denied("Прямое управление доступно владельцу сервера, участникам с `Manage Server`, "
+                + "manager-role или настроенной DJ-роли.");
     }
 
     static SkipDecision skipDecision(
@@ -143,8 +177,8 @@ public class MusicControlPolicy {
         if (accessMode == PlaybackAccessMode.VOTE_SKIP) {
             return SkipDecision.vote();
         }
-        return SkipDecision.denied("Пропуск доступен владельцу сервера, участникам с `Manage Server` "
-                + "или настроенной DJ-роли.");
+        return SkipDecision.denied("Пропуск доступен владельцу сервера, участникам с `Manage Server`, "
+                + "manager-role или настроенной DJ-роли.");
     }
 
     private GuildPreferences preferences(Member member) {
@@ -156,6 +190,14 @@ public class MusicControlPolicy {
 
     private static boolean isAdministrator(Member member) {
         return member != null && (member.isOwner() || member.hasPermission(Permission.MANAGE_SERVER));
+    }
+
+    private static boolean hasManagerRole(Member member, GuildPreferences preferences) {
+        if (member == null || preferences == null || !preferences.hasManagerRole()) {
+            return false;
+        }
+        long configuredRoleId = preferences.managerRoleId();
+        return member.getRoles().stream().anyMatch(role -> role.getIdLong() == configuredRoleId);
     }
 
     private static boolean hasDjRole(Member member, GuildPreferences preferences) {

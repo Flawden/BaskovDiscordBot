@@ -6,6 +6,25 @@
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-08-08
+
+### Permissions & Guild Administration
+
+- Добавлена `manager-role`: владелец, `Manage Server` и участники этой роли могут администрировать guild settings и выполнять административные операции библиотеки.
+- Playback-control и добавление музыки разделены на две независимые политики: существующий `access` (`open|dj|vote`) и новый `request-access` (`open|dj`).
+- Добавлена `/settings voice-channel`: новые `/play`, `/search`, discovery/replay и playlist playback можно ограничить одним voice/stage каналом.
+- `/settings permissions` показывает итоговую матрицу доступа, DJ/manager роли, voice restriction и vote-skip threshold.
+- `/settings export` / `/settings import` получили переносимый `BASKOV_SETTINGS_V1` профиль; импорт проверяет роли/канал целевой guild и записывает профиль одной atomic persistence mutation.
+- `/settings audit` показывает последние 10 сохранённых изменений с actor Discord user ID и временем; audit хранится в том же `guild-settings.properties` и автоматически попадает в существующие persistence backups.
+- `/settings reset` теперь требует явный `confirm:true`, чтобы исключить случайный полный сброс.
+- Legacy `guild-settings.properties` остаются совместимыми: отсутствующие поля получают `request-access=open`, manager-role/music-channel = `0`.
+
+### Safety & compatibility
+
+- `@everyone` нельзя назначить ни DJ-, ни manager-role. Import отклоняет отсутствующие роли, несуществующий/non-audio канал, повреждённый profile и громкость выше configured max.
+- Ограничение music-channel применяется даже к привилегированному enqueue: оно описывает разрешённое место музыкальной сессии, а не пользовательскую роль.
+- Форматы music library/session checkpoints, queue revisions, backups, voice recovery и deployment topology не меняются; расширяется только backwards-compatible guild settings file.
+
 ## [1.4.0] — 2026-08-08
 
 ### Search & Discovery 2.0
