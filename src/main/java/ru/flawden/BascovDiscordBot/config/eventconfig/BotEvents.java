@@ -111,7 +111,7 @@ public class BotEvents extends ListenerAdapter {
             command.execute(new EventArgs(event, invocation));
             operationalMetrics.recordSuccess(OperationalMetrics.Channel.PREFIX);
         } catch (RuntimeException exception) {
-            operationalMetrics.recordFailure(OperationalMetrics.Channel.PREFIX);
+            operationalMetrics.recordFailure(OperationalMetrics.Channel.PREFIX, command.getName(), exception);
             log.error("Command '{}' failed in guild {} for user {}",
                     command.getName(), event.getGuild().getId(), member.getId(), exception);
             send(event.getChannel().asTextChannel(), errorEmbed(

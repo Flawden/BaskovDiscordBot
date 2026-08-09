@@ -9,6 +9,7 @@ import java.time.ZoneId;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OperationalMetricsTest {
 
@@ -51,6 +52,28 @@ class OperationalMetricsTest {
         assertNull(snapshot.lastSuccessAt());
         assertNull(snapshot.lastFailureAt());
         assertEquals(Duration.ZERO, snapshot.uptime());
+    }
+
+    @Test
+    void recentFailureJournalIsBoundedNewestFirstAndSanitized() {
+        MutableClock clock = new MutableClock(Instant.parse("2026-08-04T00:00:00Z"));
+        OperationalMetrics metrics = new OperationalMetrics(clock);
+
+        for (int index = 0; index < 30; index++) {
+            metrics.recordFailure(
+                    OperationalMetrics.Channel.SLASH,
+                    "/play-" + index,
+                    new IllegalStateException("failure `" + index + "`\nsecond line"));
+            clock.advance(Duration.ofSeconds(1));
+        }
+
+        var failures = metrics.recentFailures(OperationalMetrics.MAX_RECENT_FAILURES + 10);
+        assertEquals(OperationalMetrics.MAX_RECENT_FAILURES, failures.size());
+        assertEquals("/play-29", failures.get(0).operation());
+        assertEquals("/play-5", failures.get(failures.size() - 1).operation());
+        assertTrue(failures.get(0).message().contains("failure '29' second line"));
+        assertEquals("IllegalStateException", failures.get(0).errorType());
+        assertEquals(30, metrics.snapshot().totalFailures());
     }
 
     private static final class MutableClock extends Clock {

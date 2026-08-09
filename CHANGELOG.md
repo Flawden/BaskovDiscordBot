@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [1.12.0] — 2026-08-09
+
+### Observability & Self-Diagnostics
+
+- Добавлен read-only `/doctor summary|gateway|voice|storage|session|source|failures`. Doctor агрегирует существующие runtime-сигналы в `OK/WARN/FAIL`, краткий диагноз и конкретный следующий шаг вместо ещё одной сырой status-простыни.
+- `SystemDoctor` объединяет Discord gateway heartbeat, DAVE readiness, voice AudioManager/frame-demand, recent media-source failures, live persistence probe, backup scheduler, playback recovery и command metrics. Внешние HTTP/YouTube/Maven probes намеренно не выполняются из Discord-команды, чтобы сломанный upstream не подвешивал диагностику.
+- `OperationalMetrics` получил bounded in-memory journal последних 25 внутренних command failures, newest-first. Записываются только timestamp, channel, безопасное имя операции, exception type и короткое санитизированное сообщение; Discord snowflakes и credential-like assignments редактируются, raw component IDs, user IDs и stack traces в journal не пишутся.
+- `/doctor failures` показывает до 10 последних failure events; button failures используют только безопасные категории `experience-button`/`music-button`, поэтому confirmation component tokens не попадают в self-diagnostics. Journal намеренно очищается при restart.
+- `/doctor voice` отличает штатный idle от ожидаемого playback без Discord AudioManager, отсутствующего/устаревшего frame demand и DAVE failure. `/doctor source` использует pinned `youtube-source 1.18.2` плюс реальные недавние runtime source errors/fallback counters вместо синтетического network ping.
+- `/doctor storage` объединяет live readiness трёх persistent stores и состояние periodic backups; `/doctor session` интерпретирует recovery in-progress и свежие failure/timeout events; `/doctor gateway` проверяет CONNECTED и свежесть 10-секундного heartbeat.
+- `/help` и `docs/MODERN-COMMANDS.md` обновлены; добавлена отдельная архитектурная документация `OBSERVABILITY-SELF-DIAGNOSTICS.md`.
+
 ## [1.11.0] — 2026-08-09
 
 ### Administration & Moderation 2.0

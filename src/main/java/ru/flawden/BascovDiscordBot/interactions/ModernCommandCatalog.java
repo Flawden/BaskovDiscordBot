@@ -32,6 +32,15 @@ public final class ModernCommandCatalog {
                                 .addChoice("Администрирование", "admin")),
                 Commands.slash("version", "Показывает версию запущенного бота"),
                 Commands.slash("status", "Показывает состояние Discord, музыки и команд"),
+                Commands.slash("doctor", "Диагностирует подсистемы и подсказывает следующий шаг")
+                        .addSubcommands(
+                                new SubcommandData("summary", "Общая health-сводка и приоритет проблем"),
+                                new SubcommandData("gateway", "Discord gateway и DAVE runtime"),
+                                new SubcommandData("voice", "Voice transport, frame demand и DAVE"),
+                                new SubcommandData("storage", "Persistent storage и backups"),
+                                new SubcommandData("session", "Playback checkpoint и recovery"),
+                                new SubcommandData("source", "Media source и свежие source failures"),
+                                new SubcommandData("failures", "Последние внутренние ошибки команд")),
                 Commands.slash("play", "Ищет и добавляет песню")
                         .addOptions(new OptionData(
                                 OptionType.STRING,

@@ -48,6 +48,7 @@ import ru.flawden.BascovDiscordBot.operations.OperationalMetrics;
 import ru.flawden.BascovDiscordBot.operations.PersistenceBackupService;
 import ru.flawden.BascovDiscordBot.operations.PersistenceReadiness;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
+import ru.flawden.BascovDiscordBot.operations.SystemDoctor;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
 import ru.flawden.BascovDiscordBot.session.SessionRecoveryDetails;
 import ru.flawden.BascovDiscordBot.session.SessionRecoverySnapshot;
@@ -92,6 +93,7 @@ public class ModernInteractions extends ListenerAdapter {
     private final QueueModerationPolicy moderationPolicy;
     private final OperationalMetrics operationalMetrics;
     private final RuntimeHealthMonitor healthMonitor;
+    private final SystemDoctor systemDoctor;
     private final PersistenceReadiness persistenceReadiness;
     private final PersistenceBackupService persistenceBackupService;
     private final DaveRuntimeInfo daveRuntimeInfo;
@@ -112,6 +114,7 @@ public class ModernInteractions extends ListenerAdapter {
             QueueModerationPolicy moderationPolicy,
             OperationalMetrics operationalMetrics,
             RuntimeHealthMonitor healthMonitor,
+            SystemDoctor systemDoctor,
             PersistenceReadiness persistenceReadiness,
             PersistenceBackupService persistenceBackupService,
             DaveRuntimeInfo daveRuntimeInfo,
@@ -130,6 +133,7 @@ public class ModernInteractions extends ListenerAdapter {
         this.moderationPolicy = moderationPolicy;
         this.operationalMetrics = operationalMetrics;
         this.healthMonitor = healthMonitor;
+        this.systemDoctor = systemDoctor;
         this.persistenceReadiness = persistenceReadiness;
         this.persistenceBackupService = persistenceBackupService;
         this.daveRuntimeInfo = daveRuntimeInfo;
@@ -152,6 +156,7 @@ public class ModernInteractions extends ListenerAdapter {
                 case "help" -> help(event);
                 case "version" -> event.replyEmbeds(versionEvent.buildEmbed()).setEphemeral(true).queue();
                 case "status" -> status(event);
+                case "doctor" -> doctor(event);
                 case "session" -> session(event);
                 case "play" -> play(event);
                 case "search" -> search(event);
@@ -186,7 +191,7 @@ public class ModernInteractions extends ListenerAdapter {
             }
             operationalMetrics.recordSuccess(OperationalMetrics.Channel.SLASH);
         } catch (RuntimeException exception) {
-            operationalMetrics.recordFailure(OperationalMetrics.Channel.SLASH);
+            operationalMetrics.recordFailure(OperationalMetrics.Channel.SLASH, "/" + event.getName(), exception);
             log.error("Slash command '{}' failed in guild {} for user {}",
                     event.getName(), event.getGuild().getId(), event.getUser().getId(), exception);
             if (!event.isAcknowledged()) {
@@ -301,7 +306,8 @@ public class ModernInteractions extends ListenerAdapter {
             }
             operationalMetrics.recordSuccess(OperationalMetrics.Channel.BUTTON);
         } catch (RuntimeException exception) {
-            operationalMetrics.recordFailure(OperationalMetrics.Channel.BUTTON);
+            operationalMetrics.recordFailure(OperationalMetrics.Channel.BUTTON,
+                    experienceButton ? "experience-button" : "music-button", exception);
             log.error("Interaction button '{}' failed for user {}",
                     event.getComponentId(), event.getUser().getId(), exception);
             MessageEmbed failureEmbed = MusicEmbeds.error(
@@ -733,6 +739,97 @@ public class ModernInteractions extends ListenerAdapter {
                 .setComponents(ExperienceControls.statusRows())
                 .setEphemeral(true)
                 .queue();
+    }
+
+    private void doctor(SlashCommandInteractionEvent event) {
+        String subcommand = event.getSubcommandName();
+        if (subcommand == null) {
+            subcommand = "summary";
+        }
+        if ("failures".equals(subcommand)) {
+            event.replyEmbeds(doctorFailuresEmbed())
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        SystemDoctor.Report report = systemDoctor.diagnose(event.getGuild());
+        List<SystemDoctor.Check> checks = switch (subcommand) {
+            case "summary" -> report.checks();
+            case "gateway" -> report.checks("gateway", "dave");
+            case "voice" -> report.checks("voice", "dave");
+            case "storage" -> report.checks("storage", "backups");
+            case "session" -> report.checks("session");
+            case "source" -> report.checks("source");
+            default -> List.of();
+        };
+        if (checks.isEmpty()) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "❌ Неизвестный doctor-раздел",
+                            "Используй `/doctor summary|gateway|voice|storage|session|source|failures`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        event.replyEmbeds(doctorEmbed(subcommand, report, checks))
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private MessageEmbed doctorEmbed(
+            String scope,
+            SystemDoctor.Report report,
+            List<SystemDoctor.Check> checks) {
+        EmbedBuilder embed = new EmbedBuilder()
+                .setTitle("🩺 Baskov Doctor — " + scope)
+                .setDescription("Итог: `" + reportSeverity(checks) + "` • проверок: `" + checks.size() + "`")
+                .setColor(switch (reportSeverity(checks)) {
+                    case OK -> Color.GREEN;
+                    case WARN -> Color.ORANGE;
+                    case FAIL -> Color.RED;
+                });
+        for (SystemDoctor.Check check : checks) {
+            embed.addField(
+                    check.severity().icon() + " " + check.title(),
+                    "`" + check.id() + "` • " + sanitizeInline(check.details())
+                            + "\n→ " + sanitizeInline(check.action()),
+                    false);
+        }
+        return embed
+                .setFooter("/doctor не делает внешних network probes • /doctor failures показывает bounded журнал ошибок")
+                .build();
+    }
+
+    private MessageEmbed doctorFailuresEmbed() {
+        List<OperationalMetrics.FailureEvent> failures = operationalMetrics.recentFailures(10);
+        EmbedBuilder embed = new EmbedBuilder()
+                .setTitle("🧯 Baskov Doctor — recent failures")
+                .setColor(failures.isEmpty() ? Color.GREEN : Color.ORANGE);
+        if (failures.isEmpty()) {
+            embed.setDescription("С момента запуска bounded журнал внутренних ошибок пуст.");
+        } else {
+            StringBuilder body = new StringBuilder();
+            for (OperationalMetrics.FailureEvent failure : failures) {
+                long epoch = failure.at().getEpochSecond();
+                body.append("• <t:").append(epoch).append(":R> `")
+                        .append(failure.channel()).append("` `")
+                        .append(sanitizeInline(failure.operation())).append("` — `")
+                        .append(sanitizeInline(failure.errorType())).append("`: ")
+                        .append(sanitizeInline(failure.message())).append('\n');
+            }
+            embed.setDescription(body.toString());
+        }
+        return embed
+                .setFooter("Хранится максимум " + OperationalMetrics.MAX_RECENT_FAILURES
+                        + " событий в памяти процесса • user IDs и stack traces сюда не попадают")
+                .build();
+    }
+
+    private static SystemDoctor.Severity reportSeverity(List<SystemDoctor.Check> checks) {
+        return checks.stream()
+                .map(SystemDoctor.Check::severity)
+                .max(SystemDoctor.Severity::compareTo)
+                .orElse(SystemDoctor.Severity.OK);
     }
 
     private void session(SlashCommandInteractionEvent event) {
@@ -3391,7 +3488,7 @@ public class ModernInteractions extends ListenerAdapter {
                     .addField("Поведение", "`/settings volume` `/settings repeat` `/settings vote-threshold`", false)
                     .addField("Перенос", "`/settings export` `/settings import`", false)
                     .addField("Сброс", "`/settings reset` открывает интерактивное подтверждение; `confirm:true` больше вводить не нужно.", false)
-                    .addField("Диагностика", "`/status` — gateway, voice, storage, backups и failures; `/session status|recover` — checkpoint и ручной recovery.", false);
+                    .addField("Диагностика", "`/doctor summary|gateway|voice|storage|session|source|failures` — actionable diagnosis; `/status` — raw snapshot; `/session status|recover` — checkpoint/recovery.", false);
         }
         return embed.build();
     }

@@ -36,6 +36,7 @@
 | `/help` | Показывает краткую помощь |
 | `/version` | Показывает версию production-сборки |
 | `/status` | Показывает uptime, Discord gateway, музыкальные сессии и агрегированные счётчики |
+| `/doctor summary|gateway|voice|storage|session|source|failures` | Actionable self-diagnostics по существующим runtime-сигналам без внешних network probes |
 
 Команды регистрируются глобально при успешном запуске JDA. Discord может обновлять глобальный список команд не мгновенно.
 
@@ -115,3 +116,18 @@ DJ-роли и голосование описаны в [`DJ-ROLES-AND-VOTING.md
 ## Administration & Moderation 2.0
 
 `v1.11.0` добавляет `moderator-role` без полного доступа к guild settings и `/moderation status|remove|purge|audit`. `remove` и `purge` используют optional queue revision. `/settings requester-limit` вводит cap только для pending requests одного пользователя; enforcement находится в `TrackScheduler`, поэтому одинаков для play/search/favorites/history/playlist paths. Settings export теперь V2, а import продолжает принимать V1. Подробности — в [`ADMINISTRATION-MODERATION-2.md`](ADMINISTRATION-MODERATION-2.md).
+
+
+## Observability & Self-Diagnostics 1.12
+
+`/doctor` не заменяет `/status`: status показывает широкий raw snapshot, doctor превращает те же безопасные runtime-сигналы в severity (`OK/WARN/FAIL`), краткий диагноз и рекомендуемое следующее действие.
+
+- `summary` — gateway, DAVE, voice, source, storage, backups, recovery и command runtime;
+- `gateway` — Discord heartbeat + DAVE;
+- `voice` — AudioManager, frame demand и DAVE;
+- `storage` — live persistence probe + backup scheduler;
+- `session` — playback checkpoint/recovery;
+- `source` — modern YouTube source identity + свежие source runtime errors/fallbacks;
+- `failures` — до 10 последних записей из bounded in-memory журнала (сам журнал хранит максимум 25).
+
+Doctor намеренно не делает внешние HTTP/Maven/YouTube probes из Discord-команды: зависший upstream не должен подвешивать саму диагностику. Failure journal не хранит Discord user IDs, stack traces или secrets.

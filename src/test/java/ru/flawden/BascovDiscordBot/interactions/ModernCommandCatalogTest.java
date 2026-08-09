@@ -21,9 +21,19 @@ class ModernCommandCatalogTest {
 
         assertEquals(commands.size(), names.size());
         assertEquals(Set.of(
-                "help", "version", "status", "play", "search", "discover", "history", "replay", "favorites", "playlist",
+                "help", "version", "status", "doctor", "play", "search", "discover", "history", "replay", "favorites", "playlist",
                 "pause", "resume", "previous", "skip", "voteskip", "stop", "queue", "now", "seek",
                 "volume", "repeat", "shuffle", "remove", "move", "clear", "queue-manage", "session", "moderation", "settings"), names);
+    }
+
+    @Test
+    void doctorCommandExposesActionableDiagnosticScopes() {
+        SlashCommandData doctor = command("doctor");
+        assertEquals(Set.of("summary", "gateway", "voice", "storage", "session", "source", "failures"),
+                doctor.getSubcommands().stream()
+                        .map(subcommand -> subcommand.getName())
+                        .collect(Collectors.toSet()));
+        assertTrue(doctor.getSubcommands().stream().allMatch(subcommand -> subcommand.getOptions().isEmpty()));
     }
 
     @Test
