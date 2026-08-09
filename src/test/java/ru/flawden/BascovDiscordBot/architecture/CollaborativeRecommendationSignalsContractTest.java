@@ -48,8 +48,10 @@ class CollaborativeRecommendationSignalsContractTest {
         String player = read("lavaplayer/PlayerManager.java");
         String collaborative = read("recommendation/ListenBrainzCollaborativeProvider.java");
 
-        assertTrue(player.contains("ytsearch:"));
-        assertTrue(!collaborative.contains("ytsearch:"));
+        assertTrue(player.contains("MediaQueryResolver.YOUTUBE_SEARCH_PREFIX"));
+        assertTrue(player.contains("audioPlayerManager.loadItemOrdered"));
+        assertTrue(!collaborative.contains("MediaQueryResolver.YOUTUBE_SEARCH_PREFIX"));
+        assertTrue(!collaborative.contains("AudioTrack"));
     }
 
     private static String read(String relative) throws Exception {
