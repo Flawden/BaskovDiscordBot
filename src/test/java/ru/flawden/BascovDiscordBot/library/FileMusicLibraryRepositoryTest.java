@@ -167,6 +167,90 @@ class FileMusicLibraryRepositoryTest {
                 repository.playlist(10L, "Full soon").orElseThrow().tracks().size());
     }
 
+
+    @Test
+    void persistsPersonalFavoritesNewestFirstWithoutDuplicates() {
+        Path file = tempDir.resolve("favorites.tsv");
+        FileMusicLibraryRepository repository = repository(file);
+
+        assertEquals(FavoriteOperationResult.Status.ADDED,
+                repository.addFavorite(10L, 20L, track("First", 1L)).status());
+        assertEquals(FavoriteOperationResult.Status.ADDED,
+                repository.addFavorite(10L, 20L, track("Second", 2L)).status());
+        assertEquals(FavoriteOperationResult.Status.ALREADY_EXISTS,
+                repository.addFavorite(10L, 20L, track("First duplicate title", 1L)).status());
+
+        assertEquals(java.util.List.of("Second", "First"),
+                repository.favorites(10L, 20L).stream().map(StoredTrack::title).toList());
+        assertTrue(repository.favorites(10L, 30L).isEmpty());
+
+        FileMusicLibraryRepository reloaded = repository(file);
+        assertEquals(java.util.List.of("Second", "First"),
+                reloaded.favorites(10L, 20L).stream().map(StoredTrack::title).toList());
+    }
+
+    @Test
+    void boundsFavoritesPerUserWithoutPartialOverflow() {
+        FileMusicLibraryRepository repository = repository(tempDir.resolve("favorite-limit.tsv"));
+        for (int index = 1; index <= MusicLibraryRepository.MAX_FAVORITES_PER_USER; index++) {
+            assertEquals(FavoriteOperationResult.Status.ADDED,
+                    repository.addFavorite(10L, 20L, track("Track " + index, index)).status());
+        }
+
+        assertEquals(FavoriteOperationResult.Status.LIMIT_REACHED,
+                repository.addFavorite(10L, 20L, track("Overflow", 999L)).status());
+        assertEquals(MusicLibraryRepository.MAX_FAVORITES_PER_USER,
+                repository.favorites(10L, 20L).size());
+    }
+
+    @Test
+    void removesSearchesAndClearsOnlyTheUsersFavorites() {
+        FileMusicLibraryRepository repository = repository(tempDir.resolve("favorite-mutations.tsv"));
+        repository.addFavorite(10L, 20L, track("Poison", 1L));
+        repository.addFavorite(10L, 20L, new StoredTrack(
+                "Bismarck",
+                "Sabaton",
+                "https://www.youtube.com/watch?v=id2",
+                "id2",
+                MediaProvider.YOUTUBE,
+                180_000L,
+                20L,
+                "Owner",
+                1_700_000_000_002L));
+        repository.addFavorite(10L, 30L, track("Other user", 3L));
+
+        assertEquals(java.util.List.of(1),
+                repository.searchFavorites(10L, 20L, "sabaton").stream()
+                        .map(FavoriteSearchHit::position)
+                        .toList());
+
+        FavoriteOperationResult removed = repository.removeFavorite(10L, 20L, 2);
+        assertEquals(FavoriteOperationResult.Status.REMOVED, removed.status());
+        assertEquals("Poison", removed.track().title());
+
+        FavoriteOperationResult cleared = repository.clearFavorites(10L, 20L);
+        assertEquals(FavoriteOperationResult.Status.CLEARED, cleared.status());
+        assertEquals(1, cleared.affectedTracks());
+        assertTrue(repository.favorites(10L, 20L).isEmpty());
+        assertEquals(1, repository.favorites(10L, 30L).size());
+    }
+
+    @Test
+    void playlistAndHistoryMutationsPreserveFavoritesInTheSameStorage() {
+        Path file = tempDir.resolve("mixed-library.tsv");
+        FileMusicLibraryRepository repository = repository(file);
+        repository.addFavorite(10L, 20L, track("Keep me", 1L));
+        repository.recordHistory(10L, track("History", 2L));
+        repository.createPlaylist(10L, 20L, "Roadtrip");
+        repository.addTrack(10L, "Roadtrip", 20L, false, track("Playlist", 3L));
+        repository.removeTrack(10L, "Roadtrip", 20L, false, 1);
+
+        FileMusicLibraryRepository reloaded = repository(file);
+        assertEquals("Keep me", reloaded.favorites(10L, 20L).get(0).title());
+        assertEquals("History", reloaded.history(10L).get(0).title());
+        assertTrue(reloaded.playlist(10L, "Roadtrip").isPresent());
+    }
+
     @Test
     void rejectsDuplicatePlaylistNamesIgnoringCase() {
         FileMusicLibraryRepository repository = repository(tempDir.resolve("duplicates.tsv"));

@@ -14,6 +14,7 @@ import ru.flawden.BascovDiscordBot.lavaplayer.TrackScheduler;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
 import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
+import ru.flawden.BascovDiscordBot.library.FavoriteSearchHit;
 import ru.flawden.BascovDiscordBot.library.PlaylistSearchHit;
 import ru.flawden.BascovDiscordBot.library.StoredPlaylist;
 import ru.flawden.BascovDiscordBot.library.StoredTrack;
@@ -246,6 +247,65 @@ public final class MusicEmbeds {
                 .setDescription(description.toString())
                 .setColor(Color.CYAN)
                 .setFooter("Номер подходит для /replay position • хранится до 50 треков")
+                .build();
+    }
+
+    public static MessageEmbed favorites(List<StoredTrack> favorites, int requestedPage) {
+        if (favorites == null || favorites.isEmpty()) {
+            return error(
+                    "⭐ Избранное пусто",
+                    "Запусти музыку и сохрани текущий трек через `/favorites add`.");
+        }
+        int pageSize = 10;
+        int totalPages = Math.max(1, (favorites.size() + pageSize - 1) / pageSize);
+        if (requestedPage < 1 || requestedPage > totalPages) {
+            return error(
+                    "📄 Страница избранного не найдена",
+                    "Доступны страницы `1.." + totalPages + "`.");
+        }
+
+        int from = (requestedPage - 1) * pageSize;
+        int to = Math.min(favorites.size(), from + pageSize);
+        StringBuilder description = new StringBuilder();
+        for (int index = from; index < to; index++) {
+            StoredTrack track = favorites.get(index);
+            description.append("**").append(index + 1).append(". ")
+                    .append(shortText(track.title(), 90)).append("**\n")
+                    .append(shortText(track.author(), 70))
+                    .append(" • `").append(formatTime(track.durationMillis())).append("`")
+                    .append(" • `").append(track.provider().label()).append("`\n\n");
+        }
+        long duration = favorites.stream().mapToLong(StoredTrack::durationMillis).sum();
+        return new EmbedBuilder()
+                .setTitle("⭐ Твоё избранное • " + requestedPage + "/" + totalPages)
+                .setDescription(description.toString())
+                .setColor(Color.CYAN)
+                .setFooter("Треков: " + favorites.size()
+                        + " • Длительность: " + humanMillis(duration)
+                        + " • номера подходят для /favorites play и /favorites remove")
+                .build();
+    }
+
+    public static MessageEmbed favoriteSearch(String query, List<FavoriteSearchHit> hits) {
+        if (hits == null || hits.isEmpty()) {
+            return error(
+                    "🔎 В избранном ничего не найдено",
+                    "По запросу `" + shortText(query, 80) + "` совпадений нет.");
+        }
+        StringBuilder description = new StringBuilder();
+        for (FavoriteSearchHit hit : hits) {
+            StoredTrack track = hit.track();
+            description.append("**").append(hit.position()).append(". ")
+                    .append(shortText(track.title(), 90)).append("**\n")
+                    .append(shortText(track.author(), 70))
+                    .append(" • `").append(formatTime(track.durationMillis())).append("`")
+                    .append(" • `").append(track.provider().label()).append("`\n\n");
+        }
+        return new EmbedBuilder()
+                .setTitle("🔎 Поиск по избранному")
+                .setDescription("Запрос: `" + shortText(query, 80) + "`\n\n" + description)
+                .setColor(Color.CYAN)
+                .setFooter("Позиции совпадают с /favorites list")
                 .build();
     }
 

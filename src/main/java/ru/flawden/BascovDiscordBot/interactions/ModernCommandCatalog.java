@@ -69,6 +69,35 @@ public final class ModernCommandCatalog {
                                 "position",
                                 "Номер трека из /history, где 1 — самый новый",
                                 true),
+                Commands.slash("favorites", "Управляет твоим личным избранным")
+                        .addSubcommands(
+                                new SubcommandData("list", "Показывает твоё избранное")
+                                        .addOption(
+                                                OptionType.INTEGER,
+                                                "page",
+                                                "Страница избранного, начиная с 1",
+                                                false),
+                                new SubcommandData("add", "Сохраняет текущий трек в избранное"),
+                                new SubcommandData("play", "Добавляет трек из избранного в очередь")
+                                        .addOption(
+                                                OptionType.INTEGER,
+                                                "position",
+                                                "Позиция трека из /favorites list",
+                                                true),
+                                new SubcommandData("play-all", "Добавляет всё избранное в очередь"),
+                                new SubcommandData("remove", "Удаляет трек из избранного")
+                                        .addOption(
+                                                OptionType.INTEGER,
+                                                "position",
+                                                "Позиция трека из /favorites list",
+                                                true),
+                                new SubcommandData("search", "Ищет по названию и исполнителю в избранном")
+                                        .addOption(
+                                                OptionType.STRING,
+                                                "query",
+                                                "Что найти в избранном",
+                                                true),
+                                new SubcommandData("clear", "Удаляет всё твоё избранное с подтверждением")),
                 Commands.slash("playlist", "Управляет постоянными плейлистами сервера")
                         .addSubcommands(
                                 new SubcommandData("list", "Показывает плейлисты сервера"),

@@ -1,3 +1,23 @@
+# Changelog
+
+Все заметные изменения Baskov Discord Bot фиксируются в этом файле.
+Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
+а версии следуют [Semantic Versioning](https://semver.org/lang/ru/).
+
+## [Unreleased]
+
+## [1.7.0] — 2026-08-09
+
+### Favorites & Personal Library
+
+- Добавлена `/favorites` с subcommands `list`, `add`, `play`, `play-all`, `remove`, `search` и `clear`; список личный для каждого Discord user внутри конкретной guild.
+- `/favorites add` сохраняет текущий replayable YouTube/SoundCloud track; одинаковый `provider + playbackIdentifier` не создаёт дубликат. Новые записи идут первыми, лимит — 100 favorites на пользователя и сервер.
+- `play` и `play-all` переиспользуют существующий ordered batch loader, request/DJ policy, voice-channel restriction, queue bounds и playback readiness — отдельного обходного playback path нет.
+- `/favorites search` выполняет локальный case-insensitive поиск по title/author и сохраняет исходные 1-based позиции; `/favorites clear` использует двухминутное owner/guild-bound интерактивное подтверждение.
+- Autocomplete `/play` и `/search` теперь приоритетно объединяет recent queries → личные favorites → persistent history → playlists без сетевых запросов.
+- Favorites сериализуются в существующий `BASKOV_MUSIC_LIBRARY_V1` как `F` records; старые файлы без favorites загружаются без миграции, а playlist/history mutations сохраняют user favorite maps.
+- Существующий atomic `music-library.tsv`, owner-only permissions и persistence backup автоматически покрывают новый personal library state; новый storage file, external DB, Discord permissions или secrets не требуются. Downgrade на бинарник до `v1.7.0` после появления `F` records требует backup: старый код не сохраняет неизвестные favorite records при следующей library mutation.
+
 ## [1.6.4] — 2026-08-09
 
 ### Now Playing Controls State Hotfix
@@ -6,14 +26,6 @@
 - Slash `/seek` после успешной перемотки также возвращает state-aware пульт вместо zero-state fallback.
 - Добавлен regression contract: production interaction responses больше не могут использовать `MusicControls.nowRows()` без manager там, где состояние музыкальной сессии доступно.
 - Playback engine, queue/history semantics, persistence formats, voice recovery и CI/Maven bootstrap не меняются.
-
-# Changelog
-
-Все заметные изменения Baskov Discord Bot фиксируются в этом файле.
-Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
-а версии следуют [Semantic Versioning](https://semver.org/lang/ru/).
-
-## [Unreleased]
 
 ## [1.6.3] — 2026-08-09
 

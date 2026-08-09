@@ -103,6 +103,7 @@ public class ConfirmationStore {
         STOP,
         CLEAR_QUEUE,
         DELETE_PLAYLIST,
+        CLEAR_FAVORITES,
         RESET_SETTINGS
     }
 

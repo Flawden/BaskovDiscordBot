@@ -94,9 +94,14 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
             int historyCount = libraries.values().stream()
                     .mapToInt(library -> library.history().size())
                     .sum();
-            log.info("Loaded {} playlists and {} history entries for {} Discord guilds from {}",
+            int favoriteCount = libraries.values().stream()
+                    .flatMap(library -> library.favorites().values().stream())
+                    .mapToInt(List::size)
+                    .sum();
+            log.info("Loaded {} playlists, {} history entries and {} favorites for {} Discord guilds from {}",
                     playlistCount,
                     historyCount,
+                    favoriteCount,
                     libraries.size(),
                     file);
         }
@@ -150,7 +155,7 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
                     List.of());
             LinkedHashMap<String, StoredPlaylist> playlists = new LinkedHashMap<>(previous.playlists());
             playlists.put(key, created);
-            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history()));
+            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history(), previous.favorites()));
             return PlaylistOperationResult.of(PlaylistOperationResult.Status.CREATED, created);
         }
     }
@@ -189,7 +194,7 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
             StoredPlaylist updated = playlist.withAddedTrack(track);
             LinkedHashMap<String, StoredPlaylist> playlists = new LinkedHashMap<>(previous.playlists());
             playlists.put(key, updated);
-            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history()));
+            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history(), previous.favorites()));
             return PlaylistOperationResult.of(PlaylistOperationResult.Status.ADDED, updated, track);
         }
     }
@@ -231,7 +236,7 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
             StoredPlaylist updated = playlist.withAddedTracks(safeTracks);
             LinkedHashMap<String, StoredPlaylist> playlists = new LinkedHashMap<>(previous.playlists());
             playlists.put(key, updated);
-            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history()));
+            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history(), previous.favorites()));
             return PlaylistOperationResult.of(
                     PlaylistOperationResult.Status.BULK_ADDED,
                     updated,
@@ -272,7 +277,7 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
             LinkedHashMap<String, StoredPlaylist> playlists = new LinkedHashMap<>(previous.playlists());
             playlists.remove(key);
             playlists.put(newKey, updated);
-            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history()));
+            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history(), previous.favorites()));
             return PlaylistOperationResult.of(PlaylistOperationResult.Status.RENAMED, updated);
         }
     }
@@ -313,7 +318,7 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
                     source.tracks());
             LinkedHashMap<String, StoredPlaylist> playlists = new LinkedHashMap<>(previous.playlists());
             playlists.put(newKey, copied);
-            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history()));
+            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history(), previous.favorites()));
             return PlaylistOperationResult.of(
                     PlaylistOperationResult.Status.COPIED,
                     copied,
@@ -358,7 +363,7 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
             StoredPlaylist updated = playlist.withTracks(tracks);
             LinkedHashMap<String, StoredPlaylist> playlists = new LinkedHashMap<>(previous.playlists());
             playlists.put(key, updated);
-            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history()));
+            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history(), previous.favorites()));
             return PlaylistOperationResult.of(PlaylistOperationResult.Status.MOVED, updated, moved);
         }
     }
@@ -397,7 +402,7 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
             if (removed > 0) {
                 LinkedHashMap<String, StoredPlaylist> playlists = new LinkedHashMap<>(previous.playlists());
                 playlists.put(key, updated);
-                replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history()));
+                replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history(), previous.favorites()));
             }
             return PlaylistOperationResult.of(
                     PlaylistOperationResult.Status.DEDUPED,
@@ -470,7 +475,7 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
             StoredPlaylist updated = playlist.withoutTrack(index);
             LinkedHashMap<String, StoredPlaylist> playlists = new LinkedHashMap<>(previous.playlists());
             playlists.put(key, updated);
-            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history()));
+            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history(), previous.favorites()));
             return PlaylistOperationResult.of(PlaylistOperationResult.Status.REMOVED, updated, removed);
         }
     }
@@ -497,7 +502,7 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
 
             LinkedHashMap<String, StoredPlaylist> playlists = new LinkedHashMap<>(previous.playlists());
             playlists.remove(key);
-            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history()));
+            replaceAndPersist(guildId, previous, new GuildLibrary(playlists, previous.history(), previous.favorites()));
             return PlaylistOperationResult.of(PlaylistOperationResult.Status.DELETED, playlist);
         }
     }
@@ -522,8 +527,123 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
             if (history.size() > MAX_HISTORY_PER_GUILD) {
                 history.subList(MAX_HISTORY_PER_GUILD, history.size()).clear();
             }
-            replaceAndPersist(guildId, previous, new GuildLibrary(previous.playlists(), history));
+            replaceAndPersist(guildId, previous, new GuildLibrary(previous.playlists(), history, previous.favorites()));
         }
+    }
+
+    @Override
+    public List<StoredTrack> favorites(long guildId, long userId) {
+        validateGuildId(guildId);
+        validateActor(userId);
+        return libraries.getOrDefault(guildId, GuildLibrary.empty())
+                .favorites()
+                .getOrDefault(userId, List.of());
+    }
+
+    @Override
+    public FavoriteOperationResult addFavorite(long guildId, long userId, StoredTrack track) {
+        validateGuildId(guildId);
+        validateActor(userId);
+        if (track == null) {
+            return FavoriteOperationResult.of(FavoriteOperationResult.Status.UNREPLAYABLE_TRACK, null);
+        }
+        synchronized (mutationLock) {
+            GuildLibrary previous = libraries.getOrDefault(guildId, GuildLibrary.empty());
+            List<StoredTrack> current = previous.favorites().getOrDefault(userId, List.of());
+            String identity = trackIdentity(track);
+            for (StoredTrack existing : current) {
+                if (trackIdentity(existing).equals(identity)) {
+                    return FavoriteOperationResult.of(FavoriteOperationResult.Status.ALREADY_EXISTS, existing);
+                }
+            }
+            if (current.size() >= MAX_FAVORITES_PER_USER) {
+                return FavoriteOperationResult.of(FavoriteOperationResult.Status.LIMIT_REACHED, null);
+            }
+
+            ArrayList<StoredTrack> updatedFavorites = new ArrayList<>(current.size() + 1);
+            updatedFavorites.add(track);
+            updatedFavorites.addAll(current);
+            LinkedHashMap<Long, List<StoredTrack>> favorites = new LinkedHashMap<>(previous.favorites());
+            favorites.put(userId, List.copyOf(updatedFavorites));
+            replaceAndPersist(guildId, previous,
+                    new GuildLibrary(previous.playlists(), previous.history(), favorites));
+            return FavoriteOperationResult.of(FavoriteOperationResult.Status.ADDED, track);
+        }
+    }
+
+    @Override
+    public FavoriteOperationResult removeFavorite(long guildId, long userId, int oneBasedPosition) {
+        validateGuildId(guildId);
+        validateActor(userId);
+        synchronized (mutationLock) {
+            GuildLibrary previous = libraries.getOrDefault(guildId, GuildLibrary.empty());
+            List<StoredTrack> current = previous.favorites().getOrDefault(userId, List.of());
+            int index = oneBasedPosition - 1;
+            if (index < 0 || index >= current.size()) {
+                return FavoriteOperationResult.of(FavoriteOperationResult.Status.NOT_FOUND, null);
+            }
+            StoredTrack removed = current.get(index);
+            ArrayList<StoredTrack> updatedFavorites = new ArrayList<>(current);
+            updatedFavorites.remove(index);
+            LinkedHashMap<Long, List<StoredTrack>> favorites = new LinkedHashMap<>(previous.favorites());
+            if (updatedFavorites.isEmpty()) {
+                favorites.remove(userId);
+            } else {
+                favorites.put(userId, List.copyOf(updatedFavorites));
+            }
+            replaceAndPersist(guildId, previous,
+                    new GuildLibrary(previous.playlists(), previous.history(), favorites));
+            return FavoriteOperationResult.of(FavoriteOperationResult.Status.REMOVED, removed);
+        }
+    }
+
+    @Override
+    public FavoriteOperationResult clearFavorites(long guildId, long userId) {
+        validateGuildId(guildId);
+        validateActor(userId);
+        synchronized (mutationLock) {
+            GuildLibrary previous = libraries.getOrDefault(guildId, GuildLibrary.empty());
+            List<StoredTrack> current = previous.favorites().getOrDefault(userId, List.of());
+            if (current.isEmpty()) {
+                return FavoriteOperationResult.of(FavoriteOperationResult.Status.NOT_FOUND, null);
+            }
+            LinkedHashMap<Long, List<StoredTrack>> favorites = new LinkedHashMap<>(previous.favorites());
+            favorites.remove(userId);
+            replaceAndPersist(guildId, previous,
+                    new GuildLibrary(previous.playlists(), previous.history(), favorites));
+            return FavoriteOperationResult.of(
+                    FavoriteOperationResult.Status.CLEARED,
+                    null,
+                    current.size());
+        }
+    }
+
+    @Override
+    public List<FavoriteSearchHit> searchFavorites(long guildId, long userId, String query) {
+        validateGuildId(guildId);
+        validateActor(userId);
+        String normalized = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        if (normalized.isBlank()) {
+            throw new IllegalArgumentException("Поисковый запрос не может быть пустым");
+        }
+        List<StoredTrack> favorites = favorites(guildId, userId);
+        ArrayList<FavoriteSearchHit> hits = new ArrayList<>();
+        for (int index = 0; index < favorites.size(); index++) {
+            StoredTrack track = favorites.get(index);
+            if (containsIgnoreCase(track.title(), normalized)
+                    || containsIgnoreCase(track.author(), normalized)) {
+                hits.add(new FavoriteSearchHit(index + 1, track));
+                if (hits.size() >= 20) {
+                    break;
+                }
+            }
+        }
+        return List.copyOf(hits);
+    }
+
+    private static String trackIdentity(StoredTrack track) {
+        return track.provider().name() + "|"
+                + track.playbackIdentifier().trim().toLowerCase(Locale.ROOT);
     }
 
     private void replaceAndPersist(long guildId, GuildLibrary previous, GuildLibrary updated) {
@@ -546,6 +666,7 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
             case "P" -> loadPlaylist(loaded, columns);
             case "T" -> loadPlaylistTrack(loaded, columns);
             case "H" -> loadHistory(loaded, columns);
+            case "F" -> loadFavorite(loaded, columns);
             default -> throw new IllegalArgumentException("unknown record type " + columns[0]);
         }
     }
@@ -590,6 +711,20 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
         MutableGuildLibrary library = loaded.computeIfAbsent(guildId, ignored -> new MutableGuildLibrary());
         if (position == library.history.size() && library.history.size() < MAX_HISTORY_PER_GUILD) {
             library.history.add(track);
+        }
+    }
+
+    private void loadFavorite(Map<Long, MutableGuildLibrary> loaded, String[] columns) {
+        requireColumns(columns, 13);
+        long guildId = positiveLong(columns[1], "guildId");
+        long userId = positiveLong(columns[2], "userId");
+        int position = nonNegativeInt(columns[3], "position");
+        StoredTrack track = decodeTrack(columns, 4);
+
+        MutableGuildLibrary library = loaded.computeIfAbsent(guildId, ignored -> new MutableGuildLibrary());
+        ArrayList<StoredTrack> favorites = library.favorites.computeIfAbsent(userId, ignored -> new ArrayList<>());
+        if (position == favorites.size() && favorites.size() < MAX_FAVORITES_PER_USER) {
+            favorites.add(track);
         }
     }
 
@@ -667,6 +802,21 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
             appendTrack(columns, library.history().get(index));
             lines.add(String.join("\t", columns));
         }
+        library.favorites().entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> {
+                    long userId = entry.getKey();
+                    List<StoredTrack> favorites = entry.getValue();
+                    for (int index = 0; index < favorites.size(); index++) {
+                        List<String> columns = new ArrayList<>();
+                        columns.add("F");
+                        columns.add(Long.toString(guildId));
+                        columns.add(Long.toString(userId));
+                        columns.add(Integer.toString(index));
+                        appendTrack(columns, favorites.get(index));
+                        lines.add(String.join("\t", columns));
+                    }
+                });
     }
 
     private static void appendTrack(List<String> columns, StoredTrack track) {
@@ -764,28 +914,35 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
 
     private record GuildLibrary(
             Map<String, StoredPlaylist> playlists,
-            List<StoredTrack> history) {
+            List<StoredTrack> history,
+            Map<Long, List<StoredTrack>> favorites) {
 
         private GuildLibrary {
             playlists = Collections.unmodifiableMap(new LinkedHashMap<>(playlists));
             history = List.copyOf(history);
+            LinkedHashMap<Long, List<StoredTrack>> favoriteCopy = new LinkedHashMap<>();
+            favorites.forEach((userId, tracks) -> favoriteCopy.put(userId, List.copyOf(tracks)));
+            favorites = Collections.unmodifiableMap(favoriteCopy);
         }
 
         private static GuildLibrary empty() {
-            return new GuildLibrary(Map.of(), List.of());
+            return new GuildLibrary(Map.of(), List.of(), Map.of());
         }
 
         private boolean isEmpty() {
-            return playlists.isEmpty() && history.isEmpty();
+            return playlists.isEmpty() && history.isEmpty() && favorites.isEmpty();
         }
     }
 
     private static final class MutableGuildLibrary {
         private final LinkedHashMap<String, StoredPlaylist> playlists = new LinkedHashMap<>();
         private final ArrayList<StoredTrack> history = new ArrayList<>();
+        private final LinkedHashMap<Long, ArrayList<StoredTrack>> favorites = new LinkedHashMap<>();
 
         private GuildLibrary toImmutable() {
-            return new GuildLibrary(playlists, history);
+            LinkedHashMap<Long, List<StoredTrack>> favoriteCopy = new LinkedHashMap<>();
+            favorites.forEach((userId, tracks) -> favoriteCopy.put(userId, List.copyOf(tracks)));
+            return new GuildLibrary(playlists, history, favoriteCopy);
         }
     }
 }

@@ -12,6 +12,7 @@
 | `/discover recent|again|related|history` | Продолжает поиск по недавним запросам, текущему треку или истории |
 | `/history [page]` | Показывает до 50 последних успешно завершённых или пропущенных треков |
 | `/replay position` | Повторно загружает трек по номеру из постоянной истории |
+| `/favorites ...` | Личное persistent избранное: list/add/play/play-all/remove/search/clear |
 | `/playlist ...` | Управляет постоянной библиотекой: create/show/search/add/add-history/capture-queue/play/remove/move/rename/copy/dedupe/delete |
 | `/pause` | Ставит текущий трек на паузу |
 | `/resume` | Продолжает воспроизведение |
@@ -38,7 +39,7 @@
 
 ## Autocomplete
 
-Параметр `query` команд `/play` и `/search` объединяет локальную in-memory историю последних запросов пользователя с persistent playback history и треками плейлистов текущего сервера. Autocomplete не делает сетевых запросов. Параметр `name` операций `/playlist show|add|play|remove|move|rename|copy|dedupe|capture-queue|add-history|delete` предлагает имена постоянных плейлистов текущего сервера.
+Параметр `query` команд `/play` и `/search` объединяет локальную in-memory историю последних запросов пользователя с личным persistent избранным, persistent playback history и треками плейлистов текущего сервера. Autocomplete не делает сетевых запросов. Параметр `name` операций `/playlist show|add|play|remove|move|rename|copy|dedupe|capture-queue|add-history|delete` предлагает имена постоянных плейлистов текущего сервера.
 История:
 
 - не сохраняется между перезапусками контейнера;
@@ -72,7 +73,7 @@ Legacy prefix-команды не удалены. Это позволяет пе
 
 
 Подробности интерактивного поиска описаны в [`SEARCH-TRACK-SELECTION.md`](SEARCH-TRACK-SELECTION.md).
-Постоянные плейлисты, история и replay описаны в [`PLAYLISTS-HISTORY-REPLAY.md`](PLAYLISTS-HISTORY-REPLAY.md).
+Постоянные плейлисты, история и replay описаны в [`PLAYLISTS-HISTORY-REPLAY.md`](PLAYLISTS-HISTORY-REPLAY.md), а личное избранное — в [`FAVORITES-PERSONAL-LIBRARY.md`](FAVORITES-PERSONAL-LIBRARY.md).
 
 DJ-роли и голосование описаны в [`DJ-ROLES-AND-VOTING.md`](DJ-ROLES-AND-VOTING.md), а административная матрица — в [`GUILD-ADMINISTRATION.md`](GUILD-ADMINISTRATION.md).
 
@@ -92,3 +93,8 @@ DJ-роли и голосование описаны в [`DJ-ROLES-AND-VOTING.md
 Опасные действия `/stop`, непустой `/clear`, `/playlist delete` и `/settings reset` создают одноразовую confirmation session на две минуты. Token привязан к guild и пользователю, а перед выполнением права проверяются повторно. Stop-кнопка под `/now` использует ту же модель.
 
 После `Подтвердить` token потребляется до mutation; повторный клик не может выполнить действие второй раз. `Отмена` также потребляет token. Confirmation sessions in-memory и намеренно не переживают restart процесса.
+
+
+## Favorites & Personal Library 1.7
+
+`/favorites` хранит до 100 личных треков на пользователя и сервер в существующем `music-library.tsv`. `add` сохраняет текущий replayable track, `play`/`play-all` используют обычную voice/request policy, `search` возвращает исходные позиции, а `clear` защищён одноразовым confirmation UI. Favorites также участвуют в локальном autocomplete `/play` и `/search` перед общей history/playlists.

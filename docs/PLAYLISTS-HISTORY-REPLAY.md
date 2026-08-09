@@ -87,7 +87,7 @@ BASKOV_MUSIC_LIBRARY_V1
 
 Пользовательские строки кодируются URL-safe Base64, поэтому табы, переводы строк и Unicode не могут нарушить TSV-структуру. Запись выполняется через временный файл и atomic move; на POSIX-файловой системе устанавливаются права владельца `0600`.
 
-Файл хранит только безопасные метаданные и публичный playback URL. `AudioTrack`, токены Discord, cookies, OAuth и другие секреты не сериализуются.
+Файл хранит только безопасные метаданные и публичный playback URL. Начиная с `v1.7.0`, тот же `BASKOV_MUSIC_LIBRARY_V1` содержит личные favorite records `F`; старые файлы без них совместимы без миграции. Подробности — в [`FAVORITES-PERSONAL-LIBRARY.md`](FAVORITES-PERSONAL-LIBRARY.md). `AudioTrack`, токены Discord, cookies, OAuth и другие секреты не сериализуются.
 
 ## Потоки и lifecycle
 
@@ -117,4 +117,4 @@ docker exec baskov-discord-bot sh -lc \
 docker restart baskov-discord-bot
 ```
 
-После восстановления healthcheck команды `/history` и `/playlist list` должны показывать те же данные.
+После восстановления healthcheck команды `/history`, `/playlist list` и `/favorites list` должны показывать те же данные.

@@ -13,7 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class DiscoverySuggestionsTest {
 
     @Test
-    void combinesRecentHistoryAndPlaylistsWithoutDuplicates() {
+    void combinesRecentFavoritesHistoryAndPlaylistsWithoutDuplicates() {
+        StoredTrack favoriteTrack = track("Poison", "Alice Cooper", "favorite-1");
         StoredTrack historyTrack = track("Bismarck", "Sabaton", "history-1");
         StoredTrack playlistTrack = track("Army of the Night", "Powerwolf", "playlist-1");
         StoredPlaylist playlist = new StoredPlaylist(
@@ -25,11 +26,13 @@ class DiscoverySuggestionsTest {
         assertEquals(
                 List.of(
                         "Sabaton Bismarck live",
+                        "Alice Cooper Poison",
                         "Sabaton Bismarck",
                         "Powerwolf Army of the Night"),
                 DiscoverySuggestions.suggest(
                         "",
                         List.of("Sabaton Bismarck live"),
+                        List.of(favoriteTrack),
                         List.of(historyTrack),
                         List.of(playlist)));
     }
@@ -44,6 +47,7 @@ class DiscoverySuggestionsTest {
                 DiscoverySuggestions.suggest(
                         "SABATON",
                         List.of("sabaton live", "powerwolf"),
+                        List.of(),
                         List.of(historyTrack),
                         List.of(new StoredPlaylist(
                                 "Metal",

@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.6.4**.
+Текущая версия релизной ветки: **v1.7.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -8,6 +8,7 @@
 
 - slash-команды воспроизведения и полноценного управления очередью;
 - `/search` с пятью результатами YouTube, одноразовыми кнопками выбора и пятиминутной owner-bound сессией; autocomplete последних запросов работает в `/play` и `/search`;
+- личное persistent избранное до 100 треков на пользователя и сервер через `/favorites list|add|play|play-all|remove|search|clear`; favorites участвуют в локальном autocomplete и используют существующий ordered batch playback;
 - постоянная история до 50 треков на сервер, `/history`, `/replay` и серверные плейлисты с owner/admin-управлением, autocomplete, lifecycle-операциями, поиском, capture queue и ordered batch playback;
 - legacy `!`-команды как compatibility layer;
 - воспроизведение музыки, пауза, остановка, пропуск и возврат к предыдущим трекам;
@@ -77,7 +78,7 @@ docker compose logs -f bot
 | `DISCORD_BOT_MUSIC_DEFAULT_VOLUME` | `100` | громкость новой guild-сессии |
 | `DISCORD_BOT_MUSIC_MAX_VOLUME` | `150` | верхняя граница команды `/volume` |
 | `DISCORD_BOT_PERSISTENCE_FILE` | `data/guild-settings.properties` | файл постоянных guild-настроек; в Docker используется `/app/data/...` |
-| `DISCORD_BOT_MUSIC_LIBRARY_FILE` | `data/music-library.tsv` | отдельный atomic-файл постоянных плейлистов и истории; в Docker `/app/data/music-library.tsv` |
+| `DISCORD_BOT_MUSIC_LIBRARY_FILE` | `data/music-library.tsv` | отдельный atomic-файл постоянных плейлистов, истории и личного избранного; в Docker `/app/data/music-library.tsv` |
 | `DISCORD_BOT_MUSIC_SESSION_FILE` | `data/music-sessions.tsv` | atomic checkpoint активных voice/music-сессий; в Docker `/app/data/music-sessions.tsv` |
 | `DISCORD_BOT_MUSIC_SESSION_CHECKPOINT_INTERVAL` | `5s` | период сохранения активной сессии |
 | `DISCORD_BOT_MUSIC_SESSION_MAX_AGE` | `6h` | максимальный возраст checkpoint для автозапуска |
@@ -97,7 +98,7 @@ GitHub-hosted delivery и резервный self-hosted режим описан
 Современный Discord-интерфейс описан в [`docs/MODERN-COMMANDS.md`](docs/MODERN-COMMANDS.md).
 Интерактивная помощь, status refresh и destructive confirmations описаны в [`docs/DISCORD-EXPERIENCE.md`](docs/DISCORD-EXPERIENCE.md).
 Интерактивный поиск и безопасный выбор трека описаны в [`docs/SEARCH-TRACK-SELECTION.md`](docs/SEARCH-TRACK-SELECTION.md).
-Постоянные плейлисты, история и replay описаны в [`docs/PLAYLISTS-HISTORY-REPLAY.md`](docs/PLAYLISTS-HISTORY-REPLAY.md).
+Постоянные плейлисты, история и replay описаны в [`docs/PLAYLISTS-HISTORY-REPLAY.md`](docs/PLAYLISTS-HISTORY-REPLAY.md), а личное избранное — в [`docs/FAVORITES-PERSONAL-LIBRARY.md`](docs/FAVORITES-PERSONAL-LIBRARY.md).
 DJ-роли, access modes и vote-skip описаны в [`docs/DJ-ROLES-AND-VOTING.md`](docs/DJ-ROLES-AND-VOTING.md), а guild administration — в [`docs/GUILD-ADMINISTRATION.md`](docs/GUILD-ADMINISTRATION.md).
 Очередь и новые команды управления описаны в [`docs/QUEUE-EXPERIENCE.md`](docs/QUEUE-EXPERIENCE.md).
 Расширенный пульт, история и `/previous` описаны в [`docs/ADVANCED-PLAYBACK-CONTROLS.md`](docs/ADVANCED-PLAYBACK-CONTROLS.md).
@@ -178,7 +179,7 @@ ghcr.io/<owner>/<repository>:dev|latest
 | `DISCORD_BOT_VOICE_LOG_LEVEL` | `DEBUG` | уровень узкого JDA voice logger |
 | `DISCORD_BOT_MUSIC_DEFAULT_VOLUME` | `100` | начальная громкость |
 | `DISCORD_BOT_MUSIC_MAX_VOLUME` | `150` | максимальная громкость |
-| `DISCORD_BOT_MUSIC_LIBRARY_FILE` | `data/music-library.tsv` | файл постоянных плейлистов и истории |
+| `DISCORD_BOT_MUSIC_LIBRARY_FILE` | `data/music-library.tsv` | файл постоянных плейлистов, истории и личного избранного |
 | `DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_ENABLED` | `true` | включить backup persistent storage |
 | `DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_INTERVAL` | `6h` | интервал backup |
 | `DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_RETENTION` | `14` | число сохраняемых backup |

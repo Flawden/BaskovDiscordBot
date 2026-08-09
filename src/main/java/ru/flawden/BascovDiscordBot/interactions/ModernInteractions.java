@@ -35,6 +35,8 @@ import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackScheduler;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
 import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
+import ru.flawden.BascovDiscordBot.library.FavoriteOperationResult;
+import ru.flawden.BascovDiscordBot.library.FavoriteSearchHit;
 import ru.flawden.BascovDiscordBot.library.MusicLibraryRepository;
 import ru.flawden.BascovDiscordBot.library.PlaylistOperationResult;
 import ru.flawden.BascovDiscordBot.library.StoredPlaylist;
@@ -148,6 +150,7 @@ public class ModernInteractions extends ListenerAdapter {
                 case "discover" -> discover(event);
                 case "history" -> history(event);
                 case "replay" -> replay(event);
+                case "favorites" -> favorites(event);
                 case "playlist" -> playlist(event);
                 case "pause" -> pause(event, true);
                 case "resume" -> pause(event, false);
@@ -200,16 +203,19 @@ public class ModernInteractions extends ListenerAdapter {
 
         if (("play".equals(event.getName()) || "search".equals(event.getName()))
                 && "query".equals(focusedName)) {
+            List<StoredTrack> favorites = List.of();
             List<StoredTrack> history = List.of();
             List<StoredPlaylist> playlists = List.of();
             if (event.getGuild() != null) {
                 long guildId = event.getGuild().getIdLong();
+                favorites = musicLibraryRepository.favorites(guildId, event.getUser().getIdLong());
                 history = musicLibraryRepository.history(guildId);
                 playlists = musicLibraryRepository.playlists(guildId);
             }
             List<Command.Choice> choices = DiscoverySuggestions.suggest(
                             focusedValue,
                             searchHistory.recent(event.getUser().getIdLong(), 20),
+                            favorites,
                             history,
                             playlists)
                     .stream()
@@ -388,6 +394,7 @@ public class ModernInteractions extends ListenerAdapter {
             case STOP -> confirmStop(event, guild, member);
             case CLEAR_QUEUE -> confirmClearQueue(event, guild, member);
             case DELETE_PLAYLIST -> confirmDeletePlaylist(event, guild, member, confirmation.payload());
+            case CLEAR_FAVORITES -> confirmClearFavorites(event, guild);
             case RESET_SETTINGS -> confirmResetSettings(event, guild, member);
         }
     }
@@ -468,6 +475,20 @@ public class ModernInteractions extends ListenerAdapter {
                     "📚 Удаление не выполнено",
                     "Состояние библиотеки изменилось. Открой `/playlist list` и повтори операцию.");
         };
+        event.editMessageEmbeds(embed).setComponents(List.of()).queue();
+    }
+
+    private void confirmClearFavorites(ButtonInteractionEvent event, Guild guild) {
+        FavoriteOperationResult result = musicLibraryRepository.clearFavorites(
+                guild.getIdLong(),
+                event.getUser().getIdLong());
+        MessageEmbed embed = result.status() == FavoriteOperationResult.Status.CLEARED
+                ? MusicEmbeds.success(
+                        "🧹 Избранное очищено",
+                        "Удалено треков: `" + result.affectedTracks() + "`. Плейлисты и общая история не изменены.")
+                : MusicEmbeds.error(
+                        "⭐ Избранное уже пусто",
+                        "Удалять больше нечего.");
         event.editMessageEmbeds(embed).setComponents(List.of()).queue();
     }
 
@@ -911,6 +932,177 @@ public class ModernInteractions extends ListenerAdapter {
                 event,
                 List.of(selected),
                 "🔁 Трек из истории добавлен");
+    }
+
+    private void favorites(SlashCommandInteractionEvent event) {
+        String subcommand = event.getSubcommandName();
+        if (subcommand == null || "list".equals(subcommand)) {
+            showFavorites(event);
+            return;
+        }
+
+        switch (subcommand) {
+            case "add" -> addCurrentTrackToFavorites(event);
+            case "play" -> playFavorite(event);
+            case "play-all" -> playAllFavorites(event);
+            case "remove" -> removeFavorite(event);
+            case "search" -> searchFavorites(event);
+            case "clear" -> clearFavorites(event);
+            default -> event.replyEmbeds(MusicEmbeds.error(
+                            "⭐ Неизвестная операция",
+                            "Используй `/favorites list`, `add`, `play`, `play-all`, `remove`, `search` или `clear`."))
+                    .setEphemeral(true)
+                    .queue();
+        }
+    }
+
+    private void showFavorites(SlashCommandInteractionEvent event) {
+        long requestedPage = event.getOption("page", 1L, OptionMapping::getAsLong);
+        if (requestedPage < 1L || requestedPage > Integer.MAX_VALUE) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "📄 Неверная страница",
+                            "Номер страницы должен быть положительным целым числом."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        event.replyEmbeds(MusicEmbeds.favorites(
+                        musicLibraryRepository.favorites(
+                                event.getGuild().getIdLong(),
+                                event.getUser().getIdLong()),
+                        Math.toIntExact(requestedPage)))
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private void addCurrentTrackToFavorites(SlashCommandInteractionEvent event) {
+        GuildMusicManager manager = playerManager.findMusicManager(event.getGuild()).orElse(null);
+        TrackRequest current = manager == null ? null : manager.getScheduler().getCurrentRequest();
+        StoredTrack track = StoredTrack.from(current).orElse(null);
+        FavoriteOperationResult result = musicLibraryRepository.addFavorite(
+                event.getGuild().getIdLong(),
+                event.getUser().getIdLong(),
+                track);
+        replyFavoriteMutation(event, result);
+    }
+
+    private void playFavorite(SlashCommandInteractionEvent event) {
+        long requestedPosition = event.getOption("position", -1L, OptionMapping::getAsLong);
+        List<StoredTrack> favorites = musicLibraryRepository.favorites(
+                event.getGuild().getIdLong(),
+                event.getUser().getIdLong());
+        if (requestedPosition < 1L || requestedPosition > favorites.size()) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "⭐ Позиция избранного не найдена",
+                            favorites.isEmpty()
+                                    ? "Твоё избранное пока пусто."
+                                    : "Укажи номер из диапазона `1.." + favorites.size() + "` из `/favorites list`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        queueStoredTracks(
+                event,
+                List.of(favorites.get(Math.toIntExact(requestedPosition - 1L))),
+                "⭐ Трек из избранного добавлен");
+    }
+
+    private void playAllFavorites(SlashCommandInteractionEvent event) {
+        List<StoredTrack> favorites = musicLibraryRepository.favorites(
+                event.getGuild().getIdLong(),
+                event.getUser().getIdLong());
+        if (favorites.isEmpty()) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "⭐ Избранное пусто",
+                            "Добавь текущую песню через `/favorites add`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        queueStoredTracks(event, favorites, "⭐ Избранное добавлено в очередь");
+    }
+
+    private void removeFavorite(SlashCommandInteractionEvent event) {
+        long requestedPosition = event.getOption("position", -1L, OptionMapping::getAsLong);
+        if (requestedPosition < 1L || requestedPosition > Integer.MAX_VALUE) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🗑️ Неверная позиция",
+                            "Позиция должна быть положительным целым числом."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        FavoriteOperationResult result = musicLibraryRepository.removeFavorite(
+                event.getGuild().getIdLong(),
+                event.getUser().getIdLong(),
+                Math.toIntExact(requestedPosition));
+        replyFavoriteMutation(event, result);
+    }
+
+    private void searchFavorites(SlashCommandInteractionEvent event) {
+        String query = event.getOption("query", "", OptionMapping::getAsString).trim();
+        try {
+            List<FavoriteSearchHit> hits = musicLibraryRepository.searchFavorites(
+                    event.getGuild().getIdLong(),
+                    event.getUser().getIdLong(),
+                    query);
+            event.replyEmbeds(MusicEmbeds.favoriteSearch(query, hits))
+                    .setEphemeral(true)
+                    .queue();
+        } catch (IllegalArgumentException exception) {
+            event.replyEmbeds(MusicEmbeds.error("🔎 Поиск отклонён", exception.getMessage()))
+                    .setEphemeral(true)
+                    .queue();
+        }
+    }
+
+    private void clearFavorites(SlashCommandInteractionEvent event) {
+        List<StoredTrack> favorites = musicLibraryRepository.favorites(
+                event.getGuild().getIdLong(),
+                event.getUser().getIdLong());
+        if (favorites.isEmpty()) {
+            event.replyEmbeds(MusicEmbeds.error("⭐ Избранное уже пусто", "Удалять нечего."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        requestConfirmation(
+                event,
+                ConfirmationStore.Action.CLEAR_FAVORITES,
+                "",
+                "⚠️ Очистить личное избранное?",
+                "Будут удалены все твои `" + favorites.size()
+                        + "` сохранённых треков на этом сервере. Плейлисты и общая история останутся без изменений.");
+    }
+
+    private void replyFavoriteMutation(
+            SlashCommandInteractionEvent event,
+            FavoriteOperationResult result) {
+        MessageEmbed embed = switch (result.status()) {
+            case ADDED -> MusicEmbeds.success(
+                    "⭐ Добавлено в избранное",
+                    "`" + result.track().title() + "` теперь в твоей личной библиотеке.");
+            case ALREADY_EXISTS -> MusicEmbeds.success(
+                    "⭐ Уже в избранном",
+                    "`" + result.track().title() + "` уже сохранён — дубликат не создан.");
+            case REMOVED -> MusicEmbeds.success(
+                    "🗑️ Удалено из избранного",
+                    "`" + result.track().title() + "` удалён из твоей личной библиотеки.");
+            case CLEARED -> MusicEmbeds.success(
+                    "🧹 Избранное очищено",
+                    "Удалено треков: `" + result.affectedTracks() + "`.");
+            case NOT_FOUND -> MusicEmbeds.error(
+                    "⭐ Позиция не найдена",
+                    "Проверь номер через `/favorites list`.");
+            case LIMIT_REACHED -> MusicEmbeds.error(
+                    "🚧 Избранное заполнено",
+                    "На одном сервере можно хранить до `"
+                            + MusicLibraryRepository.MAX_FAVORITES_PER_USER + "` избранных треков на пользователя.");
+            case UNREPLAYABLE_TRACK -> MusicEmbeds.error(
+                    "💾 Текущий трек нельзя сохранить",
+                    "Сейчас ничего не играет либо источник не содержит повторно загружаемую YouTube/SoundCloud-ссылку.");
+        };
+        event.replyEmbeds(embed).setEphemeral(true).queue();
     }
 
     private void playlist(SlashCommandInteractionEvent event) {
@@ -2692,7 +2884,7 @@ public class ModernInteractions extends ListenerAdapter {
                     .setDescription("Slash-команды — основной интерфейс. Выбери раздел кнопками ниже.")
                     .addField("▶️ Быстрый старт", "`/play` → `/now` → `/queue`", false)
                     .addField("🔎 Найти трек", "`/search` показывает до пяти вариантов; `/discover` продолжает знакомый поиск.", false)
-                    .addField("📚 Сохранить музыку", "`/playlist` и `/history` переживают restart контейнера.", false)
+                    .addField("📚 Сохранить музыку", "`/favorites`, `/playlist` и `/history` переживают restart контейнера.", false)
                     .addField("🩺 Проверить сервис", "`/status` теперь можно обновлять кнопкой без новой команды.", false)
                     .addField("Твои права здесь", canManage
                             ? "`admin` — можно менять guild settings и административно управлять библиотекой."
@@ -2702,7 +2894,7 @@ public class ModernInteractions extends ListenerAdapter {
             case PLAYBACK -> embed
                     .setTitle("▶️ Воспроизведение")
                     .setDescription("Команды активной музыкальной сессии.")
-                    .addField("Запуск", "`/play` `/search` `/discover` `/replay` `/playlist play`", false)
+                    .addField("Запуск", "`/play` `/search` `/discover` `/replay` `/favorites play|play-all` `/playlist play`", false)
                     .addField("Управление", "`/pause` `/resume` `/previous` `/skip` `/voteskip` `/seek` `/volume` `/repeat`", false)
                     .addField("Пульт `/now`", "Предыдущий, ±15 секунд, pause/resume, skip, shuffle, repeat, очередь, refresh и stop.", false)
                     .addField("Защита stop", "`/stop` и кнопка Stop сначала показывают одноразовое подтверждение на 2 минуты.", false)
@@ -2718,11 +2910,12 @@ public class ModernInteractions extends ListenerAdapter {
             case LIBRARY -> embed
                     .setTitle("📚 Библиотека и discovery")
                     .setDescription("Постоянные плейлисты, история и повторное воспроизведение.")
+                    .addField("Избранное", "`/favorites list|add|play|play-all|remove|search|clear` — личное для каждого пользователя.", false)
                     .addField("Плейлисты", "`/playlist list|create|show|add|play|remove|move|rename|copy|dedupe|capture-queue|add-history|search|delete`", false)
                     .addField("История", "`/history` `/replay` `/discover history`", false)
                     .addField("Discovery", "`/discover recent|again|related|history`", false)
-                    .addField("Безопасное удаление", "`/playlist delete` теперь только под одноразовым интерактивным подтверждением.", false)
-                    .addField("Autocomplete", "`/play`, `/search` и playlist names используют локальные подсказки без сетевого запроса на каждый символ.", false);
+                    .addField("Безопасное удаление", "`/playlist delete` и `/favorites clear` защищены одноразовым интерактивным подтверждением.", false)
+                    .addField("Autocomplete", "`/play`, `/search` учитывают твоё избранное, history и playlists; playlist names тоже дополняются локально без сетевого запроса на каждый символ.", false);
             case ADMIN -> embed
                     .setTitle("⚙️ Guild Administration")
                     .setDescription(canManage

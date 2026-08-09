@@ -21,7 +21,7 @@ class ModernCommandCatalogTest {
 
         assertEquals(commands.size(), names.size());
         assertEquals(Set.of(
-                "help", "version", "status", "play", "search", "discover", "history", "replay", "playlist",
+                "help", "version", "status", "play", "search", "discover", "history", "replay", "favorites", "playlist",
                 "pause", "resume", "previous", "skip", "voteskip", "stop", "queue", "now", "seek",
                 "volume", "repeat", "shuffle", "remove", "move", "clear", "queue-manage", "settings"), names);
     }
@@ -81,6 +81,19 @@ class ModernCommandCatalogTest {
                 .filter(subcommand -> !"stats".equals(subcommand.getName()))
                 .flatMap(subcommand -> subcommand.getOptions().stream())
                 .anyMatch(option -> option.getName().equals("revision")));
+    }
+
+    @Test
+    void favoritesCommandExposesPersonalLibraryLifecycle() {
+        SlashCommandData favorites = command("favorites");
+        assertEquals(Set.of("list", "add", "play", "play-all", "remove", "search", "clear"),
+                favorites.getSubcommands().stream()
+                        .map(subcommand -> subcommand.getName())
+                        .collect(Collectors.toSet()));
+        assertTrue(favorites.getSubcommands().stream()
+                .filter(subcommand -> Set.of("play", "remove").contains(subcommand.getName()))
+                .flatMap(subcommand -> subcommand.getOptions().stream())
+                .anyMatch(option -> option.getName().equals("position")));
     }
 
     @Test
