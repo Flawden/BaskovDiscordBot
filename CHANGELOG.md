@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [1.6.2] — 2026-08-09
+
+### Maven Repository Routing Hotfix
+
+- Maven Resolver groupId filtering включён для CI/delivery Maven invocations: сторонние Lavalink repositories больше не опрашиваются для обычных Spring Boot/JUnit/Jetty/Jackson/Netty и других Central artifacts.
+- `lavalink-releases` разрешён только для `dev.lavalink.youtube`, а `lavalink-libdave-snapshots` — только для `moe.kyokobot.libdave`; Maven Central намеренно остаётся без groupId filter.
+- Фильтры хранятся как project-owned `.mvn/rrf/groupId-<repository-id>.txt` и применяются как к `clean verify`, так и к `help:evaluate`, чтобы version resolution не возвращал прежний repository fan-out.
+- Maven diagnostics теперь записывает активный filter type, basedir и routing-файлы в `environment.log`.
+- Helper diagnostics перенесены в stderr, поэтому `maven-ci.sh version` отдаёт в stdout только чистую application version и безопасно используется через `GITHUB_OUTPUT`/Docker build-arg.
+- Добавлен contract test, закрепляющий repository IDs, разрешённые groupId и отсутствие фильтра для Central.
+- Runtime Java/Discord/music/persistence code не меняется; релиз устраняет подтверждённую по CI logs архитектурную причину многоминутного dependency resolution.
+
 ## [1.6.1] — 2026-08-09
 
 ### Maven Delivery Diagnostics & Resilience

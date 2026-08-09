@@ -2,6 +2,12 @@
 set -Eeuo pipefail
 
 readonly SCRIPT_NAME="$(basename "$0")"
+readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+readonly MAVEN_RRF_DIR="${REPO_ROOT}/.mvn/rrf"
+readonly -a MAVEN_REPOSITORY_FILTER_ARGS=(
+  "-Daether.remoteRepositoryFilter.groupId=true"
+  "-Daether.remoteRepositoryFilter.groupId.basedir=${MAVEN_RRF_DIR}"
+)
 readonly MAVEN_VERIFY_ATTEMPTS="${MAVEN_VERIFY_ATTEMPTS:-2}"
 readonly MAVEN_VERIFY_TIMEOUT_SECONDS="${MAVEN_VERIFY_TIMEOUT_SECONDS:-420}"
 readonly MAVEN_VERSION_TIMEOUT_SECONDS="${MAVEN_VERSION_TIMEOUT_SECONDS:-120}"
@@ -11,7 +17,7 @@ readonly DIAGNOSTICS_DIR="${BASKOV_MAVEN_DIAGNOSTICS_DIR:-${RUNNER_TEMP:-${TMPDI
 mkdir -p "${DIAGNOSTICS_DIR}"
 
 log() {
-  printf '[maven-ci] %s\n' "$*"
+  printf '[maven-ci] %s\n' "$*" >&2
 }
 
 probe_url() {
@@ -52,6 +58,15 @@ print_environment() {
     echo "maven_version_timeout_seconds=${MAVEN_VERSION_TIMEOUT_SECONDS}"
     echo "java_home=${JAVA_HOME:-unknown}"
     echo "maven_args=${MAVEN_ARGS:-}"
+    echo "maven_remote_repository_filter=groupId"
+    echo "maven_remote_repository_filter_basedir=${MAVEN_RRF_DIR}"
+    for filter_file in "${MAVEN_RRF_DIR}"/groupId-*.txt; do
+      if [[ -f "${filter_file}" ]]; then
+        printf 'maven_remote_repository_filter_file=%s:' "$(basename "${filter_file}")"
+        paste -sd, "${filter_file}"
+        echo
+      fi
+    done
     printf 'disk='; df -h . | tail -n 1
     printf 'm2_size='; du -sh "${HOME}/.m2" 2>/dev/null | cut -f1 || echo 'absent'
     printf 'm2_repository_size='; du -sh "${HOME}/.m2/repository" 2>/dev/null | cut -f1 || echo 'absent'
@@ -105,7 +120,9 @@ verify() {
 
     set +e
     timeout --signal=TERM --kill-after=30s "${MAVEN_VERIFY_TIMEOUT_SECONDS}s" \
-      ./mvnw --batch-mode --show-version --errors clean verify 2>&1 | tee "${attempt_log}"
+      ./mvnw --batch-mode --show-version --errors \
+        "${MAVEN_REPOSITORY_FILTER_ARGS[@]}" \
+        clean verify 2>&1 | tee "${attempt_log}"
     status=${PIPESTATUS[0]}
     set -e
 
@@ -140,8 +157,10 @@ project_version() {
 
   log "resolving Maven project version with hard timeout=${MAVEN_VERSION_TIMEOUT_SECONDS}s"
   version="$(timeout --signal=TERM --kill-after=15s "${MAVEN_VERSION_TIMEOUT_SECONDS}s" \
-    ./mvnw --batch-mode --errors help:evaluate \
-      -Dexpression=project.version -DforceStdout -q 2> >(tee "${output_file}" >&2))"
+    ./mvnw --batch-mode --errors \
+      "${MAVEN_REPOSITORY_FILTER_ARGS[@]}" \
+      help:evaluate -Dexpression=project.version -DforceStdout -q \
+      2> >(tee "${output_file}" >&2))"
 
   if [[ -z "${version}" ]]; then
     log "Maven project version is empty"

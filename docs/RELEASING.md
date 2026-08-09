@@ -73,4 +73,6 @@ docker exec baskov-discord-bot sh -c 'ls -lah /app/data/backups 2>/dev/null || t
 
 При failure скачайте artifact `maven-diagnostics-<run-id>` и проверьте `repository-probes.log`, `environment.log` и `verify-attempt-*.log` до изменения application code.
 
+Начиная с `v1.6.2`, helper дополнительно включает Maven Resolver groupId repository filtering из `.mvn/rrf`: `lavalink-releases` обслуживает только `dev.lavalink.youtube`, `lavalink-libdave-snapshots` — только `moe.kyokobot.libdave`, Central остаётся unrestricted. При добавлении нового custom-repository dependency обновить соответствующий routing-файл и [`MAVEN-REPOSITORY-ROUTING.md`](MAVEN-REPOSITORY-ROUTING.md).
+
 Если изменяются закреплённые dependency/build-tool версии, одновременно обновить `.github/maven-cache-key.txt`; contract test не даст случайно оставить старый fingerprint.

@@ -106,6 +106,7 @@ DJ-роли, access modes и vote-skip описаны в [`docs/DJ-ROLES-AND-VOT
 Подробности recovery обрезанных preview и SoundCloud `404` описаны в [`docs/SOURCE-STREAMING-STABILITY.md`](docs/SOURCE-STREAMING-STABILITY.md).
 Постоянные guild-настройки описаны в [`docs/GUILD-SETTINGS.md`](docs/GUILD-SETTINGS.md).
 Operations и health-модель описаны в [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
+Maven repository routing для GitHub-hosted CI/CD описан в [`docs/MAVEN-REPOSITORY-ROUTING.md`](docs/MAVEN-REPOSITORY-ROUTING.md).
 Voice connection state machine описана в [`docs/VOICE-CONNECTIONS.md`](docs/VOICE-CONNECTIONS.md).
 Root-cause voice diagnostics и bridge/host A/B-тест описаны в [`docs/VOICE-ROOT-CAUSE-DIAGNOSTICS.md`](docs/VOICE-ROOT-CAUSE-DIAGNOSTICS.md).
 DAVE voice migration и переход JDA 5 → 6 описаны в [`docs/DAVE-VOICE-MIGRATION.md`](docs/DAVE-VOICE-MIGRATION.md).
@@ -134,7 +135,7 @@ Native libDAVE runtime, platform profiles и startup fail-fast описаны в
 
 В текущем режиме разработки релизы отправляются напрямую в `master`; ветка `dev` остаётся технически поддерживаемой, но не используется.
 
-Каждая доставка сначала выполняет Maven diagnostics + bounded Maven verification. `setup-java` настроен с `show-download-progress: true`, поэтому dependency resolution больше не выглядит как бесконечная тишина; cache restore segment ограничен двумя минутами, а Maven verification — двумя попытками максимум по семь минут. После этого workflow публикует в GHCR:
+Каждая доставка сначала выполняет Maven diagnostics + bounded Maven verification. `setup-java` настроен с `show-download-progress: true`, поэтому dependency resolution больше не выглядит как бесконечная тишина; cache restore segment ограничен двумя минутами, а Maven verification — двумя попытками максимум по семь минут. Начиная с `v1.6.2`, Maven Resolver groupId filtering маршрутизирует `dev.lavalink.youtube` только в `lavalink-releases`, `moe.kyokobot.libdave` только в `lavalink-libdave-snapshots`, а Maven Central остаётся unrestricted. После этого workflow публикует в GHCR:
 
 ```text
 ghcr.io/<owner>/<repository>:sha-<full-git-sha>

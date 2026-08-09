@@ -34,6 +34,8 @@ Application version в fingerprint не входит. `MavenDeliveryResilienceCo
 
 Repository probes диагностические: сами по себе они не определяют результат build. Источник истины — Maven verification.
 
+С `v1.6.2` дополнительно включён project-owned groupId Remote Repository Filter: обычные Central artifacts больше не fan-out через оба Lavalink repository. Routing policy вынесена в [`MAVEN-REPOSITORY-ROUTING.md`](MAVEN-REPOSITORY-ROUTING.md).
+
 ## Bounded verification
 
 `maven-ci.sh verify` выполняет максимум две попытки. Каждая попытка:

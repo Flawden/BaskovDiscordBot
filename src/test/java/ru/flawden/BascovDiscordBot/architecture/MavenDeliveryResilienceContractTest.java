@@ -70,7 +70,7 @@ class MavenDeliveryResilienceContractTest {
         String wrapper = Files.readString(Path.of(".mvn/wrapper/maven-wrapper.properties"));
         assertTrue(wrapper.contains("wrapperVersion=" + cacheKey.getProperty("maven-wrapper-script")));
         assertTrue(wrapper.contains("apache-maven-" + cacheKey.getProperty("maven-wrapper") + "-bin.zip"));
-        assertFalse(Files.readString(Path.of(".github/maven-cache-key.txt")).contains("1.6.1"),
+        assertFalse(Files.readString(Path.of(".github/maven-cache-key.txt")).contains("1.6.2"),
                 "Application-only release bumps must not invalidate the dependency cache");
     }
 
