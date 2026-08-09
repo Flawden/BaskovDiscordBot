@@ -41,6 +41,18 @@ public final class ModernCommandCatalog {
                                 new SubcommandData("session", "Playback checkpoint и recovery"),
                                 new SubcommandData("source", "Media source и свежие source failures"),
                                 new SubcommandData("failures", "Последние внутренние ошибки команд")),
+                Commands.slash("radio", "Автоматически продолжает музыку, когда очередь заканчивается")
+                        .addSubcommands(
+                                new SubcommandData("start", "Включает bounded smart radio")
+                                        .addOptions(new OptionData(
+                                                OptionType.STRING,
+                                                "mode",
+                                                "Источник локальных seed-треков",
+                                                false)
+                                                .addChoice("Личное", "personal")
+                                                .addChoice("Сервер", "server")),
+                                new SubcommandData("status", "Показывает состояние smart radio"),
+                                new SubcommandData("stop", "Выключает smart radio; текущий трек не останавливается")),
                 Commands.slash("play", "Ищет и добавляет песню")
                         .addOptions(new OptionData(
                                 OptionType.STRING,

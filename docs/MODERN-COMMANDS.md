@@ -131,3 +131,13 @@ DJ-роли и голосование описаны в [`DJ-ROLES-AND-VOTING.md
 - `failures` — до 10 последних записей из bounded in-memory журнала (сам журнал хранит максимум 25).
 
 Doctor намеренно не делает внешние HTTP/Maven/YouTube probes из Discord-команды: зависший upstream не должен подвешивать саму диагностику. Failure journal не хранит Discord user IDs, stack traces или secrets.
+
+## Smart Radio (v1.13.0)
+
+```text
+/radio start [mode:personal|server]
+/radio status
+/radio stop
+```
+
+Radio продолжает только действительно пустую очередь и добавляет по одному кандидату. `personal` строит seed из favorites/personal history владельца, `server` — из guild history. Режим ephemeral и после restart/deploy остаётся выключенным.

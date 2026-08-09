@@ -24,6 +24,9 @@ import ru.flawden.BascovDiscordBot.operations.VoiceDiagnostics;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferences;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
 import ru.flawden.BascovDiscordBot.library.PlaybackHistoryRecorder;
+import ru.flawden.BascovDiscordBot.library.MusicLibraryRepository;
+import ru.flawden.BascovDiscordBot.library.PersonalListeningInsights;
+import ru.flawden.BascovDiscordBot.library.StoredTrack;
 import ru.flawden.BascovDiscordBot.session.MusicSessionRepository;
 import ru.flawden.BascovDiscordBot.session.SessionRecoveryDetails;
 import ru.flawden.BascovDiscordBot.session.SessionRecoverySnapshot;
@@ -32,8 +35,11 @@ import ru.flawden.BascovDiscordBot.session.StoredSessionTrack;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.Optional;
@@ -76,7 +82,9 @@ public class PlayerManager {
     private final VoiceConnectionCoordinator voiceConnections;
     private final VoiceDiagnostics voiceDiagnostics;
     private final PlaybackHistoryRecorder historyRecorder;
+    private final MusicLibraryRepository musicLibraryRepository;
     private final MusicSessionRepository sessionRepository;
+    private final Map<Long, RadioState> radioStates = new ConcurrentHashMap<>();
     private final AtomicBoolean closing = new AtomicBoolean();
     private final AtomicLong recoveryAttempts = new AtomicLong();
     private final AtomicLong recoverySuccesses = new AtomicLong();
@@ -93,6 +101,7 @@ public class PlayerManager {
             VoiceConnectionCoordinator voiceConnections,
             VoiceDiagnostics voiceDiagnostics,
             PlaybackHistoryRecorder historyRecorder,
+            MusicLibraryRepository musicLibraryRepository,
             MusicSessionProperties sessionProperties,
             MusicSessionRepository sessionRepository) {
         this.properties = properties;
@@ -101,6 +110,7 @@ public class PlayerManager {
         this.voiceConnections = voiceConnections;
         this.voiceDiagnostics = voiceDiagnostics;
         this.historyRecorder = historyRecorder;
+        this.musicLibraryRepository = Objects.requireNonNull(musicLibraryRepository, "musicLibraryRepository");
         this.sessionRepository = sessionRepository;
         this.audioPlayerManager = new DefaultAudioPlayerManager();
 
@@ -170,12 +180,52 @@ public class PlayerManager {
                     properties,
                     preferences,
                     () -> cancelIdleDisconnect(guildId),
-                    () -> scheduleIdleDisconnect(guild),
+                    () -> handleMusicIdle(guild),
                     voiceDiagnostics,
                     request -> historyRecorder.record(guildId, request));
             guild.getAudioManager().setSendingHandler(manager.getSendHandler());
             return manager;
         });
+    }
+
+    public boolean hasRadioSeeds(long guildId, RadioMode mode, long userId) {
+        return !radioSeeds(guildId, mode, userId).isEmpty();
+    }
+
+    public RadioStartResult startRadio(Guild guild, RadioMode mode, TrackRequester owner) {
+        Objects.requireNonNull(guild, "guild");
+        Objects.requireNonNull(mode, "mode");
+        TrackRequester requester = owner == null ? TrackRequester.unknown() : owner;
+        List<StoredTrack> seeds = radioSeeds(guild.getIdLong(), mode, requester.userId());
+        if (seeds.isEmpty()) {
+            return new RadioStartResult(RadioStartResult.Status.NO_SEEDS, RadioSnapshot.disabled());
+        }
+
+        long guildId = guild.getIdLong();
+        RadioState previous = radioStates.put(guildId, new RadioState(mode, requester));
+        GuildMusicManager manager = getMusicManager(guild);
+        manager.markActivity();
+        RadioStartResult.Status status = previous == null
+                ? RadioStartResult.Status.STARTED
+                : RadioStartResult.Status.UPDATED;
+        if (manager.isIdle()) {
+            triggerRadioRefill(guild, manager);
+        }
+        return new RadioStartResult(status, radioSnapshot(guildId));
+    }
+
+    public RadioSnapshot stopRadio(long guildId) {
+        RadioState removed = radioStates.remove(guildId);
+        GuildMusicManager manager = musicManagers.get(guildId);
+        if (manager != null && manager.isIdle()) {
+            scheduleIdleDisconnect(manager.getGuild());
+        }
+        return removed == null ? RadioSnapshot.disabled() : removed.snapshot(false);
+    }
+
+    public RadioSnapshot radioSnapshot(long guildId) {
+        RadioState state = radioStates.get(guildId);
+        return state == null ? RadioSnapshot.disabled() : state.snapshot(true);
     }
 
     public Optional<GuildMusicManager> findMusicManager(Guild guild) {
@@ -1159,6 +1209,7 @@ public class PlayerManager {
     private void releaseSession(Guild guild, boolean removeCheckpoint) {
         long guildId = guild.getIdLong();
         GuildMusicManager manager = musicManagers.remove(guildId);
+        radioStates.remove(guildId);
         cancelIdleDisconnect(guildId);
         voiceFrameDemandMissingSince.remove(guildId);
         voiceWatchdogNotBefore.remove(guildId);
@@ -1216,6 +1267,150 @@ public class PlayerManager {
                 queueResult.queuePosition(),
                 queueResult.estimatedWaitMillis(),
                 requester));
+    }
+
+    private void handleMusicIdle(Guild guild) {
+        GuildMusicManager manager = musicManagers.get(guild.getIdLong());
+        if (manager != null && radioStates.containsKey(guild.getIdLong())) {
+            triggerRadioRefill(guild, manager);
+            return;
+        }
+        scheduleIdleDisconnect(guild);
+    }
+
+    private void triggerRadioRefill(Guild guild, GuildMusicManager manager) {
+        long guildId = guild.getIdLong();
+        RadioState state = radioStates.get(guildId);
+        if (state == null || !manager.isActive() || !manager.isIdle() || state.refillInProgress()) {
+            return;
+        }
+        long activityVersion = manager.getActivityVersion();
+        StoredTrack seed = state.beginRefill(radioSeeds(guildId, state.mode(), state.owner().userId()));
+        if (seed == null) {
+            radioFailure(guild, manager, state, "Нет локальных seed-треков");
+            return;
+        }
+
+        String query = MediaQueryResolver.YOUTUBE_SEARCH_PREFIX + radioQuery(seed);
+        audioPlayerManager.loadItemOrdered("radio:" + guildId, query, new AudioLoadResultHandler() {
+            @Override
+            public void trackLoaded(AudioTrack track) {
+                finishRadioSearch(guild, manager, state, activityVersion, seed, List.of(track));
+            }
+
+            @Override
+            public void playlistLoaded(AudioPlaylist playlist) {
+                finishRadioSearch(guild, manager, state, activityVersion, seed, searchCandidates(playlist, 10));
+            }
+
+            @Override
+            public void noMatches() {
+                radioFailure(guild, manager, state, "Поиск не вернул кандидатов");
+            }
+
+            @Override
+            public void loadFailed(FriendlyException exception) {
+                radioFailure(guild, manager, state, SourceFailureFormatter.describe(query, exception));
+            }
+        });
+    }
+
+    private void finishRadioSearch(
+            Guild guild,
+            GuildMusicManager manager,
+            RadioState state,
+            long activityVersion,
+            StoredTrack seed,
+            List<AudioTrack> candidates) {
+        long guildId = guild.getIdLong();
+        if (radioStates.get(guildId) != state || !manager.isActive()) {
+            state.cancelRefill();
+            return;
+        }
+        if (manager.getActivityVersion() != activityVersion || !manager.isIdle()) {
+            state.cancelRefill();
+            return;
+        }
+
+        Set<String> excluded = new LinkedHashSet<>(state.recentTrackKeys());
+        excluded.add(storedTrackKey(seed));
+        musicLibraryRepository.history(guildId).stream()
+                .limit(8)
+                .map(PlayerManager::storedTrackKey)
+                .forEach(excluded::add);
+
+        AudioTrack selected = candidates == null ? null : candidates.stream()
+                .filter(this::isPlayableCandidate)
+                .filter(track -> !excluded.contains(trackKey(track).toLowerCase(Locale.ROOT)))
+                .findFirst()
+                .orElse(null);
+        if (selected == null) {
+            radioFailure(guild, manager, state, "Все найденные кандидаты уже недавно звучали");
+            return;
+        }
+
+        TrackRequester radioRequester = new TrackRequester(0L, "📻 Radio");
+        TrackScheduler.QueueResult result = manager.getScheduler().queue(selected, radioRequester, List.of());
+        if (result.status() != TrackScheduler.QueueStatus.STARTED
+                && result.status() != TrackScheduler.QueueStatus.QUEUED) {
+            radioFailure(guild, manager, state, "Кандидат отклонён queue policy: " + result.status());
+            return;
+        }
+        state.completeRefill(seed.title(), selected.getInfo().title, trackKey(selected));
+        cancelIdleDisconnect(guildId);
+        log.info("Smart radio generated track: guild={}, mode={}, seed={}, track={}",
+                guildId, state.mode(), seed.title(), selected.getInfo().title);
+    }
+
+    private void radioFailure(Guild guild, GuildMusicManager manager, RadioState state, String reason) {
+        if (radioStates.get(guild.getIdLong()) != state) {
+            state.cancelRefill();
+            return;
+        }
+        int failures = state.failRefill();
+        log.warn("Smart radio refill failed: guild={}, failures={}, reason={}", guild.getId(), failures, reason);
+        if (failures >= 3) {
+            radioStates.remove(guild.getIdLong(), state);
+            log.warn("Smart radio disabled after three consecutive refill failures: guild={}", guild.getId());
+            if (manager.isIdle()) {
+                scheduleIdleDisconnect(guild);
+            }
+            return;
+        }
+        if (manager.isIdle()) {
+            idleScheduler.schedule(() -> triggerRadioRefill(guild, manager), 750L, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private List<StoredTrack> radioSeeds(long guildId, RadioMode mode, long userId) {
+        if (mode == RadioMode.PERSONAL) {
+            if (userId <= 0L) {
+                return List.of();
+            }
+            return PersonalListeningInsights.discoverySeeds(
+                    musicLibraryRepository.favorites(guildId, userId),
+                    musicLibraryRepository.personalHistory(guildId, userId),
+                    20);
+        }
+        return PersonalListeningInsights.discoverySeeds(
+                List.of(),
+                musicLibraryRepository.history(guildId),
+                20);
+    }
+
+    private static String radioQuery(StoredTrack seed) {
+        String title = seed.title() == null ? "" : seed.title().trim();
+        String author = seed.author() == null ? "" : seed.author().trim();
+        String query = author.isBlank() || "Неизвестно".equalsIgnoreCase(author)
+                ? title
+                : author + " " + title;
+        return query.length() <= 100 ? query : query.substring(0, 100).trim();
+    }
+
+    private static String storedTrackKey(StoredTrack track) {
+        return track == null || track.playbackIdentifier() == null
+                ? "unknown"
+                : track.playbackIdentifier().trim().toLowerCase(Locale.ROOT);
     }
 
     private void monitorVoiceConnections() {
@@ -1325,11 +1520,15 @@ public class PlayerManager {
         if (track == null || track.getInfo() == null) {
             return "unknown";
         }
+        String uri = track.getInfo().uri;
+        if (uri != null && !uri.isBlank()) {
+            return uri.trim().toLowerCase(Locale.ROOT);
+        }
         String identifier = track.getInfo().identifier;
         if (identifier != null && !identifier.isBlank()) {
-            return identifier;
+            return identifier.trim().toLowerCase(Locale.ROOT);
         }
-        return String.valueOf(track.getInfo().title) + ':' + track.getDuration();
+        return (String.valueOf(track.getInfo().title) + ':' + track.getDuration()).toLowerCase(Locale.ROOT);
     }
 
     private void safeCloseAudio(Guild guild) {
@@ -1445,6 +1644,7 @@ public class PlayerManager {
         voiceFrameDemandMissingSince.clear();
         voiceWatchdogNotBefore.clear();
         voiceWatchdogReported.clear();
+        radioStates.clear();
         idleScheduler.shutdownNow();
         playbackReadinessScheduler.shutdownNow();
         sessionLifecycleScheduler.shutdownNow();
@@ -1457,4 +1657,86 @@ public class PlayerManager {
             boolean wasPaused,
             String reason) {
     }
+
+    private static final class RadioState {
+        private static final int RECENT_LIMIT = 10;
+
+        private final RadioMode mode;
+        private final TrackRequester owner;
+        private final ArrayDeque<String> recentTrackKeys = new ArrayDeque<>();
+        private long generatedTracks;
+        private int consecutiveFailures;
+        private boolean refillInProgress;
+        private int seedCursor;
+        private String lastSeed = "—";
+        private String lastTrack = "—";
+
+        private RadioState(RadioMode mode, TrackRequester owner) {
+            this.mode = mode;
+            this.owner = owner;
+        }
+
+        synchronized RadioMode mode() {
+            return mode;
+        }
+
+        synchronized TrackRequester owner() {
+            return owner;
+        }
+
+        synchronized boolean refillInProgress() {
+            return refillInProgress;
+        }
+
+        synchronized StoredTrack beginRefill(List<StoredTrack> seeds) {
+            if (refillInProgress || seeds == null || seeds.isEmpty()) {
+                return null;
+            }
+            refillInProgress = true;
+            StoredTrack seed = seeds.get(Math.floorMod(seedCursor, seeds.size()));
+            seedCursor++;
+            return seed;
+        }
+
+        synchronized void cancelRefill() {
+            refillInProgress = false;
+        }
+
+        synchronized void completeRefill(String seed, String track, String trackKey) {
+            refillInProgress = false;
+            consecutiveFailures = 0;
+            generatedTracks++;
+            lastSeed = seed == null ? "—" : seed;
+            lastTrack = track == null ? "—" : track;
+            String key = trackKey == null ? "unknown" : trackKey.toLowerCase(Locale.ROOT);
+            recentTrackKeys.remove(key);
+            recentTrackKeys.addFirst(key);
+            while (recentTrackKeys.size() > RECENT_LIMIT) {
+                recentTrackKeys.removeLast();
+            }
+        }
+
+        synchronized int failRefill() {
+            refillInProgress = false;
+            return ++consecutiveFailures;
+        }
+
+        synchronized List<String> recentTrackKeys() {
+            return List.copyOf(recentTrackKeys);
+        }
+
+        synchronized RadioSnapshot snapshot(boolean enabled) {
+            return new RadioSnapshot(
+                    enabled,
+                    mode,
+                    owner.userId(),
+                    owner.displayName(),
+                    generatedTracks,
+                    consecutiveFailures,
+                    refillInProgress,
+                    lastSeed,
+                    lastTrack);
+        }
+    }
+
 }

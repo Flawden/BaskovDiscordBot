@@ -31,6 +31,9 @@ import ru.flawden.BascovDiscordBot.lavaplayer.MusicSearchResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlaybackReadinessResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.RepeatMode;
+import ru.flawden.BascovDiscordBot.lavaplayer.RadioStartResult;
+import ru.flawden.BascovDiscordBot.lavaplayer.RadioSnapshot;
+import ru.flawden.BascovDiscordBot.lavaplayer.RadioMode;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackScheduler;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
@@ -157,6 +160,7 @@ public class ModernInteractions extends ListenerAdapter {
                 case "version" -> event.replyEmbeds(versionEvent.buildEmbed()).setEphemeral(true).queue();
                 case "status" -> status(event);
                 case "doctor" -> doctor(event);
+                case "radio" -> radio(event);
                 case "session" -> session(event);
                 case "play" -> play(event);
                 case "search" -> search(event);
@@ -830,6 +834,125 @@ public class ModernInteractions extends ListenerAdapter {
                 .map(SystemDoctor.Check::severity)
                 .max(SystemDoctor.Severity::compareTo)
                 .orElse(SystemDoctor.Severity.OK);
+    }
+
+    private void radio(SlashCommandInteractionEvent event) {
+        Guild guild = event.getGuild();
+        Member member = event.getMember();
+        String subcommand = event.getSubcommandName() == null ? "status" : event.getSubcommandName();
+
+        if ("status".equals(subcommand)) {
+            event.replyEmbeds(radioEmbed(playerManager.radioSnapshot(guild.getIdLong())))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        if ("stop".equals(subcommand)) {
+            RadioSnapshot snapshot = playerManager.radioSnapshot(guild.getIdLong());
+            boolean owner = snapshot.enabled() && snapshot.ownerUserId() == event.getUser().getIdLong();
+            if (!owner && !administrationPolicy.canManage(member)) {
+                event.replyEmbeds(MusicEmbeds.error(
+                                "📻 Нельзя выключить чужое радио",
+                                "Остановить smart radio может тот, кто его включил, либо owner / Manage Server / manager-role."))
+                        .setEphemeral(true)
+                        .queue();
+                return;
+            }
+            if (!snapshot.enabled()) {
+                event.replyEmbeds(MusicEmbeds.error("📻 Радио уже выключено", "Сейчас smart radio не активно."))
+                        .setEphemeral(true)
+                        .queue();
+                return;
+            }
+            playerManager.stopRadio(guild.getIdLong());
+            event.replyEmbeds(MusicEmbeds.success(
+                            "📻 Smart radio выключено",
+                            "Текущий трек, если он играет, не остановлен. После окончания обычной очереди автопродолжения больше не будет."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        MusicControlPolicy.Decision decision = controlPolicy.canStartOrQueue(
+                member,
+                member.getVoiceState(),
+                guild.getSelfMember().getVoiceState());
+        if (!decision.allowed()) {
+            event.replyEmbeds(MusicEmbeds.error("🎧 Управление недоступно", decision.message()))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        String rawMode = event.getOption("mode", "personal", OptionMapping::getAsString);
+        RadioMode mode = "server".equalsIgnoreCase(rawMode) ? RadioMode.SERVER : RadioMode.PERSONAL;
+        long userId = event.getUser().getIdLong();
+        if (!playerManager.hasRadioSeeds(guild.getIdLong(), mode, userId)) {
+            String hint = mode == RadioMode.PERSONAL
+                    ? "Добавь несколько favorites или послушай/закажи треки, чтобы появилась personal history."
+                    : "На сервере пока нет replayable history для server-radio.";
+            event.replyEmbeds(MusicEmbeds.error("📻 Пока не из чего строить радио", hint))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        var botChannel = guild.getSelfMember().getVoiceState().getChannel();
+        var targetChannel = botChannel != null ? botChannel : member.getVoiceState().getChannel();
+        if (targetChannel == null) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🔍 Голосовой канал потерян",
+                            "Войди в голосовой канал и повтори `/radio start`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        TrackRequester owner = new TrackRequester(userId, member.getEffectiveName());
+        event.deferReply().queue(hook -> playerManager
+                .ensureVoiceConnection(guild, targetChannel)
+                .whenComplete((connection, failure) -> {
+                    if (failure != null) {
+                        log.error("Voice connection future failed while starting radio in guild {}", guild.getId(), failure);
+                        editVoiceFailure(hook, new VoiceConnectionResult(
+                                VoiceConnectionResult.Status.FAILED,
+                                "Внутренняя ошибка голосового подключения."));
+                        return;
+                    }
+                    if (!connection.connected()) {
+                        editVoiceFailure(hook, connection);
+                        return;
+                    }
+                    RadioStartResult result = playerManager.startRadio(guild, mode, owner);
+                    String title = result.status() == RadioStartResult.Status.UPDATED
+                            ? "📻 Smart radio перенастроено"
+                            : "📻 Smart radio включено";
+                    hook.editOriginalEmbeds(MusicEmbeds.success(
+                                    title,
+                                    "Режим: `" + mode.label() + "`. Когда текущая очередь закончится, Басков добавит ровно один безопасный кандидат и продолжит цепочку. "
+                                            + "После трёх подряд неудачных refill radio отключится само."))
+                            .queue();
+                }));
+    }
+
+    private MessageEmbed radioEmbed(RadioSnapshot snapshot) {
+        if (snapshot == null || !snapshot.enabled()) {
+            return MusicEmbeds.success(
+                    "📻 Smart radio",
+                    "Сейчас выключено. Используй `/radio start` для personal/server autoplay.");
+        }
+        return new EmbedBuilder()
+                .setTitle("📻 Smart radio")
+                .setDescription("Состояние: `ON` • режим: `" + snapshot.mode().label() + "`")
+                .addField("Включил", snapshot.ownerUserId() > 0L ? "<@" + snapshot.ownerUserId() + ">" : snapshot.ownerDisplayName(), true)
+                .addField("Сгенерировано", "`" + snapshot.generatedTracks() + "`", true)
+                .addField("Ошибки подряд", "`" + snapshot.consecutiveFailures() + "/3`", true)
+                .addField("Refill", snapshot.refillInProgress() ? "`идёт поиск`" : "`ожидание`", true)
+                .addField("Последний seed", "`" + sanitizeInline(snapshot.lastSeed()) + "`", false)
+                .addField("Последний radio-track", "`" + sanitizeInline(snapshot.lastTrack()) + "`", false)
+                .setFooter("Radio-state ephemeral: после restart/deploy режим намеренно остаётся OFF")
+                .build();
     }
 
     private void session(SlashCommandInteractionEvent event) {
@@ -3488,7 +3611,8 @@ public class ModernInteractions extends ListenerAdapter {
                     .addField("Поведение", "`/settings volume` `/settings repeat` `/settings vote-threshold`", false)
                     .addField("Перенос", "`/settings export` `/settings import`", false)
                     .addField("Сброс", "`/settings reset` открывает интерактивное подтверждение; `confirm:true` больше вводить не нужно.", false)
-                    .addField("Диагностика", "`/doctor summary|gateway|voice|storage|session|source|failures` — actionable diagnosis; `/status` — raw snapshot; `/session status|recover` — checkpoint/recovery.", false);
+                    .addField("Диагностика", "`/doctor summary|gateway|voice|storage|session|source|failures` — actionable diagnosis; `/status` — raw snapshot; `/session status|recover` — checkpoint/recovery.", false)
+                    .addField("Smart radio", "`/radio start|status|stop` — bounded autoplay из personal/server history без внешнего recommendation service.", false);
         }
         return embed.build();
     }

@@ -81,6 +81,21 @@ public final class PersonalListeningInsights {
     public static Optional<StoredTrack> discoverySeed(
             List<StoredTrack> favorites,
             List<StoredTrack> history) {
+        return discoverySeeds(favorites, history, 1).stream().findFirst();
+    }
+
+    /**
+     * Возвращает ранжированный список локальных seed-треков. Это тот же scoring,
+     * что у {@link #discoverySeed(List, List)}, но без потери следующих кандидатов —
+     * smart-radio может ротировать seed и не зацикливаться на одном любимом треке.
+     */
+    public static List<StoredTrack> discoverySeeds(
+            List<StoredTrack> favorites,
+            List<StoredTrack> history,
+            int limit) {
+        if (limit <= 0) {
+            return List.of();
+        }
         Map<String, SeedScore> scores = new LinkedHashMap<>();
         int order = 0;
         if (favorites != null) {
@@ -103,10 +118,11 @@ public final class PersonalListeningInsights {
                 if (track == null) {
                     continue;
                 }
-                SeedScore score = scores.get(identity(track));
+                String identity = identity(track);
+                SeedScore score = scores.get(identity);
                 if (score == null) {
                     score = new SeedScore(track, order);
-                    scores.put(identity(track), score);
+                    scores.put(identity, score);
                 }
                 score.score += 1;
                 order++;
@@ -115,8 +131,9 @@ public final class PersonalListeningInsights {
         return scores.values().stream()
                 .sorted(Comparator.comparingInt((SeedScore score) -> score.score).reversed()
                         .thenComparingInt(score -> score.firstOrder))
+                .limit(limit)
                 .map(score -> score.track)
-                .findFirst();
+                .toList();
     }
 
     public static int uniqueTrackCount(List<StoredTrack> history) {

@@ -21,7 +21,7 @@ class ModernCommandCatalogTest {
 
         assertEquals(commands.size(), names.size());
         assertEquals(Set.of(
-                "help", "version", "status", "doctor", "play", "search", "discover", "history", "replay", "favorites", "playlist",
+                "help", "version", "status", "doctor", "radio", "play", "search", "discover", "history", "replay", "favorites", "playlist",
                 "pause", "resume", "previous", "skip", "voteskip", "stop", "queue", "now", "seek",
                 "volume", "repeat", "shuffle", "remove", "move", "clear", "queue-manage", "session", "moderation", "settings"), names);
     }
@@ -34,6 +34,19 @@ class ModernCommandCatalogTest {
                         .map(subcommand -> subcommand.getName())
                         .collect(Collectors.toSet()));
         assertTrue(doctor.getSubcommands().stream().allMatch(subcommand -> subcommand.getOptions().isEmpty()));
+    }
+
+    @Test
+    void radioCommandExposesBoundedAutoplayLifecycle() {
+        SlashCommandData radio = command("radio");
+        assertEquals(Set.of("start", "status", "stop"),
+                radio.getSubcommands().stream()
+                        .map(subcommand -> subcommand.getName())
+                        .collect(Collectors.toSet()));
+        assertTrue(radio.getSubcommands().stream()
+                .filter(subcommand -> "start".equals(subcommand.getName()))
+                .flatMap(subcommand -> subcommand.getOptions().stream())
+                .anyMatch(option -> "mode".equals(option.getName()) && option.getChoices().size() == 2));
     }
 
     @Test

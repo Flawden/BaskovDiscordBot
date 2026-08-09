@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [1.13.0] — 2026-08-09
+
+### Smart Radio & Autoplay
+
+- Добавлен `/radio start|status|stop`. Режим `personal` использует локальные favorites + personal history пользователя, `server` — retained guild history; внешнего recommendation API и отдельного профилирования нет.
+- Когда current+queue заканчиваются, smart radio запускает один `ytsearch:` по ротируемому seed и добавляет ровно один безопасный кандидат. Autoplay не заполняет очередь пачкой и не обходит существующие stream/duration/global queue ограничения.
+- Radio-generated треки маркируются системным requester `📻 Radio` (`userId=0`), поэтому не расходуют personal requester cap и не приписываются инициатору как его ручные заказы в personal history.
+- Защита от гонки: refill запоминает `GuildMusicManager.activityVersion`; если во время асинхронного radio-search пользователь вручную запускает/добавляет музыку, запоздавший radio candidate отбрасывается и не вклинивается перед человеческим запросом.
+- Последние 10 radio-generated идентификаторов и до 8 свежих guild-history треков исключаются из кандидатов; seed ротируются через новый `PersonalListeningInsights.discoverySeeds(...)`, чтобы autoplay не зацикливался на одном favourite.
+- После трёх последовательных refill failures radio автоматически выключается и возвращает обычный idle-disconnect lifecycle. `status` показывает mode, owner, generated count, failures, refill state и последние seed/track.
+- Radio-state намеренно ephemeral и не сериализуется в session/settings storage: после restart/redeploy autoplay остаётся OFF и требует нового явного `/radio start`, тогда как обычный playback/session recovery продолжает работать как в v1.10+.
+
 ## [1.12.0] — 2026-08-09
 
 ### Observability & Self-Diagnostics

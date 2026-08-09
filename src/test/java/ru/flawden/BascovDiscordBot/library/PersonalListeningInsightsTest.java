@@ -65,6 +65,21 @@ class PersonalListeningInsightsTest {
     }
 
     @Test
+    void discoverySeedsExposeRankedRotationPool() {
+        StoredTrack favorite = track("Poison", "Alice Cooper", "poison", 10L);
+        StoredTrack repeated = track("Bismarck", "Sabaton", "bismarck", 9L);
+        StoredTrack third = track("Army", "Sabaton", "army", 8L);
+
+        List<StoredTrack> seeds = PersonalListeningInsights.discoverySeeds(
+                List.of(favorite),
+                List.of(repeated, repeated, repeated, third),
+                3);
+
+        assertEquals(List.of("Poison", "Bismarck", "Army"),
+                seeds.stream().map(StoredTrack::title).toList());
+    }
+
+    @Test
     void countsUniqueTracksByReplayIdentity() {
         StoredTrack first = track("First title", "Artist", "same", 10L);
         StoredTrack renamed = track("Renamed", "Artist", "same", 9L);
