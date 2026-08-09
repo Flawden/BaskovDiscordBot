@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.6.1**.
+Текущая версия релизной ветки: **v1.6.3**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -135,7 +135,7 @@ Native libDAVE runtime, platform profiles и startup fail-fast описаны в
 
 В текущем режиме разработки релизы отправляются напрямую в `master`; ветка `dev` остаётся технически поддерживаемой, но не используется.
 
-Каждая доставка сначала выполняет Maven diagnostics + bounded Maven verification. `setup-java` настроен с `show-download-progress: true`, поэтому dependency resolution больше не выглядит как бесконечная тишина; cache restore segment ограничен двумя минутами, а Maven verification — двумя попытками максимум по семь минут. Начиная с `v1.6.2`, Maven Resolver groupId filtering маршрутизирует `dev.lavalink.youtube` только в `lavalink-releases`, `moe.kyokobot.libdave` только в `lavalink-libdave-snapshots`, а Maven Central остаётся unrestricted. После этого workflow публикует в GHCR:
+Каждая доставка сначала выполняет Maven diagnostics + bounded Maven verification. `setup-java` настроен с `show-download-progress: true`, поэтому dependency resolution больше не выглядит как бесконечная тишина; cache restore segment ограничен двумя минутами, а Maven verification — двумя попытками максимум по семь минут. Начиная с `v1.6.2`, Maven Resolver groupId filtering маршрутизирует `dev.lavalink.youtube` только в `lavalink-releases`, `moe.kyokobot.libdave` только в `lavalink-libdave-snapshots`, а Maven Central остаётся unrestricted. Начиная с `v1.6.3`, CI сначала восстанавливает project-owned Maven cache с fallback на известный зелёный cache `v1.5.0`, проверяет наличие закреплённых external POM/JAR и сохраняет новый cache только после успешного Maven gate. Production image собирается из уже проверенного `target/baskov-discord-bot.jar`, без второго Maven resolution внутри Docker. После этого workflow публикует в GHCR:
 
 ```text
 ghcr.io/<owner>/<repository>:sha-<full-git-sha>

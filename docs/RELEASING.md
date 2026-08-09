@@ -76,3 +76,9 @@ docker exec baskov-discord-bot sh -c 'ls -lah /app/data/backups 2>/dev/null || t
 Начиная с `v1.6.2`, helper дополнительно включает Maven Resolver groupId repository filtering из `.mvn/rrf`: `lavalink-releases` обслуживает только `dev.lavalink.youtube`, `lavalink-libdave-snapshots` — только `moe.kyokobot.libdave`, Central остаётся unrestricted. При добавлении нового custom-repository dependency обновить соответствующий routing-файл и [`MAVEN-REPOSITORY-ROUTING.md`](MAVEN-REPOSITORY-ROUTING.md).
 
 Если изменяются закреплённые dependency/build-tool версии, одновременно обновить `.github/maven-cache-key.txt`; contract test не даст случайно оставить старый fingerprint.
+
+## v1.6.3+: verified Maven cache and container handoff
+
+GitHub-hosted delivery uses an explicit restore/save pair for `~/.m2/repository`. The dependency fingerprint lives in `.github/maven-cache-key.txt`; `v1.5.0` setup-java cache is retained only as migration fallback. A cache miss is allowed, but a new primary cache is saved only after `maven-ci.sh verify` succeeds.
+
+The production image must use `deploy/Dockerfile.ci`, which copies the JAR produced by that successful Maven gate. Do not reintroduce `dependency:go-offline` or a second Maven build into the delivery Dockerfile: it would restore the external-repository single point of failure that v1.6.3 removes.

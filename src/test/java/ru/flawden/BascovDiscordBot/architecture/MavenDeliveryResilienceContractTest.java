@@ -24,7 +24,11 @@ class MavenDeliveryResilienceContractTest {
 
         assertTrue(workflows.contains("actions/setup-java@v5"));
         assertFalse(workflows.contains("actions/setup-java@v4"));
-        assertTrue(workflows.contains("cache-dependency-path: .github/maven-cache-key.txt"));
+        assertFalse(workflows.contains("cache: maven"),
+                "setup-java dependency caching must not shadow the explicit verified cache migration");
+        assertTrue(workflows.contains("actions/cache/restore@v4"));
+        assertTrue(workflows.contains("actions/cache/save@v4"));
+        assertTrue(workflows.contains("hashFiles('.github/maven-cache-key.txt')"));
         assertTrue(workflows.contains("show-download-progress: true"));
         assertTrue(workflows.contains("SEGMENT_DOWNLOAD_TIMEOUT_MINS: '2'"));
         assertTrue(workflows.contains("./.github/scripts/maven-ci.sh diagnose"));
@@ -70,7 +74,7 @@ class MavenDeliveryResilienceContractTest {
         String wrapper = Files.readString(Path.of(".mvn/wrapper/maven-wrapper.properties"));
         assertTrue(wrapper.contains("wrapperVersion=" + cacheKey.getProperty("maven-wrapper-script")));
         assertTrue(wrapper.contains("apache-maven-" + cacheKey.getProperty("maven-wrapper") + "-bin.zip"));
-        assertFalse(Files.readString(Path.of(".github/maven-cache-key.txt")).contains("1.6.2"),
+        assertFalse(Files.readString(Path.of(".github/maven-cache-key.txt")).contains("1.6.3"),
                 "Application-only release bumps must not invalidate the dependency cache");
     }
 

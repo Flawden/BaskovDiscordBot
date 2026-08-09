@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [1.6.3] — 2026-08-09
+
+### External Maven Dependency Bootstrap
+
+- CI/delivery Maven cache переведён с нерасширяемого `setup-java cache: maven` на явный `actions/cache/restore` + `actions/cache/save`: новый project-owned cache сохраняется только после успешного `clean verify`, поэтому красный network run больше не замораживает неполный cache под exact key.
+- Первый запуск мигрирует известный зелёный Maven cache `v1.5.0` как bootstrap seed. Он содержит закреплённые `youtube-source 1.18.2` и `libDAVE ce725965e`, поэтому временная недоступность `maven.lavalink.dev` не должна блокировать уже проверенные версии.
+- Добавлен bootstrap inspector для восьми обязательных POM/JAR файлов; stale `*.lastUpdated` для этих координат очищаются до Maven, а diagnostics сохраняет `external-bootstrap.log`. Если seed отсутствует, Maven сохраняет обычный online fallback.
+- После первого успешного запуска seed мигрируется в стабильный `baskov-maven-*` cache, ключ которого зависит от `.github/maven-cache-key.txt`, а не от версии приложения.
+- Production/CI container больше не запускает второй Maven build внутри Docker. Новый `deploy/Dockerfile.ci` упаковывает ровно `target/baskov-discord-bot.jar`, который уже прошёл host `clean verify`; это устраняет вторую независимую зависимость delivery от Maven repositories.
+- Host Maven verification получает `-Dbuild.revision=${GITHUB_SHA}`, поэтому JAR, переиспользуемый Docker image, сохраняет точный Git revision для `/version`.
+- Обычный корневой `Dockerfile` сохранён для standalone source-build сценария; runtime Java/Discord/music/persistence behavior не меняется.
+
 ## [1.6.2] — 2026-08-09
 
 ### Maven Repository Routing Hotfix

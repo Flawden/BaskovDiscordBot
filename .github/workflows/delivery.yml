@@ -112,12 +112,23 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          cache: maven
-          cache-dependency-path: .github/maven-cache-key.txt
           show-download-progress: true
+
+      - name: Restore Maven dependency cache
+        id: maven-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.m2/repository
+          key: baskov-maven-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/maven-cache-key.txt') }}
+          restore-keys: |
+            baskov-maven-${{ runner.os }}-${{ runner.arch }}-
+            setup-java-Linux-x64-maven-71b8f0cd3bdce00d8b9dd28d9fd43a10b83fcfdfd9fe6875f2d0b3697ebd7207
 
       - name: Make Maven tooling executable
         run: chmod +x ./mvnw .github/scripts/maven-ci.sh
+
+      - name: Inspect external Maven bootstrap
+        run: ./.github/scripts/maven-ci.sh bootstrap
 
       - name: Validate operational assets
         shell: bash
@@ -143,6 +154,13 @@ jobs:
 
       - name: Run Maven verification
         run: ./.github/scripts/maven-ci.sh verify
+
+      - name: Save verified Maven dependency cache
+        if: ${{ success() && steps.maven-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ steps.maven-cache.outputs.cache-primary-key }}
 
       - name: Upload Maven diagnostics
         if: always()
@@ -180,6 +198,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: deploy/Dockerfile.ci
           push: true
           pull: true
           tags: |

@@ -201,3 +201,11 @@ Voice lifecycle остаётся bounded: JDA auto-reconnect выключен, �
 - [`VOICE-CONNECTIONS.md`](VOICE-CONNECTIONS.md)
 - [`VOICE-RECOVERY-SESSION-RESTORATION.md`](VOICE-RECOVERY-SESSION-RESTORATION.md)
 - [`VOICE-ROOT-CAUSE-DIAGNOSTICS.md`](VOICE-ROOT-CAUSE-DIAGNOSTICS.md)
+
+## Maven external dependency bootstrap (v1.6.3)
+
+`maven.lavalink.dev` остаётся внешним источником для `dev.lavalink.youtube` и pinned `moe.kyokobot.libdave`, но CI больше не обязан повторно скачивать уже проверенные версии при каждом чистом hosted runner. Workflow сначала восстанавливает стабильный `baskov-maven-*` cache; при первом переходе fallback указывает на exact Maven cache зелёного `v1.5.0`.
+
+После restore `maven-ci.sh bootstrap` проверяет POM/JAR для `youtube-source 1.18.2` и Linux libDAVE `ce725965e`, удаляет только их stale `*.lastUpdated` markers и пишет `external-bootstrap.log`. Отсутствующий bootstrap не маскирует ошибку: Maven продолжает обычный online resolution и diagnostics/retry policy.
+
+Cache сохраняется отдельным `actions/cache/save` только после успешного `clean verify`. Это принципиально: failed network build не может создать immutable incomplete exact-key cache. CI/delivery Docker image затем использует `deploy/Dockerfile.ci` и уже проверенный `target/baskov-discord-bot.jar`; исходный root `Dockerfile` остаётся standalone source-build вариантом.
