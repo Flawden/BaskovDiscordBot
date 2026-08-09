@@ -132,12 +132,15 @@ DJ-роли и голосование описаны в [`DJ-ROLES-AND-VOTING.md
 
 Doctor намеренно не делает внешние HTTP/Maven/YouTube probes из Discord-команды: зависший upstream не должен подвешивать саму диагностику. Failure journal не хранит Discord user IDs, stack traces или secrets.
 
-## Smart Radio (v1.13.0)
+## Smart Radio / Discovery (v1.14.0)
 
 ```text
-/radio start [mode:personal|server]
+/radio start [mode:personal|server] [strategy:familiar|similar|discovery]
 /radio status
+/radio why
 /radio stop
 ```
+
+`familiar` остаётся локальным; `similar` и `discovery` используют Last.fm candidate generation, если настроен `LASTFM_API_KEY`. `discovery` исключает already-known tracks по normalized artist/title identity. `/radio why` объясняет последнюю рекомендацию. Playback после candidate generation по-прежнему идёт через обычный `ytsearch:`.
 
 Radio продолжает только действительно пустую очередь и добавляет по одному кандидату. `personal` строит seed из favorites/personal history владельца, `server` — из guild history. Режим ephemeral и после restart/deploy остаётся выключенным.

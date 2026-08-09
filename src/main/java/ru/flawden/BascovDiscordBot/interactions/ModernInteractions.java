@@ -38,6 +38,7 @@ import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackScheduler;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
 import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
+import ru.flawden.BascovDiscordBot.recommendation.RadioStrategy;
 import ru.flawden.BascovDiscordBot.library.FavoriteOperationResult;
 import ru.flawden.BascovDiscordBot.library.FavoriteSearchHit;
 import ru.flawden.BascovDiscordBot.library.PersonalListeningInsights;
@@ -848,6 +849,30 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
+        if ("why".equals(subcommand)) {
+            RadioSnapshot snapshot = playerManager.radioSnapshot(guild.getIdLong());
+            if (!snapshot.enabled() || "—".equals(snapshot.lastTrack())) {
+                event.replyEmbeds(MusicEmbeds.error(
+                                "📻 Пока нечего объяснять",
+                                "Radio ещё не сгенерировало ни одного трека в этом runtime."))
+                        .setEphemeral(true)
+                        .queue();
+                return;
+            }
+            event.replyEmbeds(new EmbedBuilder()
+                            .setTitle("🧠 Почему этот трек?")
+                            .setDescription("`" + sanitizeInline(snapshot.lastTrack()) + "`")
+                            .addField("Стратегия", "`" + snapshot.strategy().label() + "`", true)
+                            .addField("Provider", "`" + sanitizeInline(snapshot.provider()) + "`", true)
+                            .addField("Seed", "`" + sanitizeInline(snapshot.lastSeed()) + "`", false)
+                            .addField("Причина", sanitizeInline(snapshot.lastReason()), false)
+                            .setFooter("Recommendation объясняется до ytsearch; playback остаётся обычным безопасным pipeline")
+                            .build())
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
         if ("stop".equals(subcommand)) {
             RadioSnapshot snapshot = playerManager.radioSnapshot(guild.getIdLong());
             boolean owner = snapshot.enabled() && snapshot.ownerUserId() == event.getUser().getIdLong();
@@ -887,6 +912,12 @@ public class ModernInteractions extends ListenerAdapter {
 
         String rawMode = event.getOption("mode", "personal", OptionMapping::getAsString);
         RadioMode mode = "server".equalsIgnoreCase(rawMode) ? RadioMode.SERVER : RadioMode.PERSONAL;
+        String rawStrategy = event.getOption("strategy", "similar", OptionMapping::getAsString);
+        RadioStrategy strategy = switch (rawStrategy.toLowerCase(Locale.ROOT)) {
+            case "familiar" -> RadioStrategy.FAMILIAR;
+            case "discovery" -> RadioStrategy.DISCOVERY;
+            default -> RadioStrategy.SIMILAR;
+        };
         long userId = event.getUser().getIdLong();
         if (!playerManager.hasRadioSeeds(guild.getIdLong(), mode, userId)) {
             String hint = mode == RadioMode.PERSONAL
@@ -924,13 +955,15 @@ public class ModernInteractions extends ListenerAdapter {
                         editVoiceFailure(hook, connection);
                         return;
                     }
-                    RadioStartResult result = playerManager.startRadio(guild, mode, owner);
+                    RadioStartResult result = playerManager.startRadio(guild, mode, strategy, owner);
                     String title = result.status() == RadioStartResult.Status.UPDATED
                             ? "📻 Smart radio перенастроено"
                             : "📻 Smart radio включено";
                     hook.editOriginalEmbeds(MusicEmbeds.success(
                                     title,
-                                    "Режим: `" + mode.label() + "`. Когда текущая очередь закончится, Басков добавит ровно один безопасный кандидат и продолжит цепочку. "
+                                    "Источник: `" + mode.label() + "` • стратегия: `" + strategy.label() + "`. "
+                                            + "Когда очередь закончится, Басков добавит ровно один кандидат. "
+                                            + "`similar/discovery` используют внешний similarity-provider при наличии `LASTFM_API_KEY`; иначе безопасно откатываются к local fallback. "
                                             + "После трёх подряд неудачных refill radio отключится само."))
                             .queue();
                 }));
@@ -940,18 +973,21 @@ public class ModernInteractions extends ListenerAdapter {
         if (snapshot == null || !snapshot.enabled()) {
             return MusicEmbeds.success(
                     "📻 Smart radio",
-                    "Сейчас выключено. Используй `/radio start` для personal/server autoplay.");
+                    "Сейчас выключено. Используй `/radio start` и выбери familiar/similar/discovery.");
         }
         return new EmbedBuilder()
                 .setTitle("📻 Smart radio")
-                .setDescription("Состояние: `ON` • режим: `" + snapshot.mode().label() + "`")
+                .setDescription("Состояние: `ON` • источник: `" + snapshot.mode().label()
+                        + "` • стратегия: `" + snapshot.strategy().label() + "`")
                 .addField("Включил", snapshot.ownerUserId() > 0L ? "<@" + snapshot.ownerUserId() + ">" : snapshot.ownerDisplayName(), true)
                 .addField("Сгенерировано", "`" + snapshot.generatedTracks() + "`", true)
                 .addField("Ошибки подряд", "`" + snapshot.consecutiveFailures() + "/3`", true)
                 .addField("Refill", snapshot.refillInProgress() ? "`идёт поиск`" : "`ожидание`", true)
+                .addField("Provider", "`" + sanitizeInline(snapshot.provider()) + "`", true)
                 .addField("Последний seed", "`" + sanitizeInline(snapshot.lastSeed()) + "`", false)
                 .addField("Последний radio-track", "`" + sanitizeInline(snapshot.lastTrack()) + "`", false)
-                .setFooter("Radio-state ephemeral: после restart/deploy режим намеренно остаётся OFF")
+                .addField("Почему", sanitizeInline(snapshot.lastReason()), false)
+                .setFooter("/radio why — подробное объяснение • radio-state после restart/deploy намеренно OFF")
                 .build();
     }
 

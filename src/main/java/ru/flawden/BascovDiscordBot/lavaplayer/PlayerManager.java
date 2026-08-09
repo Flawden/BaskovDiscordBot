@@ -27,6 +27,11 @@ import ru.flawden.BascovDiscordBot.library.PlaybackHistoryRecorder;
 import ru.flawden.BascovDiscordBot.library.MusicLibraryRepository;
 import ru.flawden.BascovDiscordBot.library.PersonalListeningInsights;
 import ru.flawden.BascovDiscordBot.library.StoredTrack;
+import ru.flawden.BascovDiscordBot.recommendation.RadioStrategy;
+import ru.flawden.BascovDiscordBot.recommendation.RecommendationContext;
+import ru.flawden.BascovDiscordBot.recommendation.RecommendationIdentity;
+import ru.flawden.BascovDiscordBot.recommendation.RecommendationPlan;
+import ru.flawden.BascovDiscordBot.recommendation.SmartDiscoveryEngine;
 import ru.flawden.BascovDiscordBot.session.MusicSessionRepository;
 import ru.flawden.BascovDiscordBot.session.SessionRecoveryDetails;
 import ru.flawden.BascovDiscordBot.session.SessionRecoverySnapshot;
@@ -83,6 +88,7 @@ public class PlayerManager {
     private final VoiceDiagnostics voiceDiagnostics;
     private final PlaybackHistoryRecorder historyRecorder;
     private final MusicLibraryRepository musicLibraryRepository;
+    private final SmartDiscoveryEngine discoveryEngine;
     private final MusicSessionRepository sessionRepository;
     private final Map<Long, RadioState> radioStates = new ConcurrentHashMap<>();
     private final AtomicBoolean closing = new AtomicBoolean();
@@ -102,6 +108,7 @@ public class PlayerManager {
             VoiceDiagnostics voiceDiagnostics,
             PlaybackHistoryRecorder historyRecorder,
             MusicLibraryRepository musicLibraryRepository,
+            SmartDiscoveryEngine discoveryEngine,
             MusicSessionProperties sessionProperties,
             MusicSessionRepository sessionRepository) {
         this.properties = properties;
@@ -111,6 +118,7 @@ public class PlayerManager {
         this.voiceDiagnostics = voiceDiagnostics;
         this.historyRecorder = historyRecorder;
         this.musicLibraryRepository = Objects.requireNonNull(musicLibraryRepository, "musicLibraryRepository");
+        this.discoveryEngine = Objects.requireNonNull(discoveryEngine, "discoveryEngine");
         this.sessionRepository = sessionRepository;
         this.audioPlayerManager = new DefaultAudioPlayerManager();
 
@@ -193,8 +201,17 @@ public class PlayerManager {
     }
 
     public RadioStartResult startRadio(Guild guild, RadioMode mode, TrackRequester owner) {
+        return startRadio(guild, mode, RadioStrategy.FAMILIAR, owner);
+    }
+
+    public RadioStartResult startRadio(
+            Guild guild,
+            RadioMode mode,
+            RadioStrategy strategy,
+            TrackRequester owner) {
         Objects.requireNonNull(guild, "guild");
         Objects.requireNonNull(mode, "mode");
+        RadioStrategy recommendationStrategy = strategy == null ? RadioStrategy.FAMILIAR : strategy;
         TrackRequester requester = owner == null ? TrackRequester.unknown() : owner;
         List<StoredTrack> seeds = radioSeeds(guild.getIdLong(), mode, requester.userId());
         if (seeds.isEmpty()) {
@@ -202,7 +219,7 @@ public class PlayerManager {
         }
 
         long guildId = guild.getIdLong();
-        RadioState previous = radioStates.put(guildId, new RadioState(mode, requester));
+        RadioState previous = radioStates.put(guildId, new RadioState(mode, recommendationStrategy, requester));
         GuildMusicManager manager = getMusicManager(guild);
         manager.markActivity();
         RadioStartResult.Status status = previous == null
@@ -1291,21 +1308,50 @@ public class PlayerManager {
             return;
         }
 
-        String query = MediaQueryResolver.YOUTUBE_SEARCH_PREFIX + radioQuery(seed);
-        audioPlayerManager.loadItemOrdered("radio:" + guildId, query, new AudioLoadResultHandler() {
+        RecommendationContext context = radioRecommendationContext(guildId, state);
+        discoveryEngine.recommend(seed, state.strategy(), context)
+                .whenComplete((plan, failure) -> {
+                    if (failure != null) {
+                        radioFailure(guild, manager, state, "Recommendation provider: " + failure.getClass().getSimpleName());
+                        return;
+                    }
+                    if (radioStates.get(guildId) != state
+                            || !manager.isActive()
+                            || manager.getActivityVersion() != activityVersion
+                            || !manager.isIdle()) {
+                        state.cancelRefill();
+                        return;
+                    }
+                    startRadioTransportSearch(guild, manager, state, activityVersion, seed, plan);
+                });
+    }
+
+    private void startRadioTransportSearch(
+            Guild guild,
+            GuildMusicManager manager,
+            RadioState state,
+            long activityVersion,
+            StoredTrack seed,
+            RecommendationPlan plan) {
+        RecommendationPlan safePlan = plan == null
+                ? RecommendationPlan.fallback(seed, "Recommendation plan отсутствует; локальный fallback")
+                : plan;
+        String queryText = boundedRadioQuery(safePlan.candidate().query());
+        String query = MediaQueryResolver.YOUTUBE_SEARCH_PREFIX + queryText;
+        audioPlayerManager.loadItemOrdered("radio:" + guild.getIdLong(), query, new AudioLoadResultHandler() {
             @Override
             public void trackLoaded(AudioTrack track) {
-                finishRadioSearch(guild, manager, state, activityVersion, seed, List.of(track));
+                finishRadioSearch(guild, manager, state, activityVersion, seed, safePlan, List.of(track));
             }
 
             @Override
             public void playlistLoaded(AudioPlaylist playlist) {
-                finishRadioSearch(guild, manager, state, activityVersion, seed, searchCandidates(playlist, 10));
+                finishRadioSearch(guild, manager, state, activityVersion, seed, safePlan, searchCandidates(playlist, 10));
             }
 
             @Override
             public void noMatches() {
-                radioFailure(guild, manager, state, "Поиск не вернул кандидатов");
+                radioFailure(guild, manager, state, "ytsearch не вернул кандидатов для recommendation");
             }
 
             @Override
@@ -1321,6 +1367,7 @@ public class PlayerManager {
             RadioState state,
             long activityVersion,
             StoredTrack seed,
+            RecommendationPlan plan,
             List<AudioTrack> candidates) {
         long guildId = guild.getIdLong();
         if (radioStates.get(guildId) != state || !manager.isActive()) {
@@ -1332,20 +1379,26 @@ public class PlayerManager {
             return;
         }
 
-        Set<String> excluded = new LinkedHashSet<>(state.recentTrackKeys());
-        excluded.add(storedTrackKey(seed));
-        musicLibraryRepository.history(guildId).stream()
-                .limit(8)
-                .map(PlayerManager::storedTrackKey)
-                .forEach(excluded::add);
+        RecommendationContext context = radioRecommendationContext(guildId, state);
+        Set<String> excludedKeys = new LinkedHashSet<>(state.recentTrackKeys());
+        excludedKeys.add(storedTrackKey(seed));
+        Set<String> excludedIdentities = new LinkedHashSet<>(context.recentTrackIdentities());
+        if (state.strategy().hardNovelty()) {
+            excludedIdentities.addAll(context.knownTrackIdentities());
+        }
 
         AudioTrack selected = candidates == null ? null : candidates.stream()
                 .filter(this::isPlayableCandidate)
-                .filter(track -> !excluded.contains(trackKey(track).toLowerCase(Locale.ROOT)))
+                .filter(track -> !excludedKeys.contains(trackKey(track).toLowerCase(Locale.ROOT)))
+                .filter(track -> !excludedIdentities.contains(trackIdentity(track)))
+                .filter(track -> state.strategy() != RadioStrategy.DISCOVERY
+                        || !context.recentArtists().contains(trackArtistIdentity(track)))
                 .findFirst()
                 .orElse(null);
         if (selected == null) {
-            radioFailure(guild, manager, state, "Все найденные кандидаты уже недавно звучали");
+            radioFailure(guild, manager, state, state.strategy().hardNovelty()
+                    ? "Discovery-кандидаты отфильтрованы как уже знакомые/недавние"
+                    : "Все найденные кандидаты уже недавно звучали");
             return;
         }
 
@@ -1356,10 +1409,57 @@ public class PlayerManager {
             radioFailure(guild, manager, state, "Кандидат отклонён queue policy: " + result.status());
             return;
         }
-        state.completeRefill(seed.title(), selected.getInfo().title, trackKey(selected));
+        String provider = plan == null ? "local" : plan.candidate().source();
+        String reason = plan == null ? "Локальный smart-radio" : plan.candidate().reason();
+        state.completeRefill(
+                seed.title(),
+                selected.getInfo().title,
+                trackKey(selected),
+                trackIdentity(selected),
+                trackArtistIdentity(selected),
+                provider,
+                reason);
         cancelIdleDisconnect(guildId);
-        log.info("Smart radio generated track: guild={}, mode={}, seed={}, track={}",
-                guildId, state.mode(), seed.title(), selected.getInfo().title);
+        log.info("Smart radio generated track: guild={}, scope={}, strategy={}, provider={}, seed={}, track={}",
+                guildId, state.mode(), state.strategy(), provider, seed.title(), selected.getInfo().title);
+    }
+
+    private RecommendationContext radioRecommendationContext(long guildId, RadioState state) {
+        Set<String> known = new LinkedHashSet<>();
+        musicLibraryRepository.history(guildId).stream()
+                .map(RecommendationIdentity::of)
+                .forEach(known::add);
+        if (state.mode() == RadioMode.PERSONAL && state.owner().userId() > 0L) {
+            musicLibraryRepository.favorites(guildId, state.owner().userId()).stream()
+                    .map(RecommendationIdentity::of)
+                    .forEach(known::add);
+            musicLibraryRepository.personalHistory(guildId, state.owner().userId()).stream()
+                    .map(RecommendationIdentity::of)
+                    .forEach(known::add);
+        }
+        return new RecommendationContext(
+                known,
+                new LinkedHashSet<>(state.recentTrackIdentities()),
+                new LinkedHashSet<>(state.recentArtists()));
+    }
+
+    private static String boundedRadioQuery(String query) {
+        String safe = query == null ? "" : query.trim().replaceAll("\\s+", " ");
+        return safe.length() <= 100 ? safe : safe.substring(0, 100).trim();
+    }
+
+    private static String trackIdentity(AudioTrack track) {
+        if (track == null || track.getInfo() == null) {
+            return "unknown";
+        }
+        return RecommendationIdentity.of(track.getInfo().author, track.getInfo().title);
+    }
+
+    private static String trackArtistIdentity(AudioTrack track) {
+        if (track == null || track.getInfo() == null) {
+            return "unknown";
+        }
+        return RecommendationIdentity.normalizeArtist(track.getInfo().author);
     }
 
     private void radioFailure(Guild guild, GuildMusicManager manager, RadioState state, String reason) {
@@ -1396,15 +1496,6 @@ public class PlayerManager {
                 List.of(),
                 musicLibraryRepository.history(guildId),
                 20);
-    }
-
-    private static String radioQuery(StoredTrack seed) {
-        String title = seed.title() == null ? "" : seed.title().trim();
-        String author = seed.author() == null ? "" : seed.author().trim();
-        String query = author.isBlank() || "Неизвестно".equalsIgnoreCase(author)
-                ? title
-                : author + " " + title;
-        return query.length() <= 100 ? query : query.substring(0, 100).trim();
     }
 
     private static String storedTrackKey(StoredTrack track) {
@@ -1660,24 +1751,35 @@ public class PlayerManager {
 
     private static final class RadioState {
         private static final int RECENT_LIMIT = 10;
+        private static final int ARTIST_COOLDOWN_LIMIT = 3;
 
         private final RadioMode mode;
+        private final RadioStrategy strategy;
         private final TrackRequester owner;
         private final ArrayDeque<String> recentTrackKeys = new ArrayDeque<>();
+        private final ArrayDeque<String> recentTrackIdentities = new ArrayDeque<>();
+        private final ArrayDeque<String> recentArtists = new ArrayDeque<>();
         private long generatedTracks;
         private int consecutiveFailures;
         private boolean refillInProgress;
         private int seedCursor;
+        private String provider = "local";
         private String lastSeed = "—";
         private String lastTrack = "—";
+        private String lastReason = "—";
 
-        private RadioState(RadioMode mode, TrackRequester owner) {
+        private RadioState(RadioMode mode, RadioStrategy strategy, TrackRequester owner) {
             this.mode = mode;
+            this.strategy = strategy == null ? RadioStrategy.FAMILIAR : strategy;
             this.owner = owner;
         }
 
         synchronized RadioMode mode() {
             return mode;
+        }
+
+        synchronized RadioStrategy strategy() {
+            return strategy;
         }
 
         synchronized TrackRequester owner() {
@@ -1702,18 +1804,24 @@ public class PlayerManager {
             refillInProgress = false;
         }
 
-        synchronized void completeRefill(String seed, String track, String trackKey) {
+        synchronized void completeRefill(
+                String seed,
+                String track,
+                String trackKey,
+                String trackIdentity,
+                String artistIdentity,
+                String sourceProvider,
+                String reason) {
             refillInProgress = false;
             consecutiveFailures = 0;
             generatedTracks++;
+            provider = sourceProvider == null || sourceProvider.isBlank() ? "local" : sourceProvider;
             lastSeed = seed == null ? "—" : seed;
             lastTrack = track == null ? "—" : track;
-            String key = trackKey == null ? "unknown" : trackKey.toLowerCase(Locale.ROOT);
-            recentTrackKeys.remove(key);
-            recentTrackKeys.addFirst(key);
-            while (recentTrackKeys.size() > RECENT_LIMIT) {
-                recentTrackKeys.removeLast();
-            }
+            lastReason = reason == null || reason.isBlank() ? "—" : reason;
+            remember(recentTrackKeys, trackKey, RECENT_LIMIT);
+            remember(recentTrackIdentities, trackIdentity, RECENT_LIMIT);
+            remember(recentArtists, artistIdentity, ARTIST_COOLDOWN_LIMIT);
         }
 
         synchronized int failRefill() {
@@ -1725,17 +1833,37 @@ public class PlayerManager {
             return List.copyOf(recentTrackKeys);
         }
 
+        synchronized List<String> recentTrackIdentities() {
+            return List.copyOf(recentTrackIdentities);
+        }
+
+        synchronized List<String> recentArtists() {
+            return List.copyOf(recentArtists);
+        }
+
         synchronized RadioSnapshot snapshot(boolean enabled) {
             return new RadioSnapshot(
                     enabled,
                     mode,
+                    strategy,
                     owner.userId(),
                     owner.displayName(),
                     generatedTracks,
                     consecutiveFailures,
                     refillInProgress,
+                    provider,
                     lastSeed,
-                    lastTrack);
+                    lastTrack,
+                    lastReason);
+        }
+
+        private static void remember(ArrayDeque<String> deque, String value, int limit) {
+            String safe = value == null || value.isBlank() ? "unknown" : value.toLowerCase(Locale.ROOT);
+            deque.remove(safe);
+            deque.addFirst(safe);
+            while (deque.size() > limit) {
+                deque.removeLast();
+            }
         }
     }
 

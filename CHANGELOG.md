@@ -6,6 +6,19 @@
 
 ## [Unreleased]
 
+## [1.14.0] — 2026-08-09
+
+### Smart Discovery Engine
+
+- Smart radio получил стратегии `familiar`, `similar`, `discovery` поверх прежнего `personal|server` seed scope. `familiar` сохраняет локальное v1.13-поведение, `similar` предпочитает внешние похожие треки, `discovery` жёстко исключает уже известные Баскову треки.
+- Добавлен provider-neutral recommendation слой: `RecommendationCandidate(artist,title,similarity,source,reason)` не содержит `AudioTrack` и не имеет доступа к queue/voice. После выбора candidate обычный `ytsearch:` остаётся единственным transport-путём в существующий PlayerManager/TrackScheduler.
+- Первый внешний candidate generator — Last.fm `track.getSimilar` через Java `HttpClient`. Он опционален: без `LASTFM_API_KEY`, при timeout или пустом ответе radio безопасно откатывается к локальному fallback и не ломает playback.
+- Discovery novelty фильтрует provider-independent identity `artist + title` по retained guild history, personal history/favorites владельца personal-radio и последним radio-трекам. Благодаря этому новый provider ID/YouTube URL не позволяет уже знакомой песне маскироваться под новую.
+- Добавлен artist cooldown последних 3 radio-исполнителей. Ranker сочетает similarity, novelty и diversity; `similar` допускает знакомый трек со штрафом, а `discovery` hard-reject-ит known/recent tracks.
+- Добавлен `/radio why`: показывает стратегию, provider, seed и человекочитаемую причину последней рекомендации. `/radio status` также показывает strategy/provider/reason.
+- Delivery получает optional GitHub secret `LASTFM_API_KEY` и bounded настройки `LASTFM_API_BASE_URL`, `DISCORD_BOT_DISCOVERY_REQUEST_TIMEOUT` (default `3s`) и `DISCORD_BOT_DISCOVERY_CANDIDATE_LIMIT` (default `25`). API key не пишется в logs/diagnostics и не попадает в recommendation records.
+- Radio state по-прежнему ephemeral, human-first `activityVersion` guard сохранён, refill остаётся строго по одному треку, а три подряд failure выключают autoplay.
+
 ## [1.13.0] — 2026-08-09
 
 ### Smart Radio & Autoplay

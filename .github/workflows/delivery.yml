@@ -320,6 +320,10 @@ jobs:
           BOT_VOICE_LOG_LEVEL: ${{ vars.DISCORD_BOT_VOICE_LOG_LEVEL }}
           BOT_MUSIC_DEFAULT_VOLUME: ${{ vars.DISCORD_BOT_MUSIC_DEFAULT_VOLUME }}
           BOT_MUSIC_MAX_VOLUME: ${{ vars.DISCORD_BOT_MUSIC_MAX_VOLUME }}
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_API_BASE_URL: ${{ vars.LASTFM_API_BASE_URL }}
+          BOT_DISCOVERY_REQUEST_TIMEOUT: ${{ vars.DISCORD_BOT_DISCOVERY_REQUEST_TIMEOUT }}
+          BOT_DISCOVERY_CANDIDATE_LIMIT: ${{ vars.DISCORD_BOT_DISCOVERY_CANDIDATE_LIMIT }}
         run: |
           set -Eeuo pipefail
           deploy_dir="${DEPLOY_DIR:-${{ needs.context.outputs.default_deploy_dir }}}"
@@ -350,6 +354,9 @@ jobs:
           voice_log_level="${BOT_VOICE_LOG_LEVEL:-DEBUG}"
           default_volume="${BOT_MUSIC_DEFAULT_VOLUME:-100}"
           max_volume="${BOT_MUSIC_MAX_VOLUME:-150}"
+          lastfm_api_base_url="${LASTFM_API_BASE_URL:-https://ws.audioscrobbler.com/2.0/}"
+          discovery_request_timeout="${BOT_DISCOVERY_REQUEST_TIMEOUT:-3s}"
+          discovery_candidate_limit="${BOT_DISCOVERY_CANDIDATE_LIMIT:-25}"
 
           encode() {
             printf '%s' "$1" | base64 -w 0
@@ -383,6 +390,10 @@ jobs:
             printf 'DISCORD_BOT_VOICE_LOG_LEVEL_B64=%s\n' "$(encode "${voice_log_level}")"
             printf 'DISCORD_BOT_MUSIC_DEFAULT_VOLUME_B64=%s\n' "$(encode "${default_volume}")"
             printf 'DISCORD_BOT_MUSIC_MAX_VOLUME_B64=%s\n' "$(encode "${max_volume}")"
+            printf 'LASTFM_API_KEY_B64=%s\n' "$(encode "${LASTFM_API_KEY}")"
+            printf 'LASTFM_API_BASE_URL_B64=%s\n' "$(encode "${lastfm_api_base_url}")"
+            printf 'DISCORD_BOT_DISCOVERY_REQUEST_TIMEOUT_B64=%s\n' "$(encode "${discovery_request_timeout}")"
+            printf 'DISCORD_BOT_DISCOVERY_CANDIDATE_LIMIT_B64=%s\n' "$(encode "${discovery_candidate_limit}")"
           } | ssh -i "${BASKOV_SSH_KEY}" -o UserKnownHostsFile="${BASKOV_KNOWN_HOSTS}" -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "umask 077; cat > '${deploy_dir}/.deploy-input'"
 

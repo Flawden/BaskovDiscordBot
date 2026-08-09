@@ -32,6 +32,8 @@ class SmartRadioAutoplayContractTest {
         assertTrue(player.contains("musicLibraryRepository.personalHistory"));
         assertTrue(player.contains("musicLibraryRepository.history"));
         assertTrue(player.contains("recentTrackKeys"));
+        assertTrue(player.contains("knownTrackIdentities"));
+        assertTrue(player.contains("recentArtists"));
         assertTrue(insights.contains("discoverySeeds"));
     }
 
