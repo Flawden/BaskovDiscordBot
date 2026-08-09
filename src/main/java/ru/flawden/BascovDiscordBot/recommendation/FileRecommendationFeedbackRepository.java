@@ -39,6 +39,7 @@ public class FileRecommendationFeedbackRepository implements RecommendationFeedb
     private final Path file;
     private final Object mutationLock = new Object();
     private final Map<Long, Map<Long, List<RecommendationFeedbackEntry>>> entries = new LinkedHashMap<>();
+    private long latestRecommendedAtEpochMillis;
 
     public FileRecommendationFeedbackRepository(RecommendationFeedbackProperties properties) {
         this.file = properties.getFile().toAbsolutePath().normalize();
@@ -48,6 +49,7 @@ public class FileRecommendationFeedbackRepository implements RecommendationFeedb
     public void load() {
         synchronized (mutationLock) {
             entries.clear();
+            latestRecommendedAtEpochMillis = 0L;
             if (Files.notExists(file)) {
                 log.info("Recommendation feedback storage will be created on first recommendation: {}", file);
                 return;
@@ -94,7 +96,7 @@ public class FileRecommendationFeedbackRepository implements RecommendationFeedb
             Map<Long, List<RecommendationFeedbackEntry>> guild = entries.computeIfAbsent(
                     entry.guildId(), ignored -> new LinkedHashMap<>());
             ArrayList<RecommendationFeedbackEntry> user = new ArrayList<>(guild.getOrDefault(entry.userId(), List.of()));
-            RecommendationFeedbackEntry normalized = entry;
+            RecommendationFeedbackEntry normalized = normalizeRecommendationTimestamp(entry);
             user.add(0, normalized);
             while (user.size() > MAX_ENTRIES_PER_USER) {
                 user.remove(user.size() - 1);
@@ -199,6 +201,38 @@ public class FileRecommendationFeedbackRepository implements RecommendationFeedb
         return Optional.of(updated);
     }
 
+    private RecommendationFeedbackEntry normalizeRecommendationTimestamp(RecommendationFeedbackEntry entry) {
+        long requested = entry.recommendedAtEpochMillis();
+        long minimumNext = latestRecommendedAtEpochMillis == Long.MAX_VALUE
+                ? Long.MAX_VALUE
+                : latestRecommendedAtEpochMillis + 1L;
+        long normalizedTimestamp = Math.max(requested, minimumNext);
+        latestRecommendedAtEpochMillis = normalizedTimestamp;
+        if (normalizedTimestamp == requested) {
+            return entry;
+        }
+        return new RecommendationFeedbackEntry(
+                entry.id(),
+                entry.guildId(),
+                entry.userId(),
+                entry.seedArtist(),
+                entry.seedTitle(),
+                entry.trackArtist(),
+                entry.trackTitle(),
+                entry.trackIdentity(),
+                entry.tags(),
+                entry.strategy(),
+                entry.provider(),
+                entry.similarity(),
+                normalizedTimestamp,
+                entry.lastOutcome(),
+                entry.lastOutcomeAtEpochMillis(),
+                entry.positiveSignals(),
+                entry.negativeSignals(),
+                entry.signalScore(),
+                entry.lastCompletionRatio());
+    }
+
     private void loadLine(String line, boolean legacyV1) {
         String[] columns = line.split("\t", -1);
         int expected = legacyV1 ? 19 : 20;
@@ -227,6 +261,9 @@ public class FileRecommendationFeedbackRepository implements RecommendationFeedb
                 nonNegativeInt(columns[16 + offset], "negativeSignals"),
                 Double.parseDouble(columns[17 + offset]),
                 Double.parseDouble(columns[18 + offset]));
+        latestRecommendedAtEpochMillis = Math.max(
+                latestRecommendedAtEpochMillis,
+                entry.recommendedAtEpochMillis());
         Map<Long, List<RecommendationFeedbackEntry>> guild = entries.computeIfAbsent(
                 entry.guildId(), ignored -> new LinkedHashMap<>());
         ArrayList<RecommendationFeedbackEntry> user = new ArrayList<>(guild.getOrDefault(entry.userId(), List.of()));
