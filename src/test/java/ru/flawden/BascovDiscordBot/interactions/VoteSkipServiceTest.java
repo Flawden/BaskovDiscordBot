@@ -56,4 +56,33 @@ class VoteSkipServiceTest {
 
         assertFalse(service.hasActiveSession(77L));
     }
+    @Test
+    void snapshotReadsProgressWithoutCastingAnotherVote() {
+        VoteSkipService service = new VoteSkipService();
+        service.vote(10L, "track-a", 1L, 4, 75);
+
+        var snapshot = service.snapshot(10L, "track-a", 1L, 4, 75);
+        var after = service.snapshot(10L, "track-a", 2L, 4, 75);
+
+        assertEquals(1, snapshot.votes());
+        assertEquals(3, snapshot.requiredVotes());
+        assertEquals(4, snapshot.eligibleListeners());
+        assertEquals(75, snapshot.thresholdPercent());
+        assertTrue(snapshot.viewerVoted());
+        assertFalse(after.viewerVoted());
+        assertEquals(1, after.votes());
+    }
+
+    @Test
+    void snapshotIgnoresVotesFromDifferentPlaybackKey() {
+        VoteSkipService service = new VoteSkipService();
+        service.vote(10L, "track-a", 1L, 4, 75);
+
+        var snapshot = service.snapshot(10L, "track-b", 1L, 4, 75);
+
+        assertEquals(0, snapshot.votes());
+        assertFalse(snapshot.viewerVoted());
+        assertEquals(3, snapshot.requiredVotes());
+    }
+
 }

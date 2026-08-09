@@ -441,6 +441,31 @@ public class TrackScheduler extends AudioEventAdapter {
         }
     }
 
+    public QueueMutationResult removeRequesterAt(
+            long requesterUserId,
+            int oneBasedPosition,
+            OptionalLong expectedRevision) {
+        synchronized (mutationLock) {
+            QueueMutationResult stale = staleRevisionResult(expectedRevision);
+            if (stale != null) {
+                return stale;
+            }
+            if (requesterUserId <= 0L || oneBasedPosition < 1 || oneBasedPosition > queue.size()) {
+                return mutationResult(QueueMutationStatus.INVALID_ARGUMENT, List.of());
+            }
+            List<TrackRequest> tracks = new ArrayList<>(queue);
+            TrackRequest candidate = tracks.get(oneBasedPosition - 1);
+            if (candidate.requester().userId() != requesterUserId) {
+                return mutationResult(QueueMutationStatus.NOT_OWNER, List.of());
+            }
+            TrackRequest removed = tracks.remove(oneBasedPosition - 1);
+            replaceQueueLocked(tracks);
+            markQueueMutationLocked();
+            onActivity.run();
+            return mutationResult(QueueMutationStatus.APPLIED, List.of(removed));
+        }
+    }
+
     public QueueMutationResult removeRequester(
             long requesterUserId,
             OptionalLong expectedRevision) {
@@ -749,7 +774,8 @@ public class TrackScheduler extends AudioEventAdapter {
         APPLIED,
         NO_CHANGES,
         STALE_REVISION,
-        INVALID_ARGUMENT
+        INVALID_ARGUMENT,
+        NOT_OWNER
     }
 
     public record QueueSnapshot(

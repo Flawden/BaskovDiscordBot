@@ -26,6 +26,9 @@ public final class MusicControls {
     public static final String SEEK_BACKWARD = "baskov:music:seek:-15";
     public static final String SEEK_FORWARD = "baskov:music:seek:+15";
     public static final String REFRESH = "baskov:music:refresh";
+    public static final String QUEUE_MINE = "baskov:queue:mine";
+    public static final String QUEUE_COMMUNITY = "baskov:queue:community";
+    public static final String VOTE_STATUS = "baskov:music:vote-status";
     private static final String QUEUE_PAGE_PREFIX = "baskov:queue:page:";
     private static final String SEARCH_PICK_PREFIX = "baskov:search:pick:";
     private static final String SEARCH_CANCEL_PREFIX = "baskov:search:cancel:";
@@ -88,8 +91,12 @@ public final class MusicControls {
         List<ActionRow> controls = rows();
         boolean hasPrevious = page > 1;
         boolean hasNext = page < totalPages;
+        ActionRow collaboration = ActionRow.of(
+                Button.secondary(QUEUE_MINE, "👤 Мои треки"),
+                Button.secondary(QUEUE_COMMUNITY, "👥 Заказчики"),
+                Button.secondary(VOTE_STATUS, "🗳️ Vote skip"));
         if (!hasPrevious && !hasNext) {
-            return controls;
+            return List.of(controls.get(0), collaboration);
         }
 
         ActionRow navigation;
@@ -104,7 +111,7 @@ public final class MusicControls {
             navigation = ActionRow.of(
                     Button.secondary(queuePageId(page + 1), "Вперёд ▶"));
         }
-        return List.of(controls.get(0), navigation);
+        return List.of(controls.get(0), collaboration, navigation);
     }
 
     public static List<ActionRow> searchRows(String token, int candidateCount) {
@@ -201,6 +208,9 @@ public final class MusicControls {
                 || SEEK_BACKWARD.equals(componentId)
                 || SEEK_FORWARD.equals(componentId)
                 || REFRESH.equals(componentId)
+                || QUEUE_MINE.equals(componentId)
+                || QUEUE_COMMUNITY.equals(componentId)
+                || VOTE_STATUS.equals(componentId)
                 || queuePage(componentId).isPresent()
                 || searchAction(componentId).isPresent();
     }

@@ -6,6 +6,17 @@
 
 ## [Unreleased]
 
+## [1.9.0] — 2026-08-09
+
+### Queue Collaboration & Social UX
+
+- `/queue-manage mine` показывает только ожидающие треки текущего пользователя, сохраняя глобальные позиции из `/queue`, длительность его части очереди и текущую queue revision.
+- `/queue-manage remove-own position:<n> [revision]` позволяет обычному requester-у удалить один собственный ожидающий трек без DJ-прав. Чужая позиция возвращает ownership error; stale revision проверяется до ownership и не меняет очередь. Старые privileged `/remove`, `/move`, `remove-range` и `dedupe` остаются под существующей control policy.
+- `/queue-manage community` строит локальную requester-aware сводку: число треков, длительность и глобальные позиции каждого участника, отсортированные по вкладу в очередь. Никакой дополнительной persistence или профилирования пользователей не добавлено.
+- В `/queue` появились кнопки `👤 Мои треки`, `👥 Заказчики` и `🗳️ Vote skip`; они читают live queue state и не мутируют очередь. Pagination остаётся отдельным рядом и продолжает использовать текущие позиции/revision.
+- `VoteSkipService` получил read-only snapshot текущего голосования: голоса, вычисленный порог, число eligible listeners и признак, голосовал ли текущий пользователь. Просмотр статуса не добавляет голос; `/skip`, `/voteskip` и кнопка skip сохраняют прежнюю policy.
+- Добавлен чистый `QueueCollaboration` projection поверх `TrackRequest`; requester identity уже существовала в очереди, поэтому storage/session форматы и recovery snapshot не меняются.
+
 ## [1.8.0] — 2026-08-09
 
 ### Listening History & Personal Discovery

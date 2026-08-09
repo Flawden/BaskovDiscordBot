@@ -252,16 +252,21 @@ public final class ModernCommandCatalog {
                         .addOption(OptionType.INTEGER, "from", "Текущая позиция", true)
                         .addOption(OptionType.INTEGER, "to", "Новая позиция", true),
                 Commands.slash("clear", "Очищает ожидающие треки, не останавливая текущий"),
-                Commands.slash("queue-manage", "Расширенное управление ожидающей очередью")
+                Commands.slash("queue-manage", "Совместная очередь и безопасное управление своими треками")
                         .addSubcommands(
                                 new SubcommandData("stats", "Показывает ревизию и сводку очереди"),
+                                new SubcommandData("mine", "Показывает только твои ожидающие треки и глобальные позиции"),
+                                new SubcommandData("community", "Показывает вклад заказчиков в текущую очередь"),
+                                new SubcommandData("remove-own", "Удаляет один твой трек по глобальной позиции")
+                                        .addOption(OptionType.INTEGER, "position", "Позиция из /queue или /queue-manage mine", true)
+                                        .addOption(OptionType.INTEGER, "revision", "Ревизия из /queue; защищает от устаревших позиций", false),
                                 new SubcommandData("remove-range", "Удаляет непрерывный диапазон позиций")
                                         .addOption(OptionType.INTEGER, "start", "Первая позиция диапазона", true)
                                         .addOption(OptionType.INTEGER, "end", "Последняя позиция диапазона", true)
                                         .addOption(OptionType.INTEGER, "revision", "Ревизия из /queue; защищает от устаревших позиций", false),
                                 new SubcommandData("dedupe", "Удаляет повторные копии ожидающих треков")
                                         .addOption(OptionType.INTEGER, "revision", "Ревизия из /queue; защищает от устаревших позиций", false),
-                                new SubcommandData("remove-mine", "Удаляет только твои ожидающие треки")
+                                new SubcommandData("remove-mine", "Удаляет все твои ожидающие треки")
                                         .addOption(OptionType.INTEGER, "revision", "Ревизия из /queue; защищает от устаревших позиций", false)),
                 Commands.slash("settings", "Показывает и изменяет постоянные настройки сервера")
                         .addSubcommands(

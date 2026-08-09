@@ -21,6 +21,9 @@ class QueueManagement2ContractTest {
         assertTrue(catalog.contains("new SubcommandData(\"remove-range\""));
         assertTrue(catalog.contains("new SubcommandData(\"dedupe\""));
         assertTrue(catalog.contains("new SubcommandData(\"remove-mine\""));
+        assertTrue(catalog.contains("new SubcommandData(\"remove-own\""));
+        assertTrue(catalog.contains("new SubcommandData(\"mine\""));
+        assertTrue(catalog.contains("new SubcommandData(\"community\""));
         assertTrue(catalog.contains("Commands.slash(\"remove\""));
         assertTrue(catalog.contains("Commands.slash(\"move\""));
         assertTrue(catalog.contains("Commands.slash(\"clear\""));
@@ -36,6 +39,8 @@ class QueueManagement2ContractTest {
         assertTrue(scheduler.contains("removeRange("));
         assertTrue(scheduler.contains("deduplicateQueue("));
         assertTrue(scheduler.contains("removeRequester("));
+        assertTrue(scheduler.contains("removeRequesterAt("));
+        assertTrue(scheduler.contains("QueueMutationStatus.NOT_OWNER"));
         assertTrue(scheduler.contains("synchronized (mutationLock)"));
     }
 

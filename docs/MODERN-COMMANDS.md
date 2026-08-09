@@ -29,7 +29,7 @@
 | `/remove position` | Удаляет трек по номеру |
 | `/move from to` | Перемещает трек в очереди |
 | `/clear` | Очищает ожидание, не останавливая текущий трек |
-| `/queue-manage ...` | Сводка ревизии, batch remove-range, dedupe и удаление собственных ожидающих треков |
+| `/queue-manage ...` | `stats`, `mine`, `community`, ownership-safe `remove-own`, batch remove-range/dedupe и `remove-mine` |
 | `/settings ...` | Guild administration: playback/request access, DJ/manager roles, voice restriction, profiles, audit и reset |
 | `/help` | Показывает краткую помощь |
 | `/version` | Показывает версию production-сборки |
@@ -62,7 +62,7 @@
 Кнопки, меняющие состояние плеера, используют ту же `MusicControlPolicy`, что и текстовые команды. В режиме `vote` кнопка `Следующий` создаёт голос обычного слушателя, а для DJ остаётся прямым skip.
 
 Результаты `/search` показываются ephemeral-сообщением. Кнопки 1–5 привязаны к автору и серверу, живут пять минут и после выбора становятся недействительными. Выбранный уже загруженный `AudioTrack` ставится в очередь без второго запроса к YouTube.
-Кнопка очереди является read-only и доступна всем участникам сервера. `/queue-manage stats` также read-only; mutating операции Queue Manager поддерживают optional revision guard от устаревших позиций.
+Кнопка очереди является read-only и доступна всем участникам сервера. В `v1.9.0` очередь также даёт кнопки `👤 Мои треки`, `👥 Заказчики` и `🗳️ Vote skip`: первые две читают requester-aware projection текущей waiting queue, третья показывает состояние голосования без добавления голоса. `/queue-manage stats|mine|community` read-only; mutating операции Queue Manager поддерживают optional revision guard от устаревших позиций.
 
 ## Совместимость
 
@@ -98,3 +98,8 @@ DJ-роли и голосование описаны в [`DJ-ROLES-AND-VOTING.md
 ## Favorites & Personal Library 1.7
 
 `/favorites` хранит до 100 личных треков на пользователя и сервер в существующем `music-library.tsv`. `add` сохраняет текущий replayable track, `play`/`play-all` используют обычную voice/request policy, `search` возвращает исходные позиции, а `clear` защищён одноразовым confirmation UI. Favorites также участвуют в локальном autocomplete `/play` и `/search` перед общей history/playlists.
+
+
+## Queue Collaboration & Social UX 1.9
+
+`/queue-manage mine` показывает собственные ожидающие треки с глобальными позициями, а `remove-own` удаляет только позицию, requester user ID которой совпадает с автором команды. Чужой трек этим путём удалить нельзя. `/queue-manage community` агрегирует только live waiting queue и не создаёт persistent social profile. Подробности — в [`QUEUE-COLLABORATION.md`](QUEUE-COLLABORATION.md).

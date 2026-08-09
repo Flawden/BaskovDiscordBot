@@ -194,6 +194,62 @@ class TrackSchedulerTest {
     }
 
     @Test
+    void requesterCanRemoveOneOwnedTrackByGlobalPosition() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        TrackScheduler scheduler = new TrackScheduler(
+                player, 10, Duration.ofHours(4), () -> { }, () -> { });
+        AudioTrack mine = trackWithIdentifier("Mine", "mine", Duration.ofMinutes(1));
+        AudioTrack other = trackWithIdentifier("Other", "other", Duration.ofMinutes(2));
+        when(player.startTrack(mine, true)).thenReturn(false);
+        when(player.startTrack(other, true)).thenReturn(false);
+        scheduler.queue(mine, new TrackRequester(42L, "Me"));
+        scheduler.queue(other, new TrackRequester(7L, "Other"));
+        long revision = scheduler.queueRevision();
+
+        TrackScheduler.QueueMutationResult result = scheduler.removeRequesterAt(
+                42L, 1, OptionalLong.of(revision));
+
+        assertEquals(TrackScheduler.QueueMutationStatus.APPLIED, result.status());
+        assertEquals(1, result.removedCount());
+        assertEquals(List.of(other), scheduler.queuedTracks());
+        assertEquals(revision + 1L, result.revision());
+    }
+
+    @Test
+    void requesterCannotRemoveAnotherUsersTrack() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        TrackScheduler scheduler = new TrackScheduler(
+                player, 10, Duration.ofHours(4), () -> { }, () -> { });
+        AudioTrack other = trackWithIdentifier("Other", "other", Duration.ofMinutes(2));
+        when(player.startTrack(other, true)).thenReturn(false);
+        scheduler.queue(other, new TrackRequester(7L, "Other"));
+        long revision = scheduler.queueRevision();
+
+        TrackScheduler.QueueMutationResult result = scheduler.removeRequesterAt(
+                42L, 1, OptionalLong.of(revision));
+
+        assertEquals(TrackScheduler.QueueMutationStatus.NOT_OWNER, result.status());
+        assertEquals(List.of(other), scheduler.queuedTracks());
+        assertEquals(revision, result.revision());
+    }
+
+    @Test
+    void staleRevisionWinsBeforeOwnershipCheck() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        TrackScheduler scheduler = new TrackScheduler(
+                player, 10, Duration.ofHours(4), () -> { }, () -> { });
+        AudioTrack other = trackWithIdentifier("Other", "other", Duration.ofMinutes(2));
+        when(player.startTrack(other, true)).thenReturn(false);
+        scheduler.queue(other, new TrackRequester(7L, "Other"));
+
+        TrackScheduler.QueueMutationResult result = scheduler.removeRequesterAt(
+                42L, 1, OptionalLong.of(0L));
+
+        assertEquals(TrackScheduler.QueueMutationStatus.STALE_REVISION, result.status());
+        assertEquals(List.of(other), scheduler.queuedTracks());
+    }
+
+    @Test
     void repeatsFinishedTrackInTrackMode() {
         AudioPlayer player = mock(AudioPlayer.class);
         TrackScheduler scheduler = new TrackScheduler(

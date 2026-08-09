@@ -72,13 +72,14 @@ class ModernCommandCatalogTest {
     @Test
     void queueManagerExposesStatsAndSafeBatchMutations() {
         SlashCommandData queueManager = command("queue-manage");
-        assertEquals(Set.of("stats", "remove-range", "dedupe", "remove-mine"),
+        assertEquals(Set.of("stats", "mine", "community", "remove-own", "remove-range", "dedupe", "remove-mine"),
                 queueManager.getSubcommands().stream()
                         .map(subcommand -> subcommand.getName())
                         .collect(Collectors.toSet()));
 
         assertTrue(queueManager.getSubcommands().stream()
-                .filter(subcommand -> !"stats".equals(subcommand.getName()))
+                .filter(subcommand -> Set.of("remove-own", "remove-range", "dedupe", "remove-mine")
+                        .contains(subcommand.getName()))
                 .flatMap(subcommand -> subcommand.getOptions().stream())
                 .anyMatch(option -> option.getName().equals("revision")));
     }

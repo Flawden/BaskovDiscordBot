@@ -62,6 +62,39 @@ public class VoteSkipService {
         return holder.result;
     }
 
+    public VoteSnapshot snapshot(
+            long guildId,
+            String playbackKey,
+            long viewerUserId,
+            int eligibleListeners,
+            int thresholdPercent) {
+        if (guildId <= 0 || eligibleListeners < 1) {
+            throw new IllegalArgumentException("guildId and eligibleListeners must be positive");
+        }
+        if (thresholdPercent < 1 || thresholdPercent > 100) {
+            throw new IllegalArgumentException("thresholdPercent must be between 1 and 100");
+        }
+        String normalizedKey = Objects.requireNonNull(playbackKey, "playbackKey").trim();
+        if (normalizedKey.isEmpty()) {
+            throw new IllegalArgumentException("playbackKey cannot be blank");
+        }
+        cleanupExpired();
+        VoteSession session = sessions.get(guildId);
+        int votes = session != null && session.playbackKey.equals(normalizedKey)
+                ? session.voterUserIds.size()
+                : 0;
+        boolean viewerVoted = viewerUserId > 0L
+                && session != null
+                && session.playbackKey.equals(normalizedKey)
+                && session.voterUserIds.contains(viewerUserId);
+        return new VoteSnapshot(
+                votes,
+                requiredVotes(eligibleListeners, thresholdPercent),
+                eligibleListeners,
+                thresholdPercent,
+                viewerVoted);
+    }
+
     public void reset(long guildId) {
         if (guildId > 0) {
             sessions.remove(guildId);
@@ -107,6 +140,14 @@ public class VoteSkipService {
             int votes,
             int requiredVotes,
             int eligibleListeners) {
+    }
+
+    public record VoteSnapshot(
+            int votes,
+            int requiredVotes,
+            int eligibleListeners,
+            int thresholdPercent,
+            boolean viewerVoted) {
     }
 
     private static final class VoteSession {

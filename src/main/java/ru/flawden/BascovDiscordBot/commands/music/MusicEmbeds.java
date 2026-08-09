@@ -9,6 +9,7 @@ import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.BatchMusicLoadResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.MusicLoadResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlaybackReadinessResult;
+import ru.flawden.BascovDiscordBot.lavaplayer.QueueCollaboration;
 import ru.flawden.BascovDiscordBot.lavaplayer.QueuePage;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackScheduler;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
@@ -607,6 +608,70 @@ public final class MusicEmbeds {
     }
 
     public record QueueView(MessageEmbed embed, int page, int totalPages) {
+    }
+
+
+    public static MessageEmbed personalQueue(GuildMusicManager musicManager, long userId) {
+        TrackScheduler.QueueSnapshot snapshot = musicManager == null
+                ? new TrackScheduler.QueueSnapshot(0L, List.of(), 0L, 0, 0)
+                : musicManager.getScheduler().queueSnapshot();
+        QueueCollaboration.Summary summary = QueueCollaboration.summarize(snapshot.requests(), userId);
+        if (summary.ownedTracks().isEmpty()) {
+            return success(
+                    "👤 Твоя очередь пуста",
+                    "У тебя нет ожидающих треков. Общая очередь: `" + summary.totalTracks()
+                            + "` • ревизия `" + snapshot.revision() + "`.");
+        }
+
+        StringBuilder description = new StringBuilder();
+        for (QueueCollaboration.OwnedTrack item : summary.ownedTracks()) {
+            AudioTrack track = item.request().track();
+            description.append(item.globalPosition()).append(". `")
+                    .append(shorten(track.getInfo().title)).append("` — ")
+                    .append(formatTime(track.getDuration())).append(" • ")
+                    .append(providerLabel(track)).append('\n');
+        }
+        description.append("\n**Твоих треков:** `").append(summary.ownedTracks().size()).append("` из `")
+                .append(summary.totalTracks()).append("`\n")
+                .append("**Твоя длительность:** `").append(humanMillis(summary.ownDurationMillis())).append("`\n")
+                .append("**Ревизия:** `").append(snapshot.revision()).append("`\n\n")
+                .append("Удалить один свой трек: `/queue-manage remove-own position:<n> revision:")
+                .append(snapshot.revision()).append("`.");
+        return new EmbedBuilder()
+                .setTitle("👤 Твои треки в общей очереди")
+                .setDescription(description.toString())
+                .setColor(Color.CYAN)
+                .build();
+    }
+
+    public static MessageEmbed queueCommunity(GuildMusicManager musicManager) {
+        TrackScheduler.QueueSnapshot snapshot = musicManager == null
+                ? new TrackScheduler.QueueSnapshot(0L, List.of(), 0L, 0, 0)
+                : musicManager.getScheduler().queueSnapshot();
+        QueueCollaboration.Summary summary = QueueCollaboration.summarize(snapshot.requests(), 0L);
+        if (summary.contributors().isEmpty()) {
+            return success("👥 Заказчиков пока нет", "Ожидающая очередь пуста. Ревизия: `" + snapshot.revision() + "`.");
+        }
+
+        StringBuilder description = new StringBuilder();
+        int rank = 1;
+        for (QueueCollaboration.Contributor contributor : summary.contributors().stream().limit(10).toList()) {
+            description.append(rank++).append(". ").append(contributor.discordLabel())
+                    .append(" — `").append(contributor.trackCount()).append("` трек(а), `")
+                    .append(humanMillis(contributor.durationMillis())).append("`\n")
+                    .append("   позиции: `")
+                    .append(contributor.positions().stream().map(String::valueOf)
+                            .collect(java.util.stream.Collectors.joining(", ")))
+                    .append("`\n");
+        }
+        description.append("\n**Всего:** `").append(summary.totalTracks()).append("` треков • `")
+                .append(humanMillis(summary.totalDurationMillis())).append("` • ревизия `")
+                .append(snapshot.revision()).append("`.");
+        return new EmbedBuilder()
+                .setTitle("👥 Кто наполняет очередь")
+                .setDescription(description.toString())
+                .setColor(Color.CYAN)
+                .build();
     }
 
     public static MessageEmbed queueStats(GuildMusicManager musicManager) {

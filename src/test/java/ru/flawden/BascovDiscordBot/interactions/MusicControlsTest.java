@@ -30,10 +30,24 @@ class MusicControlsTest {
 
     @Test
     void paginationRowAppearsOnlyWhenNavigationIsPossible() {
-        assertEquals(1, MusicControls.queueRows(1, 1).size());
-        assertEquals(2, MusicControls.queueRows(1, 3).size());
-        assertEquals(2, MusicControls.queueRows(2, 3).size());
-        assertEquals(2, MusicControls.queueRows(3, 3).size());
+        assertEquals(2, MusicControls.queueRows(1, 1).size());
+        assertEquals(3, MusicControls.queueRows(1, 3).size());
+        assertEquals(3, MusicControls.queueRows(2, 3).size());
+        assertEquals(3, MusicControls.queueRows(3, 3).size());
+    }
+
+    @Test
+    void queueControlsExposeCollaborationAndVoteStatus() {
+        List<Button> buttons = MusicControls.queueRows(1, 1).stream()
+                .flatMap(row -> row.getButtons().stream())
+                .toList();
+
+        assertFalse(button(buttons, MusicControls.QUEUE_MINE).isDisabled());
+        assertFalse(button(buttons, MusicControls.QUEUE_COMMUNITY).isDisabled());
+        assertFalse(button(buttons, MusicControls.VOTE_STATUS).isDisabled());
+        assertTrue(MusicControls.supports(MusicControls.QUEUE_MINE));
+        assertTrue(MusicControls.supports(MusicControls.QUEUE_COMMUNITY));
+        assertTrue(MusicControls.supports(MusicControls.VOTE_STATUS));
     }
 
     @Test

@@ -543,6 +543,27 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
+        if (MusicControls.QUEUE_MINE.equals(event.getComponentId())) {
+            GuildMusicManager manager = playerManager.findMusicManager(guild).orElse(null);
+            event.replyEmbeds(MusicEmbeds.personalQueue(manager, event.getUser().getIdLong()))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        if (MusicControls.QUEUE_COMMUNITY.equals(event.getComponentId())) {
+            GuildMusicManager manager = playerManager.findMusicManager(guild).orElse(null);
+            event.replyEmbeds(MusicEmbeds.queueCommunity(manager))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        if (MusicControls.VOTE_STATUS.equals(event.getComponentId())) {
+            replyVoteStatus(event, guild, member);
+            return;
+        }
+
         if (MusicControls.REFRESH.equals(event.getComponentId())) {
             GuildMusicManager manager = playerManager.findMusicManager(guild).orElse(null);
             event.editMessageEmbeds(MusicEmbeds.nowPlaying(manager))
@@ -1836,6 +1857,44 @@ public class ModernInteractions extends ListenerAdapter {
         return identifier + "#" + Integer.toUnsignedString(System.identityHashCode(track));
     }
 
+    private void replyVoteStatus(ButtonInteractionEvent event, Guild guild, Member member) {
+        GuildMusicManager manager = playerManager.findMusicManager(guild).orElse(null);
+        AudioTrack current = manager == null ? null : manager.getAudioPlayer().getPlayingTrack();
+        if (current == null) {
+            event.replyEmbeds(MusicEmbeds.error("🗳️ Голосования нет", "Сейчас ничего не играет."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        GuildPreferences preferences = preferencesRepository.get(guild.getIdLong());
+        if (preferences.accessMode() != PlaybackAccessMode.VOTE_SKIP) {
+            event.replyEmbeds(MusicEmbeds.success(
+                            "🗳️ Vote skip не требуется",
+                            "Режим управления сервером: `" + preferences.accessMode().label()
+                                    + "`. Голосование используется только в режиме `DJ + голосование за пропуск`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        int eligibleListeners = eligibleHumanListeners(guild);
+        VoteSkipService.VoteSnapshot snapshot = voteSkipService.snapshot(
+                guild.getIdLong(),
+                playbackVoteKey(current),
+                member.getIdLong(),
+                eligibleListeners,
+                preferences.voteSkipPercent());
+        int remaining = Math.max(0, snapshot.requiredVotes() - snapshot.votes());
+        String description = "Текущий трек: `" + current.getInfo().title + "`\n"
+                + "Голосов: `" + snapshot.votes() + "/" + snapshot.requiredVotes() + "`\n"
+                + "Слушателей: `" + snapshot.eligibleListeners() + "` • порог: `" + snapshot.thresholdPercent() + "%`\n"
+                + "Твой голос: `" + (snapshot.viewerVoted() ? "уже учтён" : "ещё не отдан") + "`\n"
+                + (remaining == 0 ? "Порог уже достигнут или не требует дополнительных голосов."
+                : "До порога осталось: `" + remaining + "`. Нажми `Пропустить` или используй `/voteskip`.");
+        event.replyEmbeds(MusicEmbeds.success("🗳️ Vote skip", description))
+                .setEphemeral(true)
+                .queue();
+    }
+
     private void stop(SlashCommandInteractionEvent event) {
         if (!allowControl(event)) {
             return;
@@ -2109,6 +2168,18 @@ public class ModernInteractions extends ListenerAdapter {
             event.replyEmbeds(MusicEmbeds.queueStats(manager)).setEphemeral(true).queue();
             return;
         }
+        if ("mine".equals(subcommand)) {
+            GuildMusicManager manager = playerManager.findMusicManager(event.getGuild()).orElse(null);
+            event.replyEmbeds(MusicEmbeds.personalQueue(manager, event.getUser().getIdLong()))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        if ("community".equals(subcommand)) {
+            GuildMusicManager manager = playerManager.findMusicManager(event.getGuild()).orElse(null);
+            event.replyEmbeds(MusicEmbeds.queueCommunity(manager)).setEphemeral(true).queue();
+            return;
+        }
 
         OptionalLong expectedRevision = queueRevisionOption(event);
         if (expectedRevision.isPresent() && expectedRevision.getAsLong() < 0L) {
@@ -2121,12 +2192,13 @@ public class ModernInteractions extends ListenerAdapter {
         }
 
         switch (subcommand) {
+            case "remove-own" -> removeOwnQueueEntry(event, expectedRevision);
             case "remove-range" -> removeQueueRange(event, expectedRevision);
             case "dedupe" -> deduplicateQueue(event, expectedRevision);
             case "remove-mine" -> removeOwnQueueEntries(event, expectedRevision);
             default -> event.replyEmbeds(MusicEmbeds.error(
                             "📋 Неизвестная операция",
-                            "Используй `/queue-manage stats`, `remove-range`, `dedupe` или `remove-mine`."))
+                            "Используй `/queue-manage stats|mine|community|remove-own|remove-range|dedupe|remove-mine`."))
                     .setEphemeral(true)
                     .queue();
         }
@@ -2204,6 +2276,50 @@ public class ModernInteractions extends ListenerAdapter {
                                 + MusicEmbeds.humanMillis(result.removedDurationMillis()) + "`\n"
                                 + "Осталось в очереди: `" + result.queueSize() + "`\n"
                                 + "Новая ревизия: `" + result.revision() + "`."))
+                .queue();
+    }
+
+    private void removeOwnQueueEntry(
+            SlashCommandInteractionEvent event,
+            OptionalLong expectedRevision) {
+        GuildMusicManager manager = playerManager.findMusicManager(event.getGuild()).orElse(null);
+        if (manager == null) {
+            event.replyEmbeds(MusicEmbeds.error("🎵 Музыкальной сессии нет", "Сейчас нет ожидающей очереди."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        long rawPosition = event.getOption("position", -1L, OptionMapping::getAsLong);
+        if (rawPosition < 1L || rawPosition > Integer.MAX_VALUE) {
+            event.replyEmbeds(MusicEmbeds.error("🗑️ Неверная позиция", "Укажи глобальную позицию из `/queue`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        TrackScheduler.QueueMutationResult result = manager.getScheduler().removeRequesterAt(
+                event.getUser().getIdLong(),
+                Math.toIntExact(rawPosition),
+                expectedRevision);
+        if (result.status() == TrackScheduler.QueueMutationStatus.NOT_OWNER) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🔐 Это чужой трек",
+                            "Без DJ/manager прав через `remove-own` можно удалить только трек, заказанный тобой. "
+                                    + "Открой `/queue-manage mine` для своих позиций."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        if (!replyQueueMutationFailure(event, result)) {
+            return;
+        }
+        TrackRequest removed = result.removed().get(0);
+        event.replyEmbeds(MusicEmbeds.success(
+                        "🗑️ Твой трек удалён",
+                        "Удалён `" + removed.track().getInfo().title + "`.\n"
+                                + "Осталось в очереди: `" + result.queueSize() + "`\n"
+                                + "Новая ревизия: `" + result.revision() + "`."))
+                .setEphemeral(true)
                 .queue();
     }
 
@@ -2950,8 +3066,9 @@ public class ModernInteractions extends ListenerAdapter {
                     .setTitle("📋 Очередь")
                     .setDescription("Просмотр и безопасное изменение ожидающих треков.")
                     .addField("Основное", "`/queue` `/remove` `/move` `/shuffle` `/clear`", false)
-                    .addField("Queue Manager", "`/queue-manage stats` `remove-range` `dedupe` `remove-mine`", false)
-                    .addField("Ревизии", "Batch-операции могут сверять revision, чтобы не удалить уже сдвинувшиеся позиции.", false)
+                    .addField("Queue Manager", "`stats` `mine` `community` `remove-own` `remove-range` `dedupe` `remove-mine`", false)
+                    .addField("Совместная очередь", "В `/queue` есть кнопки `Мои треки`, `Заказчики` и read-only статус vote-skip.", false)
+                    .addField("Ревизии", "Позиционные операции могут сверять revision, чтобы не удалить уже сдвинувшийся или чужой трек.", false)
                     .addField("Защита clear", "Непустая `/clear` теперь требует отдельной кнопки подтверждения; текущий трек не останавливается.", false);
             case LIBRARY -> embed
                     .setTitle("📚 Библиотека и discovery")
