@@ -61,6 +61,35 @@ class SmartDiscoveryEngineTest {
         }
     }
 
+    @Test
+    void selectionExplainsCollaborativeContribution() {
+        DiscoveryProperties properties = new DiscoveryProperties();
+        LastFmRecommendationProvider provider = new LastFmRecommendationProvider(properties);
+        CollaborativeSignalProvider collaborative = new CollaborativeSignalProvider() {
+            @Override public String name() { return "ListenBrainz"; }
+            @Override public boolean available() { return true; }
+            @Override public java.util.concurrent.CompletableFuture<CollaborativeArtistSignals> signalsFor(StoredTrack seed) {
+                return java.util.concurrent.CompletableFuture.completedFuture(
+                        new CollaborativeArtistSignals("ListenBrainz", java.util.Map.of("Fresh", 1.0d)));
+            }
+        };
+        try {
+            SmartDiscoveryEngine engine = new SmartDiscoveryEngine(
+                    provider, properties, new FeatureHashRecommendationEmbeddingProvider(), collaborative);
+            RecommendationCandidate candidate = new RecommendationCandidate("Fresh", "Song", 0.82, "Last.fm", "provider reason");
+            RecommendationPlan plan = engine.select(
+                    track("Seed", "Artist"),
+                    RadioStrategy.DISCOVERY,
+                    RecommendationContext.empty().withCollaborativeSignals(
+                            new CollaborativeArtistSignals("ListenBrainz", java.util.Map.of("Fresh", 1.0d))),
+                    List.of(candidate));
+            assertTrue(plan.candidate().reason().contains("collaborative"));
+            assertTrue(plan.candidate().reason().contains("ListenBrainz"));
+        } finally {
+            provider.close();
+        }
+    }
+
     private static StoredTrack track(String title, String artist) {
         return new StoredTrack(
                 title,

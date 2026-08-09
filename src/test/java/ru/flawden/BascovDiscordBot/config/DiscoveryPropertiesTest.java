@@ -23,7 +23,20 @@ class DiscoveryPropertiesTest {
     void rejectsUnsafeBaseUrlAndUnboundedValues() {
         DiscoveryProperties properties = new DiscoveryProperties();
         assertThrows(IllegalArgumentException.class, () -> properties.setLastfmBaseUrl(URI.create("http://example.test")));
+        assertThrows(IllegalArgumentException.class, () -> properties.setListenbrainzBaseUrl(URI.create("http://example.test")));
         assertThrows(IllegalArgumentException.class, () -> properties.setRequestTimeout(Duration.ofSeconds(30)));
         assertThrows(IllegalArgumentException.class, () -> properties.setCandidateLimit(101));
+        assertThrows(IllegalArgumentException.class, () -> properties.setCollaborativeArtistLimit(51));
+        assertThrows(IllegalArgumentException.class, () -> properties.setListenbrainzRadioMode("wild"));
+    }
+
+    @Test
+    void listenbrainzIsOptionalAndBecomesEnabledWithToken() {
+        DiscoveryProperties properties = new DiscoveryProperties();
+        assertFalse(properties.listenbrainzEnabled());
+        properties.setListenbrainzToken("token");
+        assertTrue(properties.listenbrainzEnabled());
+        properties.setListenbrainzRadioMode("hard");
+        assertTrue("hard".equals(properties.getListenbrainzRadioMode()));
     }
 }

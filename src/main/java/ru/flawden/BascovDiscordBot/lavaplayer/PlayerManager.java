@@ -245,6 +245,14 @@ public class PlayerManager {
         return removed == null ? RadioSnapshot.disabled() : removed.snapshot(false);
     }
 
+    public boolean collaborativeSignalsAvailable() {
+        return discoveryEngine.collaborativeAvailable();
+    }
+
+    public String collaborativeSignalProviderName() {
+        return discoveryEngine.collaborativeProviderName();
+    }
+
     public RadioSnapshot radioSnapshot(long guildId) {
         RadioState state = radioStates.get(guildId);
         return state == null ? RadioSnapshot.disabled() : state.snapshot(true);

@@ -91,8 +91,16 @@ public final class RecommendationRanker {
             case DISCOVERY -> 0.18d;
         } * tasteVector.confidence();
         double vectorContribution = vectorSimilarity * vectorWeight;
-        double finalScore = Math.max(-1.0d, Math.min(1.25d,
-                baseScore + personalContribution + vectorContribution + taste.explorationBonus()));
+        double collaborativeAffinity = context.collaborativeSignals().affinity(candidate.artist());
+        double collaborativeWeight = switch (strategy) {
+            case FAMILIAR -> 0.03d;
+            case SIMILAR -> 0.12d;
+            case DISCOVERY -> 0.16d;
+        };
+        double collaborativeContribution = collaborativeAffinity * collaborativeWeight;
+        double finalScore = Math.max(-1.0d, Math.min(1.30d,
+                baseScore + personalContribution + vectorContribution
+                        + collaborativeContribution + taste.explorationBonus()));
 
         return new ScoredCandidate(
                 candidate,
@@ -110,6 +118,9 @@ public final class RecommendationRanker {
                 vectorSimilarity,
                 vectorContribution,
                 tasteVector.confidence(),
+                collaborativeAffinity,
+                collaborativeContribution,
+                context.collaborativeSignals().source(),
                 embeddingProvider.name(),
                 embeddingProvider.dimensions());
     }
@@ -139,6 +150,9 @@ public final class RecommendationRanker {
                 0.0d,
                 0.0d,
                 tasteVector == null ? 0.0d : tasteVector.confidence(),
+                0.0d,
+                0.0d,
+                "none",
                 embeddingProvider == null ? "none" : embeddingProvider.name(),
                 embeddingProvider == null ? 0 : embeddingProvider.dimensions());
     }
@@ -159,6 +173,9 @@ public final class RecommendationRanker {
             double vectorSimilarity,
             double vectorContribution,
             double vectorConfidence,
+            double collaborativeAffinity,
+            double collaborativeContribution,
+            String collaborativeSource,
             String embeddingProvider,
             int embeddingDimensions) {
     }

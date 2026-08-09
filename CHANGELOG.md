@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [1.18.0] — 2026-08-09
+
+### Collaborative Signals & Hybrid Recommendation
+
+- Добавлен provider-neutral `CollaborativeSignalProvider` и optional `ListenBrainzCollaborativeProvider`: Last.fm по-прежнему генерирует track candidates, а ListenBrainz добавляет независимый collaborative artist signal через metadata lookup + LB radio artist graph.
+- `RecommendationRanker` учитывает bounded collaborative contribution поверх provider similarity, novelty/diversity, v1.16 personal affinity и v1.17 vector cosine. В `discovery` hard novelty/recent rejection выполняется раньше collaborative scoring и не может быть отменён внешним сигналом.
+- ListenBrainz интеграция fail-open: без `LISTENBRAINZ_TOKEN`, при timeout/HTTP/parse error или отсутствии MBID ranking продолжает работать на Last.fm + local personal/vector model. Provider не знает о LavaPlayer, queue или `ytsearch:`.
+- Добавлен bounded 30-minute in-memory cache collaborative signals (максимум 256 seed entries), log-normalized listen-count affinity и configurable `easy|medium|hard` LB radio mode.
+- `/radio model` показывает состояние collaborative provider, `/radio why` добавляет explainable `collaborative +N% via ListenBrainz`, когда сигнал materially влияет на результат.
+- Delivery получил optional `LISTENBRAINZ_TOKEN` и HTTPS/config vars; пустой token не блокирует deploy. Новых persistence-файлов и migration нет.
+- Добавлены unit/architecture regressions: optional config, URI/timeout bounds, nested LB payload parsing, near-tie collaborative reranking и запрет collaborative signal обходить discovery novelty или входить в playback transport.
+
 ## [1.17.0] — 2026-08-09
 
 ### Recommendation Model / Embeddings Foundation

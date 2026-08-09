@@ -20,19 +20,33 @@ public class SmartDiscoveryEngine {
     private final RecommendationProvider provider;
     private final DiscoveryProperties properties;
     private final RecommendationEmbeddingProvider embeddingProvider;
+    private final CollaborativeSignalProvider collaborativeProvider;
 
     @Autowired
     public SmartDiscoveryEngine(
             LastFmRecommendationProvider provider,
             DiscoveryProperties properties,
-            FeatureHashRecommendationEmbeddingProvider embeddingProvider) {
+            FeatureHashRecommendationEmbeddingProvider embeddingProvider,
+            ListenBrainzCollaborativeProvider collaborativeProvider) {
         this.provider = Objects.requireNonNull(provider, "provider");
         this.properties = Objects.requireNonNull(properties, "properties");
         this.embeddingProvider = Objects.requireNonNull(embeddingProvider, "embeddingProvider");
+        this.collaborativeProvider = Objects.requireNonNull(collaborativeProvider, "collaborativeProvider");
     }
 
     SmartDiscoveryEngine(LastFmRecommendationProvider provider, DiscoveryProperties properties) {
-        this(provider, properties, new FeatureHashRecommendationEmbeddingProvider());
+        this(provider, properties, new FeatureHashRecommendationEmbeddingProvider(), disabledCollaborativeProvider());
+    }
+
+    SmartDiscoveryEngine(
+            LastFmRecommendationProvider provider,
+            DiscoveryProperties properties,
+            RecommendationEmbeddingProvider embeddingProvider,
+            CollaborativeSignalProvider collaborativeProvider) {
+        this.provider = Objects.requireNonNull(provider, "provider");
+        this.properties = Objects.requireNonNull(properties, "properties");
+        this.embeddingProvider = Objects.requireNonNull(embeddingProvider, "embeddingProvider");
+        this.collaborativeProvider = Objects.requireNonNull(collaborativeProvider, "collaborativeProvider");
     }
 
     public boolean externalAvailable() {
@@ -41,6 +55,14 @@ public class SmartDiscoveryEngine {
 
     public String providerName() {
         return provider.name();
+    }
+
+    public boolean collaborativeAvailable() {
+        return collaborativeProvider.available();
+    }
+
+    public String collaborativeProviderName() {
+        return collaborativeProvider.name();
     }
 
     public CompletableFuture<RecommendationPlan> recommend(
@@ -57,9 +79,21 @@ public class SmartDiscoveryEngine {
                     "Внешний similarity-provider не настроен; локальный fallback из seed"));
         }
 
-        return provider.similarTracks(seed, properties.getCandidateLimit())
-                .thenApply(candidates -> select(seed, mode, context, candidates))
-                .thenCompose(plan -> enrichSelected(plan));
+        CompletableFuture<List<RecommendationCandidate>> candidatesFuture =
+                provider.similarTracks(seed, properties.getCandidateLimit());
+        CompletableFuture<CollaborativeArtistSignals> collaborativeFuture = collaborativeProvider.available()
+                ? collaborativeProvider.signalsFor(seed)
+                : CompletableFuture.completedFuture(CollaborativeArtistSignals.empty());
+
+        return candidatesFuture.thenCombine(
+                        collaborativeFuture.exceptionally(exception -> CollaborativeArtistSignals.empty()),
+                        (candidates, signals) -> select(
+                                seed,
+                                mode,
+                                (context == null ? RecommendationContext.empty() : context)
+                                        .withCollaborativeSignals(signals),
+                                candidates))
+                .thenCompose(this::enrichSelected);
     }
 
     private CompletableFuture<RecommendationPlan> enrichSelected(RecommendationPlan plan) {
@@ -131,6 +165,12 @@ public class SmartDiscoveryEngine {
                     .append(Math.round(scored.vectorConfidence() * 100.0d))
                     .append("% confidence");
         }
+        if (scored.collaborativeContribution() > 0.005d) {
+            reason.append(" • collaborative ")
+                    .append(signedPercent(scored.collaborativeAffinity()))
+                    .append(" via ")
+                    .append(scored.collaborativeSource());
+        }
         if (scored.explorationBonus() > 0.0d) {
             reason.append(" • exploration +")
                     .append(Math.round(scored.explorationBonus() * 100.0d))
@@ -138,6 +178,25 @@ public class SmartDiscoveryEngine {
         }
         reason.append(" • final score ").append(Math.round(scored.score() * 100.0d)).append("%");
         return reason.toString();
+    }
+
+    private static CollaborativeSignalProvider disabledCollaborativeProvider() {
+        return new CollaborativeSignalProvider() {
+            @Override
+            public String name() {
+                return "none";
+            }
+
+            @Override
+            public boolean available() {
+                return false;
+            }
+
+            @Override
+            public CompletableFuture<CollaborativeArtistSignals> signalsFor(StoredTrack seed) {
+                return CompletableFuture.completedFuture(CollaborativeArtistSignals.empty());
+            }
+        };
     }
 
     private static String signedPercent(double value) {

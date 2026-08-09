@@ -324,6 +324,10 @@ jobs:
           LASTFM_API_BASE_URL: ${{ vars.LASTFM_API_BASE_URL }}
           BOT_DISCOVERY_REQUEST_TIMEOUT: ${{ vars.DISCORD_BOT_DISCOVERY_REQUEST_TIMEOUT }}
           BOT_DISCOVERY_CANDIDATE_LIMIT: ${{ vars.DISCORD_BOT_DISCOVERY_CANDIDATE_LIMIT }}
+          LISTENBRAINZ_TOKEN: ${{ secrets.LISTENBRAINZ_TOKEN }}
+          LISTENBRAINZ_API_BASE_URL: ${{ vars.LISTENBRAINZ_API_BASE_URL }}
+          BOT_COLLABORATIVE_ARTIST_LIMIT: ${{ vars.DISCORD_BOT_COLLABORATIVE_ARTIST_LIMIT }}
+          BOT_LISTENBRAINZ_RADIO_MODE: ${{ vars.DISCORD_BOT_LISTENBRAINZ_RADIO_MODE }}
         run: |
           set -Eeuo pipefail
           deploy_dir="${DEPLOY_DIR:-${{ needs.context.outputs.default_deploy_dir }}}"
@@ -357,6 +361,9 @@ jobs:
           lastfm_api_base_url="${LASTFM_API_BASE_URL:-https://ws.audioscrobbler.com/2.0/}"
           discovery_request_timeout="${BOT_DISCOVERY_REQUEST_TIMEOUT:-3s}"
           discovery_candidate_limit="${BOT_DISCOVERY_CANDIDATE_LIMIT:-25}"
+          listenbrainz_api_base_url="${LISTENBRAINZ_API_BASE_URL:-https://api.listenbrainz.org}"
+          collaborative_artist_limit="${BOT_COLLABORATIVE_ARTIST_LIMIT:-12}"
+          listenbrainz_radio_mode="${BOT_LISTENBRAINZ_RADIO_MODE:-medium}"
 
           encode() {
             printf '%s' "$1" | base64 -w 0
@@ -394,6 +401,10 @@ jobs:
             printf 'LASTFM_API_BASE_URL_B64=%s\n' "$(encode "${lastfm_api_base_url}")"
             printf 'DISCORD_BOT_DISCOVERY_REQUEST_TIMEOUT_B64=%s\n' "$(encode "${discovery_request_timeout}")"
             printf 'DISCORD_BOT_DISCOVERY_CANDIDATE_LIMIT_B64=%s\n' "$(encode "${discovery_candidate_limit}")"
+            printf 'LISTENBRAINZ_TOKEN_B64=%s\n' "$(encode "${LISTENBRAINZ_TOKEN}")"
+            printf 'LISTENBRAINZ_API_BASE_URL_B64=%s\n' "$(encode "${listenbrainz_api_base_url}")"
+            printf 'DISCORD_BOT_COLLABORATIVE_ARTIST_LIMIT_B64=%s\n' "$(encode "${collaborative_artist_limit}")"
+            printf 'DISCORD_BOT_LISTENBRAINZ_RADIO_MODE_B64=%s\n' "$(encode "${listenbrainz_radio_mode}")"
           } | ssh -i "${BASKOV_SSH_KEY}" -o UserKnownHostsFile="${BASKOV_KNOWN_HOSTS}" -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "umask 077; cat > '${deploy_dir}/.deploy-input'"
 

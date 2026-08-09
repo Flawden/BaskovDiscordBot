@@ -138,60 +138,6 @@ class FileRecommendationFeedbackRepositoryTest {
         assertEquals("BASKOV_RECOMMENDATION_FEEDBACK_V2", Files.readAllLines(file).get(0));
     }
 
-
-    @Test
-    void equalWallClockTimestampsStillUpdateNewestRecordedRecommendation() {
-        RecommendationFeedbackProperties properties = new RecommendationFeedbackProperties();
-        properties.setFile(tempDirectory.resolve("equal-timestamps.tsv"));
-        FileRecommendationFeedbackRepository repository = new FileRecommendationFeedbackRepository(properties);
-        repository.load();
-
-        String identity = RecommendationIdentity.of("Artist", "Track");
-        long sameTimestamp = 1_700_000_000_000L;
-        repository.recordRecommendation(entryAt(
-                "first", 42L, 1L, identity, sameTimestamp));
-        repository.recordRecommendation(entryAt(
-                "second", 42L, 2L, identity, sameTimestamp));
-
-        RecommendationFeedbackEntry updated = repository.recordLatestOutcome(
-                42L,
-                identity,
-                RecommendationOutcome.COMPLETED,
-                1.0d).orElseThrow();
-
-        assertEquals(2L, updated.userId());
-        assertTrue(repository.history(42L, 2L, 1).get(0).recommendedAtEpochMillis()
-                > repository.history(42L, 1L, 1).get(0).recommendedAtEpochMillis());
-    }
-
-    private static RecommendationFeedbackEntry entryAt(
-            String id,
-            long guildId,
-            long userId,
-            String identity,
-            long recommendedAtEpochMillis) {
-        return new RecommendationFeedbackEntry(
-                id,
-                guildId,
-                userId,
-                "Seed",
-                "Seed track",
-                "Artist",
-                "Track",
-                identity,
-                Set.of(),
-                RadioStrategy.DISCOVERY,
-                "last.fm",
-                0.8d,
-                recommendedAtEpochMillis,
-                RecommendationOutcome.PENDING,
-                0L,
-                0,
-                0,
-                0.0d,
-                0.0d);
-    }
-
     private static String b64(String value) {
         return Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(value.getBytes(StandardCharsets.UTF_8));

@@ -126,4 +126,42 @@ class RecommendationRankerTest {
         assertEquals(fresh.identity(), selected.candidate().identity());
     }
 
+    @Test
+    void collaborativeArtistSignalCanBreakNearTie() {
+        RecommendationCandidate rawWinner = new RecommendationCandidate(
+                "Unknown Artist", "Track A", 0.820d, "Last.fm", "raw");
+        RecommendationCandidate collaborativeWinner = new RecommendationCandidate(
+                "Jimmy Eat World", "Track B", 0.805d, "Last.fm", "collab");
+        RecommendationContext context = new RecommendationContext(
+                Set.of(), Set.of(), Set.of(), PersonalTasteProfile.empty(),
+                new CollaborativeArtistSignals("ListenBrainz", Map.of("Jimmy Eat World", 1.0d)));
+
+        RecommendationRanker.ScoredCandidate selected = RecommendationRanker.best(
+                        List.of(rawWinner, collaborativeWinner),
+                        RadioStrategy.SIMILAR,
+                        context)
+                .orElseThrow();
+
+        assertEquals(collaborativeWinner.identity(), selected.candidate().identity());
+        assertTrue(selected.collaborativeContribution() > 0.0d);
+        assertEquals("ListenBrainz", selected.collaborativeSource());
+    }
+
+    @Test
+    void collaborativeSignalCannotResurrectKnownTrackInDiscovery() {
+        RecommendationCandidate known = new RecommendationCandidate(
+                "Loved Artist", "Known", 1.0d, "Last.fm", "known");
+        RecommendationCandidate fresh = new RecommendationCandidate(
+                "Fresh Artist", "Fresh", 0.40d, "Last.fm", "fresh");
+        RecommendationContext context = new RecommendationContext(
+                Set.of(known.identity()), Set.of(), Set.of(), PersonalTasteProfile.empty(),
+                new CollaborativeArtistSignals("ListenBrainz", Map.of("Loved Artist", 1.0d)));
+
+        RecommendationRanker.ScoredCandidate selected = RecommendationRanker.best(
+                        List.of(known, fresh), RadioStrategy.DISCOVERY, context)
+                .orElseThrow();
+
+        assertEquals(fresh.identity(), selected.candidate().identity());
+    }
+
 }

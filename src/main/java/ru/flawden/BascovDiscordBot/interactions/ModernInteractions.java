@@ -1002,7 +1002,9 @@ public class ModernInteractions extends ListenerAdapter {
                                     title,
                                     "Источник: `" + mode.label() + "` • стратегия: `" + strategy.label() + "`. "
                                             + "Когда очередь закончится, Басков добавит ровно один кандидат. "
-                                            + "`similar/discovery` используют внешний similarity-provider при наличии `LASTFM_API_KEY`; иначе безопасно откатываются к local fallback. "
+                                            + "`similar/discovery` используют Last.fm при наличии `LASTFM_API_KEY`; "
+                                            + "при наличии `LISTENBRAINZ_TOKEN` дополнительно учитывается collaborative artist graph. "
+                                            + "Любой внешний сигнал fail-open, а playback остаётся через обычный ytsearch pipeline. "
                                             + "После трёх подряд неудачных refill radio отключится само."))
                             .queue();
                 }));
@@ -1058,11 +1060,14 @@ public class ModernInteractions extends ListenerAdapter {
                         + "%` • features `" + vector.contributingFeatures() + "`", false)
                 .addField("Explore / exploit",
                         "similar: `" + Math.round(similarExplore * 100.0d) + "% explore` • discovery: `"
-                                + Math.round(discoveryExplore * 100.0d) + "% explore`", false);
+                                + Math.round(discoveryExplore * 100.0d) + "% explore`", false)
+                .addField("Collaborative",
+                        "`" + sanitizeInline(playerManager.collaborativeSignalProviderName()) + "` • `"
+                                + (playerManager.collaborativeSignalsAvailable() ? "ON" : "OFF") + "`", false);
         if (profile.evidenceSignals() == 0) {
             return embed
                     .setDescription("Модель пока нейтральная. Дай несколько radio-рекомендаций, дослушивай/скипай/добавляй в favorites — веса появятся автоматически.")
-                    .setFooter("Track + artist + tag affinity + 64D vector taste • ranking применяется только к personal radio")
+                    .setFooter("Track + artist + tag affinity + 64D vector taste + optional collaborative graph • personal ranking только для personal radio")
                     .build();
         }
         String artists = profile.topArtists(5).stream()
@@ -1073,7 +1078,7 @@ public class ModernInteractions extends ListenerAdapter {
                 .collect(java.util.stream.Collectors.joining(" • "));
         embed.addField("Artist affinity", artists.isBlank() ? "`пока нет`" : artists, false)
                 .addField("Tag affinity", tags.isBlank() ? "`пока нет metadata`" : tags, false)
-                .setFooter("Веса и taste-vector пересобираются из bounded feedback; /radio why показывает personal + vector вклад");
+                .setFooter("Веса и taste-vector пересобираются из bounded feedback; /radio why показывает personal + vector + collaborative вклад");
         return embed.build();
     }
 
