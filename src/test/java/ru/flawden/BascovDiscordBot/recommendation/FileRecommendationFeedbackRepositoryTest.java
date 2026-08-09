@@ -6,6 +6,9 @@ import ru.flawden.BascovDiscordBot.config.RecommendationFeedbackProperties;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -16,7 +19,7 @@ class FileRecommendationFeedbackRepositoryTest {
     Path tempDirectory;
 
     @Test
-    void persistsRecommendationAndOutcomeAcrossReload() {
+    void persistsRecommendationAndOutcomeAcrossReload() throws Exception {
         Path file = tempDirectory.resolve("recommendation-feedback.tsv");
         RecommendationFeedbackProperties properties = new RecommendationFeedbackProperties();
         properties.setFile(file);
@@ -31,6 +34,7 @@ class FileRecommendationFeedbackRepositoryTest {
                 "Breaking Benjamin",
                 "Breath",
                 RecommendationIdentity.of("Breaking Benjamin", "Breath"),
+                Set.of("alternative rock", "post-grunge"),
                 RadioStrategy.DISCOVERY,
                 "last.fm",
                 0.82d);
@@ -51,6 +55,8 @@ class FileRecommendationFeedbackRepositoryTest {
         assertEquals(1, restored.positiveSignals());
         assertEquals(0, restored.negativeSignals());
         assertEquals(3.0d, restored.signalScore(), 0.001d);
+        assertTrue(restored.tags().contains("alternative rock"));
+        assertEquals("BASKOV_RECOMMENDATION_FEEDBACK_V2", Files.readAllLines(file).get(0));
     }
 
     @Test
@@ -93,6 +99,48 @@ class FileRecommendationFeedbackRepositoryTest {
 
         assertEquals(200, repository.history(42L, 7L, 500).size());
         assertEquals("Track 204", repository.history(42L, 7L, 1).get(0).trackTitle());
+    }
+
+    @Test
+    void readsLegacyV1AndUpgradesOnNextWrite() throws Exception {
+        Path file = tempDirectory.resolve("legacy-v1.tsv");
+        String identity = RecommendationIdentity.of("Legacy Artist", "Legacy Song");
+        String line = String.join("\t",
+                "R",
+                b64("legacy-id"),
+                "42",
+                "7",
+                b64("Seed Artist"),
+                b64("Seed Song"),
+                b64("Legacy Artist"),
+                b64("Legacy Song"),
+                b64(identity),
+                RadioStrategy.SIMILAR.name(),
+                b64("Last.fm"),
+                "0.75",
+                "1700000000000",
+                RecommendationOutcome.COMPLETED.name(),
+                "1700000001000",
+                "1",
+                "0",
+                "1.0",
+                "1.0");
+        Files.writeString(file, "BASKOV_RECOMMENDATION_FEEDBACK_V1\n" + line + "\n", StandardCharsets.UTF_8);
+
+        RecommendationFeedbackProperties properties = new RecommendationFeedbackProperties();
+        properties.setFile(file);
+        FileRecommendationFeedbackRepository repository = new FileRecommendationFeedbackRepository(properties);
+        repository.load();
+
+        RecommendationFeedbackEntry restored = repository.history(42L, 7L, 10).get(0);
+        assertTrue(restored.tags().isEmpty());
+        repository.recordUserOutcome(42L, 7L, identity, RecommendationOutcome.REPLAYED, 1.0d);
+        assertEquals("BASKOV_RECOMMENDATION_FEEDBACK_V2", Files.readAllLines(file).get(0));
+    }
+
+    private static String b64(String value) {
+        return Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(value.getBytes(StandardCharsets.UTF_8));
     }
 
 }

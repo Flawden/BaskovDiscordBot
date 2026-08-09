@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [1.16.0] — 2026-08-09
+
+### Personal Ranking Model
+
+- Recommendation feedback впервые влияет на выбор кандидата: `RecommendationRanker` объединяет provider similarity, novelty/diversity и персональный taste score вместо простого similarity-first порядка.
+- Добавлен `PersonalRankingModel` и read-only `PersonalTasteProfile`: exact-track affinity, artist affinity и tag affinity строятся только из bounded `recommendation-feedback.tsv`; confidence растёт по мере накопления положительных/отрицательных сигналов.
+- Exploration/exploitation адаптивный: при малом количестве данных discovery получает больший exploration bonus для неизвестных track+artist; при накопленном evidence вес learned preference увеличивается, но hard novelty и artist cooldown из v1.14 сохраняются.
+- `/radio why` теперь показывает вклад personal/artist/tag affinity, exploration bonus и final ranking score; `/radio model` показывает evidence, confidence, текущий explore-rate и strongest artist/tag weights.
+- `RecommendationCandidate` получил bounded tags metadata. Last.fm после `track.getSimilar` обогащает только top-3 кандидата через bounded `track.getTopTags`; запросы идут параллельно с cache и тем же HTTP timeout, а отсутствие tags не блокирует рекомендацию.
+- Feedback storage повышен до `BASKOV_RECOMMENDATION_FEEDBACK_V2` и сохраняет до 8 normalized tags на recommendation. V1 читается без миграции; следующая запись атомарно переписывает journal в V2. Старые v1.15 binaries V2 не понимают, поэтому перед downgrade нужен backup `recommendation-feedback.tsv`.
+- Playback boundary не изменён: personal ranker возвращает metadata candidate, после чего всё так же используется существующий `ytsearch:` → load → policy → queue → playback. Server-radio не использует персональный taste profile владельца.
+
 ## [1.15.0] — 2026-08-09
 
 ### Recommendation Feedback

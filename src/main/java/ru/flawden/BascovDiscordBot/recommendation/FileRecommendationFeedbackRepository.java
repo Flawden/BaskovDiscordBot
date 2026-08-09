@@ -30,7 +30,8 @@ import java.util.UUID;
 @Repository
 public class FileRecommendationFeedbackRepository implements RecommendationFeedbackRepository {
 
-    private static final String HEADER = "BASKOV_RECOMMENDATION_FEEDBACK_V1";
+    private static final String HEADER = "BASKOV_RECOMMENDATION_FEEDBACK_V2";
+    private static final String LEGACY_HEADER = "BASKOV_RECOMMENDATION_FEEDBACK_V1";
     private static final Set<PosixFilePermission> OWNER_ONLY = EnumSet.of(
             PosixFilePermission.OWNER_READ,
             PosixFilePermission.OWNER_WRITE);
@@ -60,7 +61,8 @@ public class FileRecommendationFeedbackRepository implements RecommendationFeedb
             if (lines.isEmpty()) {
                 return;
             }
-            if (!HEADER.equals(lines.get(0))) {
+            boolean legacyV1 = LEGACY_HEADER.equals(lines.get(0));
+            if (!HEADER.equals(lines.get(0)) && !legacyV1) {
                 throw new IllegalStateException("Unsupported recommendation feedback format in " + file);
             }
             for (int index = 1; index < lines.size(); index++) {
@@ -69,7 +71,7 @@ public class FileRecommendationFeedbackRepository implements RecommendationFeedb
                     continue;
                 }
                 try {
-                    loadLine(line);
+                    loadLine(line, legacyV1);
                 } catch (RuntimeException exception) {
                     log.warn("Ignoring malformed recommendation feedback line {}: {}", index + 1, exception.getMessage());
                 }
@@ -197,11 +199,14 @@ public class FileRecommendationFeedbackRepository implements RecommendationFeedb
         return Optional.of(updated);
     }
 
-    private void loadLine(String line) {
-        String[] columns = line.split("\\t", -1);
-        if (columns.length != 19 || !"R".equals(columns[0])) {
-            throw new IllegalArgumentException("expected R record with 19 columns");
+    private void loadLine(String line, boolean legacyV1) {
+        String[] columns = line.split("\t", -1);
+        int expected = legacyV1 ? 19 : 20;
+        if (columns.length != expected || !"R".equals(columns[0])) {
+            throw new IllegalArgumentException("expected R record with " + expected + " columns");
         }
+        int offset = legacyV1 ? 0 : 1;
+        Set<String> tags = legacyV1 ? Set.of() : decodeTags(columns[9]);
         RecommendationFeedbackEntry entry = new RecommendationFeedbackEntry(
                 decode(columns[1]),
                 positiveLong(columns[2], "guildId"),
@@ -211,16 +216,17 @@ public class FileRecommendationFeedbackRepository implements RecommendationFeedb
                 decode(columns[6]),
                 decode(columns[7]),
                 decode(columns[8]),
-                RadioStrategy.valueOf(columns[9]),
-                decode(columns[10]),
-                Double.parseDouble(columns[11]),
-                positiveLong(columns[12], "recommendedAt"),
-                RecommendationOutcome.valueOf(columns[13]),
-                nonNegativeLong(columns[14], "lastOutcomeAt"),
-                nonNegativeInt(columns[15], "positiveSignals"),
-                nonNegativeInt(columns[16], "negativeSignals"),
-                Double.parseDouble(columns[17]),
-                Double.parseDouble(columns[18]));
+                tags,
+                RadioStrategy.valueOf(columns[9 + offset]),
+                decode(columns[10 + offset]),
+                Double.parseDouble(columns[11 + offset]),
+                positiveLong(columns[12 + offset], "recommendedAt"),
+                RecommendationOutcome.valueOf(columns[13 + offset]),
+                nonNegativeLong(columns[14 + offset], "lastOutcomeAt"),
+                nonNegativeInt(columns[15 + offset], "positiveSignals"),
+                nonNegativeInt(columns[16 + offset], "negativeSignals"),
+                Double.parseDouble(columns[17 + offset]),
+                Double.parseDouble(columns[18 + offset]));
         Map<Long, List<RecommendationFeedbackEntry>> guild = entries.computeIfAbsent(
                 entry.guildId(), ignored -> new LinkedHashMap<>());
         ArrayList<RecommendationFeedbackEntry> user = new ArrayList<>(guild.getOrDefault(entry.userId(), List.of()));
@@ -280,6 +286,7 @@ public class FileRecommendationFeedbackRepository implements RecommendationFeedb
                 encode(entry.trackArtist()),
                 encode(entry.trackTitle()),
                 encode(entry.trackIdentity()),
+                encodeTags(entry.tags()),
                 entry.strategy().name(),
                 encode(entry.provider()),
                 Double.toString(entry.similarity()),
@@ -300,6 +307,7 @@ public class FileRecommendationFeedbackRepository implements RecommendationFeedb
             String trackArtist,
             String trackTitle,
             String trackIdentity,
+            Set<String> tags,
             RadioStrategy strategy,
             String provider,
             double similarity) {
@@ -312,6 +320,7 @@ public class FileRecommendationFeedbackRepository implements RecommendationFeedb
                 trackArtist,
                 trackTitle,
                 normalizeIdentity(trackIdentity),
+                tags,
                 strategy,
                 provider,
                 similarity,
@@ -322,6 +331,37 @@ public class FileRecommendationFeedbackRepository implements RecommendationFeedb
                 0,
                 0.0d,
                 0.0d);
+    }
+
+    public static RecommendationFeedbackEntry pending(
+            long guildId,
+            long userId,
+            String seedArtist,
+            String seedTitle,
+            String trackArtist,
+            String trackTitle,
+            String trackIdentity,
+            RadioStrategy strategy,
+            String provider,
+            double similarity) {
+        return pending(guildId, userId, seedArtist, seedTitle, trackArtist, trackTitle,
+                trackIdentity, Set.of(), strategy, provider, similarity);
+    }
+
+    private static String encodeTags(Set<String> tags) {
+        return encode(tags == null || tags.isEmpty() ? "" : String.join("\u001f", tags));
+    }
+
+    private static Set<String> decodeTags(String value) {
+        String decoded = decode(value);
+        if (decoded.isBlank()) {
+            return Set.of();
+        }
+        return java.util.Arrays.stream(decoded.split("\u001f"))
+                .map(String::trim)
+                .filter(tag -> !tag.isBlank())
+                .limit(8)
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
     }
 
     private static String normalizeIdentity(String value) {

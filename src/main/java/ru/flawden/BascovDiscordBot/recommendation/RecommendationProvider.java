@@ -12,4 +12,8 @@ public interface RecommendationProvider {
     boolean available();
 
     CompletableFuture<List<RecommendationCandidate>> similarTracks(StoredTrack seed, int limit);
+
+    default CompletableFuture<RecommendationCandidate> enrich(RecommendationCandidate candidate) {
+        return CompletableFuture.completedFuture(candidate);
+    }
 }

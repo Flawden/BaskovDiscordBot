@@ -1,6 +1,9 @@
 package ru.flawden.BascovDiscordBot.recommendation;
 
+import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Durable result of one smart-radio recommendation.
@@ -14,6 +17,7 @@ public record RecommendationFeedbackEntry(
         String trackArtist,
         String trackTitle,
         String trackIdentity,
+        Set<String> tags,
         RadioStrategy strategy,
         String provider,
         double similarity,
@@ -36,7 +40,8 @@ public record RecommendationFeedbackEntry(
         seedTitle = safe(seedTitle, "Неизвестный seed", 180);
         trackArtist = safe(trackArtist, "Неизвестно", 120);
         trackTitle = safe(trackTitle, "Неизвестный трек", 180);
-        trackIdentity = safe(trackIdentity, "unknown", 320);
+        trackIdentity = safe(trackIdentity, "unknown", 320).toLowerCase(Locale.ROOT);
+        tags = safeTags(tags);
         strategy = Objects.requireNonNullElse(strategy, RadioStrategy.FAMILIAR);
         provider = safe(provider, "local", 80);
         similarity = clamp(similarity, 0.0d, 1.0d);
@@ -68,6 +73,7 @@ public record RecommendationFeedbackEntry(
                 trackArtist,
                 trackTitle,
                 trackIdentity,
+                tags,
                 strategy,
                 provider,
                 similarity,
@@ -78,6 +84,29 @@ public record RecommendationFeedbackEntry(
                 negativeSignals + (safeOutcome.negative() ? 1 : 0),
                 signalScore + weight,
                 completionRatio);
+    }
+
+    private static Set<String> safeTags(Set<String> values) {
+        if (values == null || values.isEmpty()) {
+            return Set.of();
+        }
+        LinkedHashSet<String> result = new LinkedHashSet<>();
+        for (String value : values) {
+            if (value == null || value.isBlank()) {
+                continue;
+            }
+            String normalized = value.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+            if (normalized.length() > 48) {
+                normalized = normalized.substring(0, 48).trim();
+            }
+            if (!normalized.isBlank()) {
+                result.add(normalized);
+            }
+            if (result.size() >= 8) {
+                break;
+            }
+        }
+        return Set.copyOf(result);
     }
 
     private static String safe(String value, String fallback, int maxLength) {

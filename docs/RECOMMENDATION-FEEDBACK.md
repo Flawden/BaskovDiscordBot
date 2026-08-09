@@ -54,3 +54,7 @@ Quick negative = не более 30 секунд **или** не более 20% 
 Feedback не вмешивается в playback transport. Ошибка записи feedback логируется, но не должна блокировать `TrackScheduler` или voice.
 
 `v1.16.0 Personal Ranking Model` сможет использовать этот журнал как входные данные для персональных весов, artist/tag affinity и exploration/exploitation.
+
+## v1.16 compatibility
+
+Начиная с v1.16 journal записывается как `BASKOV_RECOMMENDATION_FEEDBACK_V2` и добавляет bounded track tags для Personal Ranking Model. V1 читается автоматически; первая следующая запись переводит файл в V2. Старый v1.15 binary V2 не читает, поэтому downgrade требует backup/restore этого файла.

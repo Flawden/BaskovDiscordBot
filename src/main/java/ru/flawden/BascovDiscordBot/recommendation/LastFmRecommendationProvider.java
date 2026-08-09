@@ -17,8 +17,13 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -33,7 +38,13 @@ public class LastFmRecommendationProvider implements RecommendationProvider {
     private final DiscoveryProperties properties;
     private final ObjectMapper objectMapper;
     private final ExecutorService executor;
+    private static final long TAG_CACHE_TTL_MILLIS = 24L * 60L * 60L * 1000L;
+    private static final int TAG_ENRICH_LIMIT = 3;
+    private static final int TAG_LIMIT = 5;
+
     private final HttpClient httpClient;
+    private final ExecutorService metadataExecutor;
+    private final Map<String, TagCacheEntry> tagCache = new ConcurrentHashMap<>();
 
     @Autowired
     public LastFmRecommendationProvider(DiscoveryProperties properties) {
@@ -45,6 +56,11 @@ public class LastFmRecommendationProvider implements RecommendationProvider {
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
         this.executor = Executors.newFixedThreadPool(2, runnable -> {
             Thread thread = new Thread(runnable, "baskov-lastfm-discovery");
+            thread.setDaemon(true);
+            return thread;
+        });
+        this.metadataExecutor = Executors.newFixedThreadPool(3, runnable -> {
+            Thread thread = new Thread(runnable, "baskov-lastfm-tags");
             thread.setDaemon(true);
             return thread;
         });
@@ -74,6 +90,7 @@ public class LastFmRecommendationProvider implements RecommendationProvider {
         }
         int boundedLimit = Math.max(1, Math.min(limit, properties.getCandidateLimit()));
         return CompletableFuture.supplyAsync(() -> requestSimilar(seed, boundedLimit), executor)
+                .thenCompose(this::enrichTopCandidates)
                 .exceptionally(exception -> {
                     log.warn("Last.fm recommendation request failed: {}", safeMessage(exception));
                     return List.of();
@@ -91,7 +108,7 @@ public class LastFmRecommendationProvider implements RecommendationProvider {
         HttpRequest request = HttpRequest.newBuilder(uri)
                 .timeout(properties.getRequestTimeout())
                 .header("Accept", "application/json")
-                .header("User-Agent", "BaskovDiscordBot/1.15.0 recommendation-feedback")
+                .header("User-Agent", "BaskovDiscordBot/1.16.0 personal-ranking")
                 .GET()
                 .build();
         try {
@@ -123,6 +140,18 @@ public class LastFmRecommendationProvider implements RecommendationProvider {
         return URI.create(base + separator + query);
     }
 
+    URI buildTopTagsUri(String artist, String track) {
+        String base = properties.getLastfmBaseUrl().toString();
+        String separator = base.contains("?") ? "&" : "?";
+        String query = "method=track.gettoptags"
+                + "&artist=" + encode(artist)
+                + "&track=" + encode(track)
+                + "&autocorrect=1"
+                + "&api_key=" + encode(properties.getLastfmApiKey())
+                + "&format=json";
+        return URI.create(base + separator + query);
+    }
+
     List<RecommendationCandidate> parseSimilarTracks(String json, int limit) throws IOException {
         JsonNode root = objectMapper.readTree(json == null ? "{}" : json);
         JsonNode tracks = root.path("similartracks").path("track");
@@ -145,9 +174,111 @@ public class LastFmRecommendationProvider implements RecommendationProvider {
             double similarity = parseMatch(node.path("match").asText("0"));
             String reason = "Last.fm similarity " + Math.round(similarity * 100.0d) + "% к seed `"
                     + artistSafe(artist) + " — " + titleSafe(title) + "`";
-            candidates.add(new RecommendationCandidate(artist, title, similarity, name(), reason));
+            candidates.add(new RecommendationCandidate(
+                    artist,
+                    title,
+                    similarity,
+                    name(),
+                    reason,
+                    cachedTags(artist, title)));
         }
         return List.copyOf(candidates);
+    }
+
+
+    @Override
+    public CompletableFuture<RecommendationCandidate> enrich(RecommendationCandidate candidate) {
+        if (candidate == null || !available()) {
+            return CompletableFuture.completedFuture(candidate);
+        }
+        Set<String> cached = cachedTags(candidate.artist(), candidate.title());
+        if (!cached.isEmpty()) {
+            return CompletableFuture.completedFuture(candidate.withTags(cached));
+        }
+        return CompletableFuture.supplyAsync(() -> {
+            Set<String> tags = requestTopTags(candidate.artist(), candidate.title());
+            if (!tags.isEmpty()) {
+                tagCache.put(tagKey(candidate.artist(), candidate.title()),
+                        new TagCacheEntry(tags, System.currentTimeMillis()));
+                return candidate.withTags(tags);
+            }
+            return candidate;
+        }, metadataExecutor).exceptionally(exception -> candidate);
+    }
+
+    private CompletableFuture<List<RecommendationCandidate>> enrichTopCandidates(
+            List<RecommendationCandidate> candidates) {
+        if (candidates == null || candidates.isEmpty() || !available()) {
+            return CompletableFuture.completedFuture(candidates == null ? List.of() : candidates);
+        }
+        int count = Math.min(TAG_ENRICH_LIMIT, candidates.size());
+        List<CompletableFuture<RecommendationCandidate>> futures = new ArrayList<>(count);
+        for (int index = 0; index < count; index++) {
+            futures.add(enrich(candidates.get(index)));
+        }
+        return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
+                .thenApply(ignored -> {
+                    ArrayList<RecommendationCandidate> enriched = new ArrayList<>(candidates);
+                    for (int index = 0; index < futures.size(); index++) {
+                        enriched.set(index, futures.get(index).join());
+                    }
+                    return List.copyOf(enriched);
+                });
+    }
+
+    private Set<String> cachedTags(String artist, String title) {
+        TagCacheEntry entry = tagCache.get(tagKey(artist, title));
+        if (entry == null || System.currentTimeMillis() - entry.loadedAtEpochMillis() >= TAG_CACHE_TTL_MILLIS) {
+            return Set.of();
+        }
+        return entry.tags();
+    }
+
+    private Set<String> requestTopTags(String artist, String title) {
+        try {
+            URI uri = buildTopTagsUri(artist, title);
+            HttpRequest request = HttpRequest.newBuilder(uri)
+                    .timeout(properties.getRequestTimeout())
+                    .header("Accept", "application/json")
+                    .header("User-Agent", "BaskovDiscordBot/1.16.0 personal-ranking")
+                    .GET()
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                return Set.of();
+            }
+            JsonNode nodes = objectMapper.readTree(response.body()).path("toptags").path("tag");
+            if (!nodes.isArray()) {
+                return Set.of();
+            }
+            LinkedHashSet<String> tags = new LinkedHashSet<>();
+            for (JsonNode node : nodes) {
+                String name = node.path("name").asText("").trim().toLowerCase(Locale.ROOT);
+                if (!name.isBlank()) {
+                    tags.add(name);
+                }
+                if (tags.size() >= TAG_LIMIT) {
+                    break;
+                }
+            }
+            return Set.copyOf(tags);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            return Set.of();
+        } catch (IOException | RuntimeException exception) {
+            log.debug("Last.fm tag enrichment failed for {} - {}: {}", artist, title, safeMessage(exception));
+            return Set.of();
+        }
+    }
+
+    private static String tagKey(String artist, String title) {
+        return RecommendationIdentity.of(artist, title);
+    }
+
+    private record TagCacheEntry(Set<String> tags, long loadedAtEpochMillis) {
+        private TagCacheEntry {
+            tags = tags == null ? Set.of() : Set.copyOf(tags);
+        }
     }
 
     private static double parseMatch(String value) {
@@ -182,5 +313,6 @@ public class LastFmRecommendationProvider implements RecommendationProvider {
     @PreDestroy
     public void close() {
         executor.shutdownNow();
+        metadataExecutor.shutdownNow();
     }
 }

@@ -7,7 +7,7 @@ import java.nio.file.Path;
 import java.util.Objects;
 
 /**
- * Persistent recommendation outcome journal used by the personal ranker roadmap.
+ * Persistent recommendation outcome journal consumed by the personal ranking model.
  */
 @Component
 @ConfigurationProperties(prefix = "discord-bot.recommendation-feedback")

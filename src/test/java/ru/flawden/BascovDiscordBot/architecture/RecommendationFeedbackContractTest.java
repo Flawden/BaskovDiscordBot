@@ -16,6 +16,7 @@ class RecommendationFeedbackContractTest {
         String repository = read("recommendation/FileRecommendationFeedbackRepository.java");
         String contract = read("recommendation/RecommendationFeedbackRepository.java");
 
+        assertTrue(repository.contains("BASKOV_RECOMMENDATION_FEEDBACK_V2"));
         assertTrue(repository.contains("BASKOV_RECOMMENDATION_FEEDBACK_V1"));
         assertTrue(repository.contains("StandardCopyOption.ATOMIC_MOVE"));
         assertTrue(repository.contains("MAX_ENTRIES_PER_USER"));

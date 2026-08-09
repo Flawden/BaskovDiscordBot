@@ -41,6 +41,8 @@ import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
 import ru.flawden.BascovDiscordBot.recommendation.RadioStrategy;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationFeedbackEntry;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationFeedbackService;
+import ru.flawden.BascovDiscordBot.recommendation.PersonalRankingModel;
+import ru.flawden.BascovDiscordBot.recommendation.PersonalTasteProfile;
 import ru.flawden.BascovDiscordBot.library.FavoriteOperationResult;
 import ru.flawden.BascovDiscordBot.library.FavoriteSearchHit;
 import ru.flawden.BascovDiscordBot.library.PersonalListeningInsights;
@@ -898,6 +900,15 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
+        if ("model".equals(subcommand)) {
+            event.replyEmbeds(recommendationModelEmbed(
+                            guild.getIdLong(),
+                            event.getUser().getIdLong()))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
         if ("stop".equals(subcommand)) {
             RadioSnapshot snapshot = playerManager.radioSnapshot(guild.getIdLong());
             boolean owner = snapshot.enabled() && snapshot.ownerUserId() == event.getUser().getIdLong();
@@ -1026,6 +1037,40 @@ public class ModernInteractions extends ListenerAdapter {
                         + String.format(Locale.ROOT, "%.1f", summary.signalScore()) + "`", true)
                 .setFooter("Последние 10 • максимум 200 рекомендаций на пользователя • /radio why объясняет текущий выбор")
                 .build();
+    }
+
+    private MessageEmbed recommendationModelEmbed(long guildId, long userId) {
+        PersonalTasteProfile profile = recommendationFeedback.tasteProfile(guildId, userId);
+        double similarExplore = PersonalRankingModel.explorationRate(profile, RadioStrategy.SIMILAR);
+        double discoveryExplore = PersonalRankingModel.explorationRate(profile, RadioStrategy.DISCOVERY);
+        EmbedBuilder embed = new EmbedBuilder()
+                .setTitle("🧭 Personal ranking model")
+                .setColor(profile.evidenceSignals() == 0 ? Color.GRAY : Color.CYAN)
+                .addField("Evidence", "`" + profile.evidenceSignals() + "` signals • confidence `"
+                        + Math.round(profile.confidence() * 100.0d) + "%`", false)
+                .addField("Explore / exploit",
+                        "similar: `" + Math.round(similarExplore * 100.0d) + "% explore` • discovery: `"
+                                + Math.round(discoveryExplore * 100.0d) + "% explore`", false);
+        if (profile.evidenceSignals() == 0) {
+            return embed
+                    .setDescription("Модель пока нейтральная. Дай несколько radio-рекомендаций, дослушивай/скипай/добавляй в favorites — веса появятся автоматически.")
+                    .setFooter("Track + artist + tag affinity • ranking применяется только к personal radio")
+                    .build();
+        }
+        String artists = profile.topArtists(5).stream()
+                .map(entry -> "`" + sanitizeInline(entry.getKey()) + " " + signedScore(entry.getValue()) + "`")
+                .collect(java.util.stream.Collectors.joining(" • "));
+        String tags = profile.topTags(5).stream()
+                .map(entry -> "`" + sanitizeInline(entry.getKey()) + " " + signedScore(entry.getValue()) + "`")
+                .collect(java.util.stream.Collectors.joining(" • "));
+        embed.addField("Artist affinity", artists.isBlank() ? "`пока нет`" : artists, false)
+                .addField("Tag affinity", tags.isBlank() ? "`пока нет metadata`" : tags, false)
+                .setFooter("Веса берутся только из bounded recommendation-feedback; /radio why показывает влияние на конкретный выбор");
+        return embed.build();
+    }
+
+    private static String signedScore(double value) {
+        return String.format(Locale.ROOT, "%+.1f", value);
     }
 
     private MessageEmbed radioEmbed(RadioSnapshot snapshot) {
@@ -3742,7 +3787,7 @@ public class ModernInteractions extends ListenerAdapter {
                     .addField("Перенос", "`/settings export` `/settings import`", false)
                     .addField("Сброс", "`/settings reset` открывает интерактивное подтверждение; `confirm:true` больше вводить не нужно.", false)
                     .addField("Диагностика", "`/doctor summary|gateway|voice|storage|session|source|failures` — actionable diagnosis; `/status` — raw snapshot; `/session status|recover` — checkpoint/recovery.", false)
-                    .addField("Smart radio", "`/radio start|status|why|feedback|stop` — discovery + persistent implicit feedback для будущего personal ranker.", false);
+                    .addField("Smart radio", "`/radio start|status|why|feedback|model|stop` — discovery + persistent implicit feedback + personal ranking model.", false);
         }
         return embed.build();
     }

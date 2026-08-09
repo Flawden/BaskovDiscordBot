@@ -132,12 +132,14 @@ DJ-роли и голосование описаны в [`DJ-ROLES-AND-VOTING.md
 
 Doctor намеренно не делает внешние HTTP/Maven/YouTube probes из Discord-команды: зависший upstream не должен подвешивать саму диагностику. Failure journal не хранит Discord user IDs, stack traces или secrets.
 
-## Smart Radio / Discovery (v1.14.0)
+## Smart Radio / Discovery / Personal Ranking (v1.16.0)
 
 ```text
 /radio start [mode:personal|server] [strategy:familiar|similar|discovery]
 /radio status
 /radio why
+/radio feedback
+/radio model
 /radio stop
 ```
 
@@ -152,3 +154,7 @@ Radio продолжает только действительно пустую 
 ```
 
 Показывает persistent outcome history последних radio-рекомендаций пользователя. Positive signals: natural completion, favorite, replay. Negative signals: quick skip/stop и remove from favorites. Playback transport не меняется.
+
+### `/radio model`
+
+Read-only personal ranking snapshot: evidence/confidence, adaptive exploration rate, strongest artist and tag affinity.

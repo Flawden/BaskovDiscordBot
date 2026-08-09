@@ -47,7 +47,19 @@ public class SmartDiscoveryEngine {
         }
 
         return provider.similarTracks(seed, properties.getCandidateLimit())
-                .thenApply(candidates -> select(seed, mode, context, candidates));
+                .thenApply(candidates -> select(seed, mode, context, candidates))
+                .thenCompose(plan -> enrichSelected(plan));
+    }
+
+    private CompletableFuture<RecommendationPlan> enrichSelected(RecommendationPlan plan) {
+        if (plan == null || !plan.external() || plan.candidate() == null) {
+            return CompletableFuture.completedFuture(plan);
+        }
+        return provider.enrich(plan.candidate())
+                .thenApply(enriched -> enriched == null
+                        ? plan
+                        : new RecommendationPlan(enriched, plan.external(), plan.fallback()))
+                .exceptionally(exception -> plan);
     }
 
     RecommendationPlan select(
@@ -64,7 +76,8 @@ public class SmartDiscoveryEngine {
                             candidate.title(),
                             candidate.similarity(),
                             candidate.source(),
-                            reason), true, false);
+                            reason,
+                            candidate.tags()), true, false);
                 })
                 .orElseGet(() -> RecommendationPlan.fallback(
                         seed,
@@ -90,7 +103,27 @@ public class SmartDiscoveryEngine {
         if (!scored.artistRecent()) {
             reason.append(" • artist cooldown чист");
         }
-        reason.append(" • score ").append(Math.round(scored.score() * 100.0d)).append("%");
+        if (Math.abs(scored.personalTaste()) >= 0.01d) {
+            reason.append(" • personal ")
+                    .append(signedPercent(scored.personalTaste()));
+        }
+        if (Math.abs(scored.artistAffinity()) >= 0.01d) {
+            reason.append(" • artist ").append(signedPercent(scored.artistAffinity()));
+        }
+        if (Math.abs(scored.tagAffinity()) >= 0.01d) {
+            reason.append(" • tags ").append(signedPercent(scored.tagAffinity()));
+        }
+        if (scored.explorationBonus() > 0.0d) {
+            reason.append(" • exploration +")
+                    .append(Math.round(scored.explorationBonus() * 100.0d))
+                    .append("%");
+        }
+        reason.append(" • final score ").append(Math.round(scored.score() * 100.0d)).append("%");
         return reason.toString();
+    }
+
+    private static String signedPercent(double value) {
+        long rounded = Math.round(value * 100.0d);
+        return (rounded >= 0 ? "+" : "") + rounded + "%";
     }
 }

@@ -1440,6 +1440,7 @@ public class PlayerManager {
                 state.owner().userId(),
                 seed,
                 selected,
+                plan == null ? java.util.Set.of() : plan.candidate().tags(),
                 state.strategy(),
                 provider,
                 plan == null ? 0.0d : plan.candidate().similarity());
@@ -1461,10 +1462,14 @@ public class PlayerManager {
                     .map(RecommendationIdentity::of)
                     .forEach(known::add);
         }
+        var tasteProfile = state.mode() == RadioMode.PERSONAL && state.owner().userId() > 0L
+                ? recommendationFeedback.tasteProfile(guildId, state.owner().userId())
+                : ru.flawden.BascovDiscordBot.recommendation.PersonalTasteProfile.empty();
         return new RecommendationContext(
                 known,
                 new LinkedHashSet<>(state.recentTrackIdentities()),
-                new LinkedHashSet<>(state.recentArtists()));
+                new LinkedHashSet<>(state.recentArtists()),
+                tasteProfile);
     }
 
     private static String boundedRadioQuery(String query) {

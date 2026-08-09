@@ -9,6 +9,7 @@ import ru.flawden.BascovDiscordBot.library.StoredTrack;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Converts existing user/playback behavior into bounded implicit recommendation feedback.
@@ -31,6 +32,7 @@ public class RecommendationFeedbackService {
             long userId,
             StoredTrack seed,
             AudioTrack selected,
+            Set<String> tags,
             RadioStrategy strategy,
             String provider,
             double similarity) {
@@ -47,9 +49,28 @@ public class RecommendationFeedbackService {
                         selected.getInfo().author,
                         selected.getInfo().title,
                         trackIdentity,
+                        tags,
                         strategy,
                         provider,
                         similarity)));
+    }
+
+    public void recordRecommendation(
+            long guildId,
+            long userId,
+            StoredTrack seed,
+            AudioTrack selected,
+            RadioStrategy strategy,
+            String provider,
+            double similarity) {
+        recordRecommendation(guildId, userId, seed, selected, Set.of(), strategy, provider, similarity);
+    }
+
+    public PersonalTasteProfile tasteProfile(long guildId, long userId) {
+        return PersonalRankingModel.build(repository.history(
+                guildId,
+                userId,
+                RecommendationFeedbackRepository.MAX_ENTRIES_PER_USER));
     }
 
     public void recordPlayback(long guildId, PlaybackFeedbackEvent event) {

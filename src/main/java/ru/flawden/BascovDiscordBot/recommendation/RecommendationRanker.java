@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Deterministic ranker поверх provider similarity + novelty/diversity.
+ * Deterministic hybrid ranker: provider similarity + novelty/diversity + personal feedback model.
  */
 public final class RecommendationRanker {
 
@@ -41,30 +41,85 @@ public final class RecommendationRanker {
         boolean artistRecent = context.recentArtists().contains(artist);
 
         if (recent || (strategy.hardNovelty() && known)) {
-            return new ScoredCandidate(candidate, -1.0d, true, known, artistRecent);
+            return rejected(candidate, known, artistRecent, context.personalTaste(), strategy);
         }
 
         double novelty = known ? 0.0d : 1.0d;
         double diversity = artistRecent ? 0.0d : 1.0d;
-        double score = switch (strategy) {
+        double baseScore = switch (strategy) {
             case FAMILIAR -> candidate.similarity();
             case SIMILAR -> candidate.similarity() * 0.78d + novelty * 0.14d + diversity * 0.08d;
             case DISCOVERY -> candidate.similarity() * 0.58d + novelty * 0.30d + diversity * 0.12d;
         };
         if (known && strategy == RadioStrategy.SIMILAR) {
-            score -= 0.18d;
+            baseScore -= 0.18d;
         }
         if (artistRecent) {
-            score -= strategy == RadioStrategy.DISCOVERY ? 0.25d : 0.10d;
+            baseScore -= strategy == RadioStrategy.DISCOVERY ? 0.25d : 0.10d;
         }
-        return new ScoredCandidate(candidate, score, false, known, artistRecent);
+
+        PersonalRankingModel.TasteScore taste = PersonalRankingModel.score(
+                candidate,
+                context.personalTaste(),
+                strategy);
+        double personalWeight = switch (strategy) {
+            case FAMILIAR -> 0.12d;
+            case SIMILAR -> 0.35d;
+            case DISCOVERY -> 0.40d;
+        } * context.personalTaste().confidence();
+        double personalContribution = taste.personalTaste() * personalWeight;
+        double finalScore = Math.max(-1.0d, Math.min(1.25d,
+                baseScore + personalContribution + taste.explorationBonus()));
+
+        return new ScoredCandidate(
+                candidate,
+                finalScore,
+                baseScore,
+                false,
+                known,
+                artistRecent,
+                taste.trackAffinity(),
+                taste.artistAffinity(),
+                taste.tagAffinity(),
+                taste.personalTaste(),
+                taste.explorationRate(),
+                taste.explorationBonus());
+    }
+
+    private static ScoredCandidate rejected(
+            RecommendationCandidate candidate,
+            boolean known,
+            boolean artistRecent,
+            PersonalTasteProfile profile,
+            RadioStrategy strategy) {
+        PersonalRankingModel.TasteScore taste = PersonalRankingModel.score(candidate, profile, strategy);
+        return new ScoredCandidate(
+                candidate,
+                -1.0d,
+                -1.0d,
+                true,
+                known,
+                artistRecent,
+                taste.trackAffinity(),
+                taste.artistAffinity(),
+                taste.tagAffinity(),
+                taste.personalTaste(),
+                taste.explorationRate(),
+                0.0d);
     }
 
     public record ScoredCandidate(
             RecommendationCandidate candidate,
             double score,
+            double baseScore,
             boolean rejected,
             boolean known,
-            boolean artistRecent) {
+            boolean artistRecent,
+            double trackAffinity,
+            double artistAffinity,
+            double tagAffinity,
+            double personalTaste,
+            double explorationRate,
+            double explorationBonus) {
     }
 }

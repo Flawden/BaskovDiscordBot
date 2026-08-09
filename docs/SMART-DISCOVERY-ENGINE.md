@@ -47,4 +47,4 @@ API key используется только для HTTP request и не вкл
 
 ## Future roadmap
 
-`v1.15` сможет добавить implicit recommendation feedback, `v1.16` — personal ranking weights, а дальнейшая модель сможет заменить/дополнить provider, не меняя playback pipeline.
+`v1.15` добавил implicit recommendation feedback. В `v1.16` этот feedback используется personal ranking model: track/artist/tag affinity и adaptive exploration/exploitation. Дальнейшая модель сможет заменить/дополнить provider, не меняя playback pipeline.
