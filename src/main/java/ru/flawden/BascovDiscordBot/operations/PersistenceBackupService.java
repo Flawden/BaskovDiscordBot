@@ -8,6 +8,7 @@ import ru.flawden.BascovDiscordBot.config.MusicLibraryProperties;
 import ru.flawden.BascovDiscordBot.config.MusicSessionProperties;
 import ru.flawden.BascovDiscordBot.config.OperationsProperties;
 import ru.flawden.BascovDiscordBot.config.PersistenceProperties;
+import ru.flawden.BascovDiscordBot.config.RecommendationFeedbackProperties;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -36,7 +37,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 /**
- * Creates bounded, atomic ZIP snapshots of the three persistent stores.
+ * Creates bounded, atomic ZIP snapshots of the persistent stores.
  *
  * <p>The backup directory is expected to live on the same persistent Docker
  * volume as the source data. Backups never contain absolute host paths and the
@@ -67,12 +68,14 @@ public class PersistenceBackupService {
             OperationsProperties properties,
             PersistenceProperties persistenceProperties,
             MusicLibraryProperties musicLibraryProperties,
-            MusicSessionProperties musicSessionProperties) {
+            MusicSessionProperties musicSessionProperties,
+            RecommendationFeedbackProperties recommendationFeedbackProperties) {
         this(
                 properties,
                 persistenceProperties.getFile(),
                 musicLibraryProperties.getFile(),
                 musicSessionProperties.getFile(),
+                recommendationFeedbackProperties.getFile(),
                 Clock.systemUTC());
     }
 
@@ -81,12 +84,14 @@ public class PersistenceBackupService {
             Path guildSettings,
             Path musicLibrary,
             Path musicSessions,
+            Path recommendationFeedback,
             Clock clock) {
         this.properties = Objects.requireNonNull(properties, "properties");
         this.stores = List.of(
                 new Store("guild-settings.properties", normalize(guildSettings)),
                 new Store("music-library.tsv", normalize(musicLibrary)),
-                new Store("music-sessions.tsv", normalize(musicSessions)));
+                new Store("music-sessions.tsv", normalize(musicSessions)),
+                new Store("recommendation-feedback.tsv", normalize(recommendationFeedback)));
         this.clock = Objects.requireNonNull(clock, "clock");
         this.scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable, "baskov-persistence-backup");

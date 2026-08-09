@@ -586,6 +586,84 @@ class TrackSchedulerTest {
     }
 
     @Test
+    void naturalFinishEmitsCompletedPlaybackFeedback() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        List<PlaybackFeedbackEvent> feedback = new java.util.ArrayList<>();
+        TrackScheduler scheduler = new TrackScheduler(
+                player,
+                10,
+                Duration.ofHours(4),
+                RepeatMode.OFF,
+                () -> { },
+                () -> { },
+                TrackScheduler.Diagnostics.noop(),
+                ignored -> { },
+                feedback::add);
+        AudioTrack current = track("Radio", Duration.ofSeconds(60));
+        AudioTrack historyClone = track("Radio clone", Duration.ofSeconds(60));
+        when(player.startTrack(current, true)).thenReturn(true);
+        when(current.makeClone()).thenReturn(historyClone);
+
+        scheduler.queue(current, new TrackRequester(0L, "📻 Radio"));
+        scheduler.onTrackEnd(player, current, AudioTrackEndReason.FINISHED);
+
+        assertEquals(1, feedback.size());
+        assertEquals(PlaybackFeedbackEvent.Type.COMPLETED, feedback.get(0).type());
+    }
+
+    @Test
+    void playbackFeedbackFailureCannotBlockManualSkip() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        TrackScheduler scheduler = new TrackScheduler(
+                player,
+                10,
+                Duration.ofHours(4),
+                RepeatMode.OFF,
+                () -> { },
+                () -> { },
+                TrackScheduler.Diagnostics.noop(),
+                ignored -> { },
+                ignored -> { throw new IllegalStateException("feedback storage unavailable"); });
+        AudioTrack current = track("Radio", Duration.ofMinutes(3));
+        AudioTrack next = track("Next", Duration.ofMinutes(3));
+        AudioTrack historyClone = track("Radio clone", Duration.ofMinutes(3));
+        when(player.startTrack(current, true)).thenReturn(true);
+        when(current.makeClone()).thenReturn(historyClone);
+
+        scheduler.queue(current, new TrackRequester(0L, "📻 Radio"));
+        scheduler.queue(next, new TrackRequester(7L, "Human"));
+
+        assertSame(next, scheduler.nextTrack().track());
+    }
+
+    @Test
+    void manualSkipEmitsPlaybackFeedbackBeforeAdvancing() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        List<PlaybackFeedbackEvent> feedback = new java.util.ArrayList<>();
+        TrackScheduler scheduler = new TrackScheduler(
+                player,
+                10,
+                Duration.ofHours(4),
+                RepeatMode.OFF,
+                () -> { },
+                () -> { },
+                TrackScheduler.Diagnostics.noop(),
+                ignored -> { },
+                feedback::add);
+        AudioTrack current = track("Radio", Duration.ofMinutes(3));
+        AudioTrack historyClone = track("Radio", Duration.ofMinutes(3));
+        when(player.startTrack(current, true)).thenReturn(true);
+        when(current.makeClone()).thenReturn(historyClone);
+
+        scheduler.queue(current, new TrackRequester(0L, "📻 Radio"));
+        scheduler.nextTrack();
+
+        assertEquals(1, feedback.size());
+        assertEquals(PlaybackFeedbackEvent.Type.SKIPPED, feedback.get(0).type());
+        assertSame(current, feedback.get(0).request().track());
+    }
+
+    @Test
     void previousReportsEmptyHistoryWithoutReplacingCurrentTrack() {
         AudioPlayer player = mock(AudioPlayer.class);
         TrackScheduler scheduler = new TrackScheduler(

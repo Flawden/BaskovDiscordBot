@@ -139,7 +139,7 @@ final class StatusMessageFormatter {
                 "Success/Fail: `" + backup.successfulBackups() + "/" + backup.failedBackups() + "`",
                 "Retention: `" + backup.retention() + "`",
                 "Последний backup: " + discordTime(backup.lastSuccessAt()),
-                "Файлов в snapshot: `" + backup.lastIncludedStores() + "/3`");
+                "Файлов в snapshot: `" + backup.lastIncludedStores() + "/4`");
     }
 
     static String commands(OperationalMetrics.Snapshot commands) {

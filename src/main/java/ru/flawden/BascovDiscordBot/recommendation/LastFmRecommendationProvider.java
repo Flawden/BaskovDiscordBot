@@ -91,7 +91,7 @@ public class LastFmRecommendationProvider implements RecommendationProvider {
         HttpRequest request = HttpRequest.newBuilder(uri)
                 .timeout(properties.getRequestTimeout())
                 .header("Accept", "application/json")
-                .header("User-Agent", "BaskovDiscordBot/1.14.0 smart-discovery")
+                .header("User-Agent", "BaskovDiscordBot/1.15.0 recommendation-feedback")
                 .GET()
                 .build();
         try {

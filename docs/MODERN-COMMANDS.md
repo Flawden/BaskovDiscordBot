@@ -144,3 +144,11 @@ Doctor намеренно не делает внешние HTTP/Maven/YouTube pr
 `familiar` остаётся локальным; `similar` и `discovery` используют Last.fm candidate generation, если настроен `LASTFM_API_KEY`. `discovery` исключает already-known tracks по normalized artist/title identity. `/radio why` объясняет последнюю рекомендацию. Playback после candidate generation по-прежнему идёт через обычный `ytsearch:`.
 
 Radio продолжает только действительно пустую очередь и добавляет по одному кандидату. `personal` строит seed из favorites/personal history владельца, `server` — из guild history. Режим ephemeral и после restart/deploy остаётся выключенным.
+
+## Recommendation Feedback (v1.15.0)
+
+```text
+/radio feedback
+```
+
+Показывает persistent outcome history последних radio-рекомендаций пользователя. Positive signals: natural completion, favorite, replay. Negative signals: quick skip/stop и remove from favorites. Playback transport не меняется.

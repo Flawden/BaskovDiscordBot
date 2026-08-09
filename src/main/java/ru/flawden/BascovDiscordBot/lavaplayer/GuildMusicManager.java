@@ -35,7 +35,8 @@ public class GuildMusicManager {
             Runnable onActivity,
             Runnable onIdle,
             VoiceDiagnostics diagnostics,
-            Consumer<TrackRequest> historyListener) {
+            Consumer<TrackRequest> historyListener,
+            Consumer<PlaybackFeedbackEvent> playbackFeedbackListener) {
         this.guild = Objects.requireNonNull(guild, "guild");
         this.onActivity = Objects.requireNonNull(onActivity, "onActivity");
         this.audioPlayer = Objects.requireNonNull(manager, "manager").createPlayer();
@@ -74,7 +75,8 @@ public class GuildMusicManager {
                         diagnostics.staleCallback(guild.getIdLong(), callback, title);
                     }
                 },
-                Objects.requireNonNull(historyListener, "historyListener"));
+                Objects.requireNonNull(historyListener, "historyListener"),
+                Objects.requireNonNull(playbackFeedbackListener, "playbackFeedbackListener"));
         this.scheduler.setRequesterQueueLimit(Math.min(
                 initialPreferences.requesterQueueLimit(),
                 properties.getMaxQueueSize()));

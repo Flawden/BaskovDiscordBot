@@ -19,12 +19,13 @@ Baskov Discord Bot v1.1.0 расширяет production observability: живо�
 
 ## Persistence preflight и live probe
 
-До подключения JDA проверяются три долговременных storage path:
+До подключения JDA проверяются четыре долговременных storage path:
 
 ```text
 guild-settings.properties
 music-library.tsv
 music-sessions.tsv
+recommendation-feedback.tsv
 ```
 
 Пути обязаны быть различными. Существующий объект должен быть обычным readable/writable file и не symlink. Рядом с каждым storage выполняется реальная create/write/delete probe.
@@ -64,6 +65,7 @@ baskov-persistence-YYYYMMDD-HHmmss-SSS.zip
 guild-settings.properties
 music-library.tsv
 music-sessions.tsv
+recommendation-feedback.tsv
 manifest.properties
 ```
 

@@ -494,6 +494,13 @@ public final class MusicEmbeds {
         int progressPercent = duration <= 0L
                 ? 0
                 : (int) Math.min(100L, Math.round(position * 100.0d / duration));
+        int previousCount = musicManager.getScheduler().historySize();
+        int queuedCount = musicManager.getScheduler().queueSize();
+        String controlsHint = (previousCount == 0 || queuedCount < 2)
+                ? "\n\nℹ️ **Серые кнопки:** "
+                        + (previousCount == 0 ? "`Предыдущий` — история пуста. " : "")
+                        + (queuedCount < 2 ? "`Перемешать` — нужно минимум 2 ожидающих трека." : "")
+                : "";
 
         return new EmbedBuilder()
                 .setTitle("🎵 Сейчас играет")
@@ -508,8 +515,9 @@ public final class MusicEmbeds {
                         + "**Осталось:** `" + humanMillis(remaining) + "`\n"
                         + "**Громкость:** `" + audioPlayer.getVolume() + "%`\n"
                         + "**Повтор:** `" + musicManager.getScheduler().getRepeatMode().label() + "`\n"
-                        + "**Предыдущих:** `" + musicManager.getScheduler().historySize() + "`\n"
-                        + (audioPlayer.isPaused() ? "⚠️ Воспроизведение на паузе" : "▶️ Воспроизведение активно"))
+                        + "**Предыдущих:** `" + previousCount + "` • **В очереди:** `" + queuedCount + "`\n"
+                        + (audioPlayer.isPaused() ? "⚠️ Воспроизведение на паузе" : "▶️ Воспроизведение активно")
+                        + controlsHint)
                 .build();
     }
 

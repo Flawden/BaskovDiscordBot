@@ -197,7 +197,7 @@ public class SystemDoctor {
             return check("storage", Severity.FAIL,
                     "Persistent storage probe не прошёл",
                     safe(storage.details()),
-                    "Проверь права и тип файлов guild-settings.properties, music-library.tsv и music-sessions.tsv.");
+                    "Проверь права и тип файлов guild-settings.properties, music-library.tsv, music-sessions.tsv и recommendation-feedback.tsv.");
         }
         return check("storage", Severity.OK,
                 "Persistent storage готов",

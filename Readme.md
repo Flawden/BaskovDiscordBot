@@ -1,13 +1,13 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.14.0**.
+Текущая версия релизной ветки: **v1.15.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
 ## Возможности
 
 - slash-команды воспроизведения и полноценного управления очередью;
-- Smart Discovery Engine: `/radio start|status|why|stop` поддерживает `familiar/similar/discovery`; Last.fm генерирует похожих кандидатов при наличии `LASTFM_API_KEY`, а discovery жёстко фильтрует уже знакомые треки и сохраняет обычный `ytsearch:` playback pipeline;
+- Smart Discovery Engine: `/radio start|status|why|feedback|stop` поддерживает `familiar/similar/discovery`; Last.fm генерирует похожих кандидатов при наличии `LASTFM_API_KEY`, а discovery жёстко фильтрует уже знакомые треки и сохраняет обычный `ytsearch:` playback pipeline;
 - `/search` с пятью результатами YouTube, одноразовыми кнопками выбора и пятиминутной owner-bound сессией; autocomplete последних запросов работает в `/play` и `/search`;
 - личное persistent избранное до 100 треков на пользователя и сервер через `/favorites list|add|play|play-all|remove|search|clear`; favorites участвуют в локальном autocomplete и используют существующий ordered batch playback;
 - постоянная история до 50 треков на сервер плюс personal history до 200 заказанных и реально дошедших до истории треков на пользователя; `/history scope:server|mine`, `/replay scope:server|mine`, `/discover profile|for-me` и серверные плейлисты с owner/admin-управлением, autocomplete, lifecycle-операциями, поиском, capture queue и ordered batch playback;
@@ -20,7 +20,7 @@
 - `/now` с визуальным прогрессом, state-aware двухрядным пультом previous/±15s/pause/next/shuffle/repeat, disabled-состояниями и кнопкой refresh; `/status` с активными playback modes, uptime, Discord gateway, voice transport snapshot и последними voice/source ошибками;
 - Discord Experience 1.6: секционная `/help` с кнопочной навигацией, live refresh `/status` и одноразовые owner/guild-bound подтверждения для stop/clear/delete/reset;
 - динамический Docker heartbeat, который подтверждает свежее подключение к Discord, считает gateway transitions/disconnected samples и показывает последнее CONNECTED;
-- atomic persistence backups трёх storage-файлов внутри `/app/data/backups` с bounded retention и owner-only permissions;
+- atomic persistence backups четырёх storage-файлов внутри `/app/data/backups` с bounded retention и owner-only permissions;
 - live storage probe в `/status`, агрегированный reliability state и command failure rate/последняя ошибка;
 - JDA 6.5.0 с настоящей JNI libDAVE `ce725965e`, положительной protocol version и подтверждением playback только после реального запроса аудиофрейма Discord media transport;
 - bounded voice recovery: отключённый JDA auto-reconnect, до трёх контролируемых повторных подключений с backoff и сохранением checkpoint при исчерпании попыток;
@@ -61,7 +61,7 @@ docker compose up -d --build
 docker compose logs -f bot
 ```
 
-Боту не нужен входящий HTTP-порт. Перед подключением к Discord выполняется fail-fast storage preflight для guild settings, music library и session checkpoints; после подключения приложение обновляет readiness heartbeat каждые 10 секунд, а Docker считает контейнер healthy только при свежем `CONNECTED`-сигнале.
+Боту не нужен входящий HTTP-порт. Перед подключением к Discord выполняется fail-fast storage preflight для guild settings, music library, session checkpoint и recommendation feedbacks; после подключения приложение обновляет readiness heartbeat каждые 10 секунд, а Docker считает контейнер healthy только при свежем `CONNECTED`-сигнале.
 
 ### Настройки музыкальной сессии
 
@@ -82,6 +82,7 @@ docker compose logs -f bot
 | `DISCORD_BOT_PERSISTENCE_FILE` | `data/guild-settings.properties` | файл постоянных guild-настроек; в Docker используется `/app/data/...` |
 | `DISCORD_BOT_MUSIC_LIBRARY_FILE` | `data/music-library.tsv` | отдельный atomic-файл постоянных плейлистов, истории и личного избранного; в Docker `/app/data/music-library.tsv` |
 | `DISCORD_BOT_MUSIC_SESSION_FILE` | `data/music-sessions.tsv` | atomic checkpoint активных voice/music-сессий; в Docker `/app/data/music-sessions.tsv` |
+| `DISCORD_BOT_RECOMMENDATION_FEEDBACK_FILE` | `data/recommendation-feedback.tsv` | persistent bounded history результатов рекомендаций; в Docker `/app/data/recommendation-feedback.tsv` |
 | `DISCORD_BOT_MUSIC_SESSION_CHECKPOINT_INTERVAL` | `5s` | период сохранения активной сессии |
 | `DISCORD_BOT_MUSIC_SESSION_MAX_AGE` | `6h` | максимальный возраст checkpoint для автозапуска |
 | `DISCORD_BOT_MUSIC_SESSION_RESTORE_ON_STARTUP` | `true` | восстановление после restart/redeploy |

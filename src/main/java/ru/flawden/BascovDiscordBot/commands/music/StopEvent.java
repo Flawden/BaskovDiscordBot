@@ -41,6 +41,7 @@ public class StopEvent implements Event {
         }
 
         String stoppedTrackTitle = currentTrack.getInfo().title;
+        playerManager.recordExplicitStopFeedback(event.getGuild());
         playerManager.stopAndRelease(event.getGuild());
         log.info("Music session stopped and released in guild {}", event.getGuild().getId());
 

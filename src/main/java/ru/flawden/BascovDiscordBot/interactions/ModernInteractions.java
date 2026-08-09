@@ -39,6 +39,8 @@ import ru.flawden.BascovDiscordBot.lavaplayer.TrackScheduler;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
 import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
 import ru.flawden.BascovDiscordBot.recommendation.RadioStrategy;
+import ru.flawden.BascovDiscordBot.recommendation.RecommendationFeedbackEntry;
+import ru.flawden.BascovDiscordBot.recommendation.RecommendationFeedbackService;
 import ru.flawden.BascovDiscordBot.library.FavoriteOperationResult;
 import ru.flawden.BascovDiscordBot.library.FavoriteSearchHit;
 import ru.flawden.BascovDiscordBot.library.PersonalListeningInsights;
@@ -75,6 +77,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.function.Consumer;
 
 /**
  * Slash-команды, autocomplete и component buttons.
@@ -102,6 +105,7 @@ public class ModernInteractions extends ListenerAdapter {
     private final PersistenceBackupService persistenceBackupService;
     private final DaveRuntimeInfo daveRuntimeInfo;
     private final ConfirmationStore confirmationStore;
+    private final RecommendationFeedbackService recommendationFeedback;
 
     public ModernInteractions(
             PlayerManager playerManager,
@@ -122,7 +126,8 @@ public class ModernInteractions extends ListenerAdapter {
             PersistenceReadiness persistenceReadiness,
             PersistenceBackupService persistenceBackupService,
             DaveRuntimeInfo daveRuntimeInfo,
-            ConfirmationStore confirmationStore) {
+            ConfirmationStore confirmationStore,
+            RecommendationFeedbackService recommendationFeedback) {
         this.playerManager = playerManager;
         this.controlPolicy = controlPolicy;
         this.queryResolver = queryResolver;
@@ -142,6 +147,7 @@ public class ModernInteractions extends ListenerAdapter {
         this.persistenceBackupService = persistenceBackupService;
         this.daveRuntimeInfo = daveRuntimeInfo;
         this.confirmationStore = confirmationStore;
+        this.recommendationFeedback = recommendationFeedback;
     }
 
     @Override
@@ -438,6 +444,7 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
         String title = player.getPlayingTrack().getInfo().title;
+        playerManager.recordExplicitStopFeedback(guild);
         playerManager.stopAndRelease(guild);
         voteSkipService.reset(guild.getIdLong());
         event.editMessageEmbeds(MusicEmbeds.success(
@@ -502,9 +509,18 @@ public class ModernInteractions extends ListenerAdapter {
     }
 
     private void confirmClearFavorites(ButtonInteractionEvent event, Guild guild) {
+        List<StoredTrack> removedFavorites = musicLibraryRepository.favorites(
+                guild.getIdLong(),
+                event.getUser().getIdLong());
         FavoriteOperationResult result = musicLibraryRepository.clearFavorites(
                 guild.getIdLong(),
                 event.getUser().getIdLong());
+        if (result.status() == FavoriteOperationResult.Status.CLEARED) {
+            removedFavorites.forEach(track -> recommendationFeedback.recordUnfavorite(
+                    guild.getIdLong(),
+                    event.getUser().getIdLong(),
+                    track));
+        }
         MessageEmbed embed = result.status() == FavoriteOperationResult.Status.CLEARED
                 ? MusicEmbeds.success(
                         "🧹 Избранное очищено",
@@ -873,6 +889,15 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
+        if ("feedback".equals(subcommand)) {
+            event.replyEmbeds(recommendationFeedbackEmbed(
+                            guild.getIdLong(),
+                            event.getUser().getIdLong()))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
         if ("stop".equals(subcommand)) {
             RadioSnapshot snapshot = playerManager.radioSnapshot(guild.getIdLong());
             boolean owner = snapshot.enabled() && snapshot.ownerUserId() == event.getUser().getIdLong();
@@ -967,6 +992,40 @@ public class ModernInteractions extends ListenerAdapter {
                                             + "После трёх подряд неудачных refill radio отключится само."))
                             .queue();
                 }));
+    }
+
+    private MessageEmbed recommendationFeedbackEmbed(long guildId, long userId) {
+        List<RecommendationFeedbackEntry> history = recommendationFeedback.history(guildId, userId, 10);
+        RecommendationFeedbackService.FeedbackSummary summary = recommendationFeedback.summary(guildId, userId);
+        EmbedBuilder embed = new EmbedBuilder()
+                .setTitle("🧠 Recommendation feedback")
+                .setColor(history.isEmpty() ? Color.GRAY : Color.CYAN);
+        if (history.isEmpty()) {
+            return embed
+                    .setDescription("У тебя пока нет сохранённых radio-рекомендаций. Запусти `/radio start` и дай Баскову подобрать несколько треков.")
+                    .setFooter("Feedback сохраняется отдельно и переживает restart/deploy")
+                    .build();
+        }
+        StringBuilder body = new StringBuilder();
+        for (RecommendationFeedbackEntry entry : history) {
+            body.append("• `")
+                    .append(sanitizeInline(entry.trackArtist()))
+                    .append(" — ")
+                    .append(sanitizeInline(entry.trackTitle()))
+                    .append("` → `")
+                    .append(entry.lastOutcome().name())
+                    .append("` • score `")
+                    .append(String.format(Locale.ROOT, "%.1f", entry.signalScore()))
+                    .append("`\n");
+        }
+        return embed
+                .setDescription(body.toString())
+                .addField("Сигналы", "`+" + summary.positiveSignals() + " / -" + summary.negativeSignals()
+                        + "` • pending: `" + summary.pending() + "`", true)
+                .addField("Накопленный feedback score", "`"
+                        + String.format(Locale.ROOT, "%.1f", summary.signalScore()) + "`", true)
+                .setFooter("Последние 10 • максимум 200 рекомендаций на пользователя • /radio why объясняет текущий выбор")
+                .build();
     }
 
     private MessageEmbed radioEmbed(RadioSnapshot snapshot) {
@@ -1328,7 +1387,15 @@ public class ModernInteractions extends ListenerAdapter {
         queueStoredTracks(
                 event,
                 List.of(selected),
-                mine ? "🔁 Твой трек из personal history добавлен" : "🔁 Трек из истории добавлен");
+                mine ? "🔁 Твой трек из personal history добавлен" : "🔁 Трек из истории добавлен",
+                result -> {
+                    if (result.accepted() > 0) {
+                        recommendationFeedback.recordReplay(
+                                event.getGuild().getIdLong(),
+                                event.getUser().getIdLong(),
+                                selected);
+                    }
+                });
     }
 
     private List<StoredTrack> historyFor(SlashCommandInteractionEvent event, boolean mine) {
@@ -1391,6 +1458,12 @@ public class ModernInteractions extends ListenerAdapter {
                 event.getGuild().getIdLong(),
                 event.getUser().getIdLong(),
                 track);
+        if (result.status() == FavoriteOperationResult.Status.ADDED && result.track() != null) {
+            recommendationFeedback.recordFavorite(
+                    event.getGuild().getIdLong(),
+                    event.getUser().getIdLong(),
+                    result.track());
+        }
         replyFavoriteMutation(event, result);
     }
 
@@ -1444,6 +1517,12 @@ public class ModernInteractions extends ListenerAdapter {
                 event.getGuild().getIdLong(),
                 event.getUser().getIdLong(),
                 Math.toIntExact(requestedPosition));
+        if (result.status() == FavoriteOperationResult.Status.REMOVED && result.track() != null) {
+            recommendationFeedback.recordUnfavorite(
+                    event.getGuild().getIdLong(),
+                    event.getUser().getIdLong(),
+                    result.track());
+        }
         replyFavoriteMutation(event, result);
     }
 
@@ -1856,6 +1935,14 @@ public class ModernInteractions extends ListenerAdapter {
             SlashCommandInteractionEvent event,
             List<StoredTrack> tracks,
             String successTitle) {
+        queueStoredTracks(event, tracks, successTitle, ignored -> { });
+    }
+
+    private void queueStoredTracks(
+            SlashCommandInteractionEvent event,
+            List<StoredTrack> tracks,
+            String successTitle,
+            Consumer<BatchMusicLoadResult> resultObserver) {
         Guild guild = event.getGuild();
         Member member = event.getMember();
         MusicControlPolicy.Decision decision = controlPolicy.canStartOrQueue(
@@ -1905,7 +1992,14 @@ public class ModernInteractions extends ListenerAdapter {
                             guild,
                             identifiers,
                             requester,
-                            result -> editBatchLoadResult(hook, guild, successTitle, result));
+                            result -> {
+                                try {
+                                    resultObserver.accept(result);
+                                } catch (RuntimeException exception) {
+                                    log.warn("Stored-track result observer failed; playback result remains valid", exception);
+                                }
+                                editBatchLoadResult(hook, guild, successTitle, result);
+                            });
                 }));
     }
 
@@ -3648,7 +3742,7 @@ public class ModernInteractions extends ListenerAdapter {
                     .addField("Перенос", "`/settings export` `/settings import`", false)
                     .addField("Сброс", "`/settings reset` открывает интерактивное подтверждение; `confirm:true` больше вводить не нужно.", false)
                     .addField("Диагностика", "`/doctor summary|gateway|voice|storage|session|source|failures` — actionable diagnosis; `/status` — raw snapshot; `/session status|recover` — checkpoint/recovery.", false)
-                    .addField("Smart radio", "`/radio start|status|stop` — bounded autoplay из personal/server history без внешнего recommendation service.", false);
+                    .addField("Smart radio", "`/radio start|status|why|feedback|stop` — discovery + persistent implicit feedback для будущего personal ranker.", false);
         }
         return embed.build();
     }

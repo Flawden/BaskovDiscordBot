@@ -6,6 +6,17 @@
 
 ## [Unreleased]
 
+## [1.15.0] — 2026-08-09
+
+### Recommendation Feedback
+
+- Добавлен persistent feedback journal `recommendation-feedback.tsv` (`BASKOV_RECOMMENDATION_FEEDBACK_V1`) с максимум 200 recommendation records на пользователя. Каждая запись хранит seed, фактически выбранный radio-track, strategy/provider/similarity, последний outcome, completion ratio и накопленные positive/negative signal counters.
+- Smart radio после успешного queue/start фиксирует recommendation до пользовательского feedback. Полное естественное прослушивание даёт `COMPLETED`, добавление в favorites — `FAVORITED`, `/replay` — `REPLAYED`. Быстрый skip/stop (до 30 секунд или до 20% трека) даёт `QUICK_SKIPPED`/`QUICK_STOPPED`; поздний skip/stop сохраняется как нейтральный результат; удаление из favorites — `UNFAVORITED`.
+- Playback feedback встроен в существующий `TrackScheduler` как отдельный безопасный listener: manual skip сигнализируется до advance, natural FINISHED — до перехода к следующему треку; failure feedback-listener не может остановить playback. Системные transport/recovery shutdown не считаются пользовательским `stop`.
+- Добавлен `/radio feedback`: показывает последние 10 рекомендаций пользователя, outcome, накопленные +/- сигналы и feedback score. Журнал переживает restart/deploy и предназначен как обучающий набор для v1.16 Personal Ranking Model.
+- Recommendation feedback вынесен в отдельный atomic TSV store и включён в persistence readiness + ZIP backups; старые `music-library.tsv`, `music-sessions.tsv` и guild settings форматы не меняются.
+- `/now` теперь явно объясняет серые `Предыдущий` и `Перемешать`: previous недоступен при пустой playback history, shuffle — пока в waiting queue меньше двух треков. Сами permission/state rules не ослаблялись.
+
 ## [1.14.0] — 2026-08-09
 
 ### Smart Discovery Engine

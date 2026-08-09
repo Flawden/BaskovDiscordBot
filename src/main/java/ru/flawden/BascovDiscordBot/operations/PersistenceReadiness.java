@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.MusicLibraryProperties;
 import ru.flawden.BascovDiscordBot.config.MusicSessionProperties;
 import ru.flawden.BascovDiscordBot.config.PersistenceProperties;
+import ru.flawden.BascovDiscordBot.config.RecommendationFeedbackProperties;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -35,18 +36,21 @@ public class PersistenceReadiness {
     public PersistenceReadiness(
             PersistenceProperties persistenceProperties,
             MusicLibraryProperties musicLibraryProperties,
-            MusicSessionProperties musicSessionProperties) {
+            MusicSessionProperties musicSessionProperties,
+            RecommendationFeedbackProperties recommendationFeedbackProperties) {
         this(
                 persistenceProperties.getFile(),
                 musicLibraryProperties.getFile(),
-                musicSessionProperties.getFile());
+                musicSessionProperties.getFile(),
+                recommendationFeedbackProperties.getFile());
     }
 
-    PersistenceReadiness(Path guildSettings, Path musicLibrary, Path musicSessions) {
+    PersistenceReadiness(Path guildSettings, Path musicLibrary, Path musicSessions, Path recommendationFeedback) {
         this.stores = List.of(
                 normalize(guildSettings),
                 normalize(musicLibrary),
-                normalize(musicSessions));
+                normalize(musicSessions),
+                normalize(recommendationFeedback));
     }
 
     public synchronized Snapshot requireReady() {
@@ -101,7 +105,7 @@ public class PersistenceReadiness {
     private void ensureDistinctStores() {
         Set<Path> unique = new LinkedHashSet<>(stores);
         if (unique.size() != stores.size()) {
-            throw new IllegalStateException("Persistence files must use three distinct paths");
+            throw new IllegalStateException("Persistence files must use four distinct paths");
         }
     }
 
@@ -174,7 +178,7 @@ public class PersistenceReadiness {
             String details) {
 
         static Snapshot notChecked() {
-            return new Snapshot("NOT_CHECKED", 3, 0, null, "not checked");
+            return new Snapshot("NOT_CHECKED", 4, 0, null, "not checked");
         }
 
         public boolean ready() {

@@ -36,6 +36,7 @@ public class TrackScheduler extends AudioEventAdapter {
     private final Runnable onIdle;
     private final Diagnostics diagnostics;
     private final Consumer<TrackRequest> historyListener;
+    private final Consumer<PlaybackFeedbackEvent> playbackFeedbackListener;
     private final Object mutationLock = new Object();
     private long queueRevision;
 
@@ -93,6 +94,7 @@ public class TrackScheduler extends AudioEventAdapter {
                 onActivity,
                 onIdle,
                 diagnostics,
+                ignored -> { },
                 ignored -> { });
     }
 
@@ -105,6 +107,28 @@ public class TrackScheduler extends AudioEventAdapter {
             Runnable onIdle,
             Diagnostics diagnostics,
             Consumer<TrackRequest> historyListener) {
+        this(
+                audioPlayer,
+                maxQueueSize,
+                maxTrackDuration,
+                initialRepeatMode,
+                onActivity,
+                onIdle,
+                diagnostics,
+                historyListener,
+                ignored -> { });
+    }
+
+    public TrackScheduler(
+            AudioPlayer audioPlayer,
+            int maxQueueSize,
+            Duration maxTrackDuration,
+            RepeatMode initialRepeatMode,
+            Runnable onActivity,
+            Runnable onIdle,
+            Diagnostics diagnostics,
+            Consumer<TrackRequest> historyListener,
+            Consumer<PlaybackFeedbackEvent> playbackFeedbackListener) {
         this.audioPlayer = Objects.requireNonNull(audioPlayer, "audioPlayer");
         if (maxQueueSize < 1) {
             throw new IllegalArgumentException("maxQueueSize must be positive");
@@ -118,6 +142,7 @@ public class TrackScheduler extends AudioEventAdapter {
         this.onIdle = Objects.requireNonNull(onIdle, "onIdle");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
         this.historyListener = Objects.requireNonNull(historyListener, "historyListener");
+        this.playbackFeedbackListener = Objects.requireNonNull(playbackFeedbackListener, "playbackFeedbackListener");
     }
 
     public QueueResult queue(AudioTrack track) {
@@ -228,6 +253,9 @@ public class TrackScheduler extends AudioEventAdapter {
         if (!endReason.mayStartNext) {
             return;
         }
+        if (endReason == AudioTrackEndReason.FINISHED) {
+            notifyPlaybackFeedback(PlaybackFeedbackEvent.Type.COMPLETED, elapsedMillis);
+        }
 
         synchronized (mutationLock) {
             if (endReason == AudioTrackEndReason.FINISHED && repeatMode == RepeatMode.TRACK
@@ -257,6 +285,7 @@ public class TrackScheduler extends AudioEventAdapter {
     }
 
     public TrackRequest nextTrack() {
+        notifyPlaybackFeedback(PlaybackFeedbackEvent.Type.SKIPPED, currentTrackElapsedMillis());
         return advanceToNext(true);
     }
 
@@ -782,6 +811,24 @@ public class TrackScheduler extends AudioEventAdapter {
             if (!queue.offerLast(track)) {
                 throw new IllegalStateException("Queue capacity changed during mutation");
             }
+        }
+    }
+
+    private void notifyPlaybackFeedback(PlaybackFeedbackEvent.Type type, long elapsedMillis) {
+        TrackRequest request = currentRequest;
+        if (request == null || request.track() == null) {
+            return;
+        }
+        try {
+            playbackFeedbackListener.accept(new PlaybackFeedbackEvent(
+                    type,
+                    request,
+                    elapsedMillis,
+                    Math.max(1L, request.track().getDuration())));
+        } catch (RuntimeException exception) {
+            log.error("Playback feedback listener failed for track {}; playback will continue",
+                    title(request.track()),
+                    exception);
         }
     }
 

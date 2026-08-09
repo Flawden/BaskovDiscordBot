@@ -39,7 +39,7 @@ class ModernCommandCatalogTest {
     @Test
     void radioCommandExposesBoundedAutoplayLifecycle() {
         SlashCommandData radio = command("radio");
-        assertEquals(Set.of("start", "status", "why", "stop"),
+        assertEquals(Set.of("start", "status", "why", "feedback", "stop"),
                 radio.getSubcommands().stream()
                         .map(subcommand -> subcommand.getName())
                         .collect(Collectors.toSet()));

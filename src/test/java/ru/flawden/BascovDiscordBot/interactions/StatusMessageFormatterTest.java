@@ -182,13 +182,13 @@ class StatusMessageFormatterTest {
     void storageSectionDoesNotExposePaths() {
         String section = StatusMessageFormatter.storage(new PersistenceReadiness.Snapshot(
                 "READY",
-                3,
+                4,
                 2,
                 java.time.Instant.parse("2026-08-08T00:00:00Z"),
                 "ready"));
 
         assertTrue(section.contains("Статус: `READY`"));
-        assertTrue(section.contains("Хранилищ: `3`"));
+        assertTrue(section.contains("Хранилищ: `4`"));
         assertFalse(section.contains("/app/data"));
     }
     @Test
@@ -203,12 +203,12 @@ class StatusMessageFormatterTest {
                 Instant.parse("2026-08-08T12:00:00Z"),
                 Instant.parse("2026-08-08T06:00:00Z"),
                 "baskov-persistence-20260808-120000-000.zip",
-                3,
+                4,
                 "ready");
         PersistenceReadiness.Snapshot storage = new PersistenceReadiness.Snapshot(
                 "READY",
-                3,
-                3,
+                4,
+                4,
                 Instant.parse("2026-08-08T00:00:00Z"),
                 "ready");
         RuntimeHealthMonitor.Snapshot runtime = new RuntimeHealthMonitor.Snapshot(

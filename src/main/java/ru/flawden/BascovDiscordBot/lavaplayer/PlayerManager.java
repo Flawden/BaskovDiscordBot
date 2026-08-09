@@ -31,6 +31,7 @@ import ru.flawden.BascovDiscordBot.recommendation.RadioStrategy;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationContext;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationIdentity;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationPlan;
+import ru.flawden.BascovDiscordBot.recommendation.RecommendationFeedbackService;
 import ru.flawden.BascovDiscordBot.recommendation.SmartDiscoveryEngine;
 import ru.flawden.BascovDiscordBot.session.MusicSessionRepository;
 import ru.flawden.BascovDiscordBot.session.SessionRecoveryDetails;
@@ -89,6 +90,7 @@ public class PlayerManager {
     private final PlaybackHistoryRecorder historyRecorder;
     private final MusicLibraryRepository musicLibraryRepository;
     private final SmartDiscoveryEngine discoveryEngine;
+    private final RecommendationFeedbackService recommendationFeedback;
     private final MusicSessionRepository sessionRepository;
     private final Map<Long, RadioState> radioStates = new ConcurrentHashMap<>();
     private final AtomicBoolean closing = new AtomicBoolean();
@@ -109,6 +111,7 @@ public class PlayerManager {
             PlaybackHistoryRecorder historyRecorder,
             MusicLibraryRepository musicLibraryRepository,
             SmartDiscoveryEngine discoveryEngine,
+            RecommendationFeedbackService recommendationFeedback,
             MusicSessionProperties sessionProperties,
             MusicSessionRepository sessionRepository) {
         this.properties = properties;
@@ -119,6 +122,7 @@ public class PlayerManager {
         this.historyRecorder = historyRecorder;
         this.musicLibraryRepository = Objects.requireNonNull(musicLibraryRepository, "musicLibraryRepository");
         this.discoveryEngine = Objects.requireNonNull(discoveryEngine, "discoveryEngine");
+        this.recommendationFeedback = Objects.requireNonNull(recommendationFeedback, "recommendationFeedback");
         this.sessionRepository = sessionRepository;
         this.audioPlayerManager = new DefaultAudioPlayerManager();
 
@@ -190,7 +194,8 @@ public class PlayerManager {
                     () -> cancelIdleDisconnect(guildId),
                     () -> handleMusicIdle(guild),
                     voiceDiagnostics,
-                    request -> historyRecorder.record(guildId, request));
+                    request -> historyRecorder.record(guildId, request),
+                    event -> recommendationFeedback.recordPlayback(guildId, event));
             guild.getAudioManager().setSendingHandler(manager.getSendHandler());
             return manager;
         });
@@ -1219,6 +1224,17 @@ public class PlayerManager {
         lastSessionRecoveryEvent.set(Instant.now() + " " + safe);
     }
 
+    /** Records an explicit human stop as feedback without conflating transport/recovery shutdowns. */
+    public void recordExplicitStopFeedback(Guild guild) {
+        if (guild == null) {
+            return;
+        }
+        GuildMusicManager manager = musicManagers.get(guild.getIdLong());
+        if (manager != null) {
+            recommendationFeedback.recordStop(guild.getIdLong(), manager.getScheduler().getCurrentRequest());
+        }
+    }
+
     public void stopAndRelease(Guild guild) {
         releaseSession(guild, true);
     }
@@ -1419,6 +1435,14 @@ public class PlayerManager {
                 trackArtistIdentity(selected),
                 provider,
                 reason);
+        recommendationFeedback.recordRecommendation(
+                guildId,
+                state.owner().userId(),
+                seed,
+                selected,
+                state.strategy(),
+                provider,
+                plan == null ? 0.0d : plan.candidate().similarity());
         cancelIdleDisconnect(guildId);
         log.info("Smart radio generated track: guild={}, scope={}, strategy={}, provider={}, seed={}, track={}",
                 guildId, state.mode(), state.strategy(), provider, seed.title(), selected.getInfo().title);
