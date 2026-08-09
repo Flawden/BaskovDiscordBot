@@ -12,6 +12,7 @@ public interface MusicLibraryRepository {
     int MAX_TRACKS_PER_PLAYLIST = 50;
     int MAX_HISTORY_PER_GUILD = 50;
     int MAX_FAVORITES_PER_USER = 100;
+    int MAX_PERSONAL_HISTORY_PER_USER = 200;
 
     List<StoredPlaylist> playlists(long guildId);
 
@@ -78,6 +79,8 @@ public interface MusicLibraryRepository {
     List<StoredTrack> history(long guildId);
 
     void recordHistory(long guildId, StoredTrack track);
+
+    List<StoredTrack> personalHistory(long guildId, long userId);
 
     List<StoredTrack> favorites(long guildId, long userId);
 

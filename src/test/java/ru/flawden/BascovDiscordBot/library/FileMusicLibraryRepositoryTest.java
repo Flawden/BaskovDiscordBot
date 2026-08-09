@@ -251,6 +251,70 @@ class FileMusicLibraryRepositoryTest {
         assertTrue(reloaded.playlist(10L, "Roadtrip").isPresent());
     }
 
+
+    @Test
+    void recordsAndPersistsRequesterScopedPersonalHistoryAlongsideGuildHistory() {
+        Path file = tempDir.resolve("personal-history.tsv");
+        FileMusicLibraryRepository repository = repository(file);
+
+        repository.recordHistory(10L, trackForUser("First", 1L, 20L));
+        repository.recordHistory(10L, trackForUser("Other user", 2L, 30L));
+        repository.recordHistory(10L, trackForUser("Second", 3L, 20L));
+
+        assertEquals(java.util.List.of("Second", "First"),
+                repository.personalHistory(10L, 20L).stream().map(StoredTrack::title).toList());
+        assertEquals(java.util.List.of("Other user"),
+                repository.personalHistory(10L, 30L).stream().map(StoredTrack::title).toList());
+        assertEquals(3, repository.history(10L).size());
+
+        FileMusicLibraryRepository reloaded = repository(file);
+        assertEquals(java.util.List.of("Second", "First"),
+                reloaded.personalHistory(10L, 20L).stream().map(StoredTrack::title).toList());
+    }
+
+    @Test
+    void boundsPersonalHistoryWithoutShrinkingGuildHistorySemantics() {
+        FileMusicLibraryRepository repository = repository(tempDir.resolve("personal-history-limit.tsv"));
+        for (int index = 1; index <= MusicLibraryRepository.MAX_PERSONAL_HISTORY_PER_USER + 5; index++) {
+            repository.recordHistory(10L, trackForUser("Mine " + index, index, 20L));
+        }
+
+        assertEquals(MusicLibraryRepository.MAX_PERSONAL_HISTORY_PER_USER,
+                repository.personalHistory(10L, 20L).size());
+        assertEquals("Mine 205", repository.personalHistory(10L, 20L).get(0).title());
+        assertEquals("Mine 6", repository.personalHistory(10L, 20L).get(199).title());
+        assertEquals(MusicLibraryRepository.MAX_HISTORY_PER_GUILD, repository.history(10L).size());
+    }
+
+    @Test
+    void backfillsPersonalHistoryFromLegacyGuildHistoryWhenURecordsAreAbsent() throws Exception {
+        Path file = tempDir.resolve("legacy-v17.tsv");
+        FileMusicLibraryRepository repository = repository(file);
+        repository.recordHistory(10L, trackForUser("Legacy one", 1L, 20L));
+        repository.recordHistory(10L, trackForUser("Legacy two", 2L, 20L));
+
+        java.util.List<String> lines = java.nio.file.Files.readAllLines(file);
+        java.nio.file.Files.write(file, lines.stream().filter(line -> !line.startsWith("U\t")).toList());
+
+        FileMusicLibraryRepository migrated = repository(file);
+        assertEquals(java.util.List.of("Legacy two", "Legacy one"),
+                migrated.personalHistory(10L, 20L).stream().map(StoredTrack::title).toList());
+    }
+
+    @Test
+    void playlistAndFavoriteMutationsPreservePersonalHistory() {
+        Path file = tempDir.resolve("personal-history-preservation.tsv");
+        FileMusicLibraryRepository repository = repository(file);
+        repository.recordHistory(10L, trackForUser("Keep personal", 1L, 20L));
+        repository.addFavorite(10L, 20L, trackForUser("Favorite", 2L, 20L));
+        repository.createPlaylist(10L, 20L, "Roadtrip");
+        repository.addTrack(10L, "Roadtrip", 20L, false, track("Playlist", 3L));
+
+        FileMusicLibraryRepository reloaded = repository(file);
+        assertEquals("Keep personal", reloaded.personalHistory(10L, 20L).get(0).title());
+        assertEquals("Favorite", reloaded.favorites(10L, 20L).get(0).title());
+    }
+
     @Test
     void rejectsDuplicatePlaylistNamesIgnoringCase() {
         FileMusicLibraryRepository repository = repository(tempDir.resolve("duplicates.tsv"));
@@ -268,6 +332,20 @@ class FileMusicLibraryRepositoryTest {
         FileMusicLibraryRepository repository = new FileMusicLibraryRepository(properties);
         repository.load();
         return repository;
+    }
+
+
+    private static StoredTrack trackForUser(String title, long sequence, long userId) {
+        return new StoredTrack(
+                title,
+                "Artist",
+                "https://www.youtube.com/watch?v=user" + sequence,
+                "user" + sequence,
+                MediaProvider.YOUTUBE,
+                180_000L,
+                userId,
+                "Requester " + userId,
+                1_700_000_000_000L + sequence);
     }
 
     private static StoredTrack track(String title, long sequence) {

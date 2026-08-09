@@ -9,8 +9,8 @@
 |---|---|
 | `/play query` | Сразу добавляет первый результат YouTube или принимает прямую ссылку SoundCloud/YouTube |
 | `/search query` | Показывает до пяти результатов YouTube и кнопки выбора |
-| `/discover recent|again|related|history` | Продолжает поиск по недавним запросам, текущему треку или истории |
-| `/history [page]` | Показывает до 50 последних успешно завершённых или пропущенных треков |
+| `/discover recent|again|related|history|profile|for-me` | Продолжает поиск и добавляет локальный personal discovery |
+| `/history [page] [scope:server|mine]` | Серверная история до 50 или личная requester-history до 200 записей |
 | `/replay position` | Повторно загружает трек по номеру из постоянной истории |
 | `/favorites ...` | Личное persistent избранное: list/add/play/play-all/remove/search/clear |
 | `/playlist ...` | Управляет постоянной библиотекой: create/show/search/add/add-history/capture-queue/play/remove/move/rename/copy/dedupe/delete |
@@ -80,7 +80,7 @@ DJ-роли и голосование описаны в [`DJ-ROLES-AND-VOTING.md
 
 ## Discovery
 
-`/discover recent` показывает локальную историю поиска пользователя, `/discover again` повторяет последний запрос, а `related` и `history` строят новый текстовый запрос из уже известных `author + title`. Все эти режимы используют тот же интерактивный `/search` pipeline и не обходят существующие ограничения загрузки и voice-policy.
+`/discover recent` показывает локальную историю поиска пользователя, `/discover again` повторяет последний запрос, а `related` и `history` строят новый текстовый запрос из уже известных `author + title`. `profile` агрегирует retained personal history, а `for-me` выбирает seed из favorites + personal history. Все поисковые режимы используют тот же интерактивный `/search` pipeline и не обходят существующие ограничения загрузки и voice-policy.
 
 ## Discord Experience 1.6
 

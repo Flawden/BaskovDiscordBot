@@ -27,11 +27,22 @@ public final class DiscoverySuggestions {
             List<StoredTrack> favorites,
             List<StoredTrack> history,
             List<StoredPlaylist> playlists) {
+        return suggest(input, recentQueries, favorites, List.of(), history, playlists);
+    }
+
+    public static List<String> suggest(
+            String input,
+            List<String> recentQueries,
+            List<StoredTrack> favorites,
+            List<StoredTrack> personalHistory,
+            List<StoredTrack> history,
+            List<StoredPlaylist> playlists) {
         String needle = normalize(input);
         Map<String, String> ordered = new LinkedHashMap<>();
 
         addAll(ordered, recentQueries, needle);
         addTracks(ordered, favorites, needle);
+        addTracks(ordered, personalHistory, needle);
         addTracks(ordered, history, needle);
         if (playlists != null) {
             for (StoredPlaylist playlist : playlists) {

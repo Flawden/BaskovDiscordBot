@@ -56,19 +56,24 @@ public final class ModernCommandCatalog {
                                                 OptionType.INTEGER,
                                                 "position",
                                                 "Позиция трека из /history",
-                                                true)),
+                                                true)
+                                        .addOptions(historyScopeOption()),
+                                new SubcommandData("profile", "Показывает твои top-треки и исполнителей"),
+                                new SubcommandData("for-me", "Ищет музыку из твоих favorites и personal history")),
                 Commands.slash("history", "Показывает недавнюю историю воспроизведения")
                         .addOption(
                                 OptionType.INTEGER,
                                 "page",
                                 "Страница истории, начиная с 1",
-                                false),
+                                false)
+                        .addOptions(historyScopeOption()),
                 Commands.slash("replay", "Повторно добавляет трек из истории")
                         .addOption(
                                 OptionType.INTEGER,
                                 "position",
                                 "Номер трека из /history, где 1 — самый новый",
-                                true),
+                                true)
+                        .addOptions(historyScopeOption()),
                 Commands.slash("favorites", "Управляет твоим личным избранным")
                         .addSubcommands(
                                 new SubcommandData("list", "Показывает твоё избранное")
@@ -330,4 +335,14 @@ public final class ModernCommandCatalog {
                                 new SubcommandData("reset", "Запрашивает интерактивное подтверждение полного сброса"))
         );
     }
+    private static OptionData historyScopeOption() {
+        return new OptionData(
+                OptionType.STRING,
+                "scope",
+                "История сервера или только твоя",
+                false)
+                .addChoice("Сервер", "server")
+                .addChoice("Моя", "mine");
+    }
+
 }

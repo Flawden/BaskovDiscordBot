@@ -15,6 +15,9 @@ import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
 import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
 import ru.flawden.BascovDiscordBot.library.FavoriteSearchHit;
+import ru.flawden.BascovDiscordBot.library.PersonalArtistStat;
+import ru.flawden.BascovDiscordBot.library.PersonalListeningInsights;
+import ru.flawden.BascovDiscordBot.library.PersonalTrackStat;
 import ru.flawden.BascovDiscordBot.library.PlaylistSearchHit;
 import ru.flawden.BascovDiscordBot.library.StoredPlaylist;
 import ru.flawden.BascovDiscordBot.library.StoredTrack;
@@ -215,6 +218,10 @@ public final class MusicEmbeds {
     }
 
     public static MessageEmbed playbackHistory(List<StoredTrack> history, int requestedPage) {
+        return playbackHistory(history, requestedPage, false);
+    }
+
+    public static MessageEmbed playbackHistory(List<StoredTrack> history, int requestedPage, boolean personal) {
         if (history == null || history.isEmpty()) {
             return error(
                     "🕘 История пуста",
@@ -243,10 +250,56 @@ public final class MusicEmbeds {
         }
 
         return new EmbedBuilder()
-                .setTitle("🕘 История воспроизведения • " + requestedPage + "/" + totalPages)
+                .setTitle((personal ? "👤 Твоя история" : "🕘 История воспроизведения")
+                        + " • " + requestedPage + "/" + totalPages)
                 .setDescription(description.toString())
                 .setColor(Color.CYAN)
-                .setFooter("Номер подходит для /replay position • хранится до 50 треков")
+                .setFooter(personal
+                        ? "Номер подходит для /replay position scope:mine • хранится до 200 твоих записей"
+                        : "Номер подходит для /replay position • хранится до 50 треков сервера")
+                .build();
+    }
+
+    public static MessageEmbed personalListeningProfile(List<StoredTrack> personalHistory, int favoriteCount) {
+        if (personalHistory == null || personalHistory.isEmpty()) {
+            return error(
+                    "👤 Личный профиль пока пуст",
+                    "Твои заказанные треки появятся после воспроизведения. Favorites уже можно сохранять через `/favorites add`.");
+        }
+
+        List<PersonalTrackStat> topTracks = PersonalListeningInsights.topTracks(personalHistory, 5);
+        List<PersonalArtistStat> topArtists = PersonalListeningInsights.topArtists(personalHistory, 5);
+        StringBuilder tracks = new StringBuilder();
+        for (int index = 0; index < topTracks.size(); index++) {
+            PersonalTrackStat stat = topTracks.get(index);
+            tracks.append("**").append(index + 1).append(". ")
+                    .append(shortText(stat.track().title(), 70)).append("** — `")
+                    .append(stat.plays()).append("×`\n")
+                    .append(shortText(stat.track().author(), 60)).append("\n");
+        }
+        StringBuilder artists = new StringBuilder();
+        for (int index = 0; index < topArtists.size(); index++) {
+            PersonalArtistStat stat = topArtists.get(index);
+            artists.append("**").append(index + 1).append(". ")
+                    .append(shortText(stat.artist(), 70)).append("** — `")
+                    .append(stat.plays()).append("×`\n");
+        }
+        if (artists.isEmpty()) {
+            artists.append("Недостаточно данных об исполнителях.");
+        }
+
+        return new EmbedBuilder()
+                .setTitle("👤 Твой listening profile")
+                .setDescription("Persistent personal history строится только из твоих заказов, которые реально дошли до истории воспроизведения.")
+                .addField("🔥 Часто запускал", tracks.toString(), false)
+                .addField("🎤 Частые исполнители", artists.toString(), false)
+                .addField("📊 Сводка",
+                        "Записей: `" + personalHistory.size()
+                                + "` • уникальных треков: `" + PersonalListeningInsights.uniqueTrackCount(personalHistory)
+                                + "` • favorites: `" + Math.max(0, favoriteCount) + "`",
+                        false)
+                .setColor(Color.CYAN)
+                .setFooter("/discover for-me использует favorites + personal history локально, без отдельного recommendation service")
                 .build();
     }
 

@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-08-09
+
+### Listening History & Personal Discovery
+
+- Добавлена persistent personal history до 200 записей на `guildId + requesterUserId`: каждый replayable трек, который реально попадает в guild history, атомарно записывается и в личную историю его requester-а. Это не voice-presence telemetry и не утверждение, что пользователь прослушал трек целиком.
+- `/history` и `/replay` получили optional `scope:server|mine`; старые вызовы без scope сохраняют прежнее server-history поведение. `/discover history` понимает тот же scope.
+- `/discover profile` локально считает top-треки, частых исполнителей, число уникальных треков и favorites; повторы не дедуплицируются, поэтому частота действительно отражает повторные запуски в retained personal history.
+- `/discover for-me` выбирает deterministic seed из personal favorites + personal history и передаёт его в существующий безопасный interactive search pipeline. Никакого внешнего recommendation API, отдельного профилирования или обхода request/voice policy не добавлено.
+- Autocomplete `/play` и `/search` теперь объединяет recent queries → favorites → personal history → guild history → playlists, оставаясь полностью локальным и без сетевых запросов.
+- `BASKOV_MUSIC_LIBRARY_V1` получил record `U <guildId> <userId> <position> <StoredTrack...>` для personal history. При первом чтении старого v1.7 файла пользователи без `U` автоматически получают best-effort backfill из retained guild history по `requesterUserId`; затем state сохраняется обычным atomic temp→replace.
+- Playlist/favorite/history mutations сохраняют personal history map; owner-only permissions и существующий backup `music-library.tsv` автоматически покрывают новый state. Downgrade ниже `v1.8.0` после появления `U` records требует backup, потому что старый binary не знает этот record type.
+
 ## [1.7.0] — 2026-08-09
 
 ### Favorites & Personal Library

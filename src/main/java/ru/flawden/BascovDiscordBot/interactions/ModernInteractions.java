@@ -37,6 +37,7 @@ import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
 import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
 import ru.flawden.BascovDiscordBot.library.FavoriteOperationResult;
 import ru.flawden.BascovDiscordBot.library.FavoriteSearchHit;
+import ru.flawden.BascovDiscordBot.library.PersonalListeningInsights;
 import ru.flawden.BascovDiscordBot.library.MusicLibraryRepository;
 import ru.flawden.BascovDiscordBot.library.PlaylistOperationResult;
 import ru.flawden.BascovDiscordBot.library.StoredPlaylist;
@@ -204,11 +205,13 @@ public class ModernInteractions extends ListenerAdapter {
         if (("play".equals(event.getName()) || "search".equals(event.getName()))
                 && "query".equals(focusedName)) {
             List<StoredTrack> favorites = List.of();
+            List<StoredTrack> personalHistory = List.of();
             List<StoredTrack> history = List.of();
             List<StoredPlaylist> playlists = List.of();
             if (event.getGuild() != null) {
                 long guildId = event.getGuild().getIdLong();
                 favorites = musicLibraryRepository.favorites(guildId, event.getUser().getIdLong());
+                personalHistory = musicLibraryRepository.personalHistory(guildId, event.getUser().getIdLong());
                 history = musicLibraryRepository.history(guildId);
                 playlists = musicLibraryRepository.playlists(guildId);
             }
@@ -216,6 +219,7 @@ public class ModernInteractions extends ListenerAdapter {
                             focusedValue,
                             searchHistory.recent(event.getUser().getIdLong(), 20),
                             favorites,
+                            personalHistory,
                             history,
                             playlists)
                     .stream()
@@ -804,12 +808,13 @@ public class ModernInteractions extends ListenerAdapter {
             }
             case "history" -> {
                 long position = event.getOption("position", -1L, OptionMapping::getAsLong);
-                List<StoredTrack> history = musicLibraryRepository.history(event.getGuild().getIdLong());
+                boolean mine = personalHistoryRequested(event);
+                List<StoredTrack> history = historyFor(event, mine);
                 if (position < 1L || position > history.size()) {
                     event.replyEmbeds(MusicEmbeds.error(
                                     "🧭 Трек истории не найден",
                                     history.isEmpty()
-                                            ? "История пока пуста."
+                                            ? (mine ? "Твоя personal history пока пуста." : "История пока пуста.")
                                             : "Укажи номер из диапазона `1.." + history.size() + "` из `/history`."))
                             .setEphemeral(true)
                             .queue();
@@ -820,9 +825,36 @@ public class ModernInteractions extends ListenerAdapter {
                         track.author(),
                         track.title()));
             }
+            case "profile" -> {
+                List<StoredTrack> personalHistory = musicLibraryRepository.personalHistory(
+                        event.getGuild().getIdLong(),
+                        event.getUser().getIdLong());
+                List<StoredTrack> favorites = musicLibraryRepository.favorites(
+                        event.getGuild().getIdLong(),
+                        event.getUser().getIdLong());
+                event.replyEmbeds(MusicEmbeds.personalListeningProfile(personalHistory, favorites.size()))
+                        .setEphemeral(true)
+                        .queue();
+            }
+            case "for-me" -> {
+                long guildId = event.getGuild().getIdLong();
+                long userId = event.getUser().getIdLong();
+                List<StoredTrack> favorites = musicLibraryRepository.favorites(guildId, userId);
+                List<StoredTrack> personalHistory = musicLibraryRepository.personalHistory(guildId, userId);
+                StoredTrack seed = PersonalListeningInsights.discoverySeed(favorites, personalHistory).orElse(null);
+                if (seed == null) {
+                    event.replyEmbeds(MusicEmbeds.error(
+                                    "🧭 Пока не хватает личных сигналов",
+                                    "Добавь трек в `/favorites` или дождись записей в `/history scope:mine`."))
+                            .setEphemeral(true)
+                            .queue();
+                    return;
+                }
+                startInteractiveSearch(event, DiscoverySuggestions.discoveryQuery(seed.author(), seed.title()));
+            }
             default -> event.replyEmbeds(MusicEmbeds.error(
                             "🧭 Неизвестный режим discovery",
-                            "Используй `/discover recent`, `again`, `related` или `history`."))
+                            "Используй `/discover recent`, `again`, `related`, `history`, `profile` или `for-me`."))
                     .setEphemeral(true)
                     .queue();
         }
@@ -907,21 +939,24 @@ public class ModernInteractions extends ListenerAdapter {
                     .queue();
             return;
         }
+        boolean mine = personalHistoryRequested(event);
         event.replyEmbeds(MusicEmbeds.playbackHistory(
-                        musicLibraryRepository.history(event.getGuild().getIdLong()),
-                        Math.toIntExact(requestedPage)))
+                        historyFor(event, mine),
+                        Math.toIntExact(requestedPage),
+                        mine))
                 .setEphemeral(true)
                 .queue();
     }
 
     private void replay(SlashCommandInteractionEvent event) {
         long requestedPosition = event.getOption("position", -1L, OptionMapping::getAsLong);
-        List<StoredTrack> history = musicLibraryRepository.history(event.getGuild().getIdLong());
+        boolean mine = personalHistoryRequested(event);
+        List<StoredTrack> history = historyFor(event, mine);
         if (requestedPosition < 1L || requestedPosition > history.size()) {
             event.replyEmbeds(MusicEmbeds.error(
                             "🔁 Позиция истории не найдена",
                             history.isEmpty()
-                                    ? "История пока пуста."
+                                    ? (mine ? "Твоя personal history пока пуста." : "История пока пуста.")
                                     : "Укажи номер из диапазона `1.." + history.size() + "`."))
                     .setEphemeral(true)
                     .queue();
@@ -931,7 +966,18 @@ public class ModernInteractions extends ListenerAdapter {
         queueStoredTracks(
                 event,
                 List.of(selected),
-                "🔁 Трек из истории добавлен");
+                mine ? "🔁 Твой трек из personal history добавлен" : "🔁 Трек из истории добавлен");
+    }
+
+    private List<StoredTrack> historyFor(SlashCommandInteractionEvent event, boolean mine) {
+        long guildId = event.getGuild().getIdLong();
+        return mine
+                ? musicLibraryRepository.personalHistory(guildId, event.getUser().getIdLong())
+                : musicLibraryRepository.history(guildId);
+    }
+
+    private static boolean personalHistoryRequested(SlashCommandInteractionEvent event) {
+        return "mine".equalsIgnoreCase(event.getOption("scope", "server", OptionMapping::getAsString));
     }
 
     private void favorites(SlashCommandInteractionEvent event) {
@@ -2912,8 +2958,8 @@ public class ModernInteractions extends ListenerAdapter {
                     .setDescription("Постоянные плейлисты, история и повторное воспроизведение.")
                     .addField("Избранное", "`/favorites list|add|play|play-all|remove|search|clear` — личное для каждого пользователя.", false)
                     .addField("Плейлисты", "`/playlist list|create|show|add|play|remove|move|rename|copy|dedupe|capture-queue|add-history|search|delete`", false)
-                    .addField("История", "`/history` `/replay` `/discover history`", false)
-                    .addField("Discovery", "`/discover recent|again|related|history`", false)
+                    .addField("История", "`/history scope:server|mine` `/replay scope:server|mine` `/discover history`", false)
+                    .addField("Discovery", "`/discover recent|again|related|history|profile|for-me`", false)
                     .addField("Безопасное удаление", "`/playlist delete` и `/favorites clear` защищены одноразовым интерактивным подтверждением.", false)
                     .addField("Autocomplete", "`/play`, `/search` учитывают твоё избранное, history и playlists; playlist names тоже дополняются локально без сетевого запроса на каждый символ.", false);
             case ADMIN -> embed

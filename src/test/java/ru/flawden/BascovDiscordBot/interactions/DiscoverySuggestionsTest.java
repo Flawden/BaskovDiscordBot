@@ -38,6 +38,22 @@ class DiscoverySuggestionsTest {
     }
 
     @Test
+    void prioritizesPersonalHistoryBeforeGuildHistory() {
+        StoredTrack personal = track("Personal Song", "My Artist", "personal");
+        StoredTrack guild = track("Guild Song", "Other Artist", "guild");
+
+        assertEquals(
+                List.of("My Artist Personal Song", "Other Artist Guild Song"),
+                DiscoverySuggestions.suggest(
+                        "",
+                        List.of(),
+                        List.of(),
+                        List.of(personal),
+                        List.of(guild),
+                        List.of()));
+    }
+
+    @Test
     void filtersCaseInsensitivelyAndKeepsRecentQueriesFirst() {
         StoredTrack historyTrack = track("The Last Stand", "Sabaton", "history-2");
         StoredTrack playlistTrack = track("Bismarck", "Sabaton", "playlist-2");

@@ -11,7 +11,7 @@
 /replay position
 ```
 
-`/history` показывает до 10 записей на страницу. Номер слева подходит для `/replay position:<номер>`.
+`/history` показывает до 10 записей на страницу. Без `scope` остаётся прежняя guild history до 50 записей. `scope:mine` показывает persistent personal history requester-а до 200 записей; тот же scope можно передать в `/replay`.
 
 В постоянную историю попадают треки, которые:
 
@@ -87,7 +87,7 @@ BASKOV_MUSIC_LIBRARY_V1
 
 Пользовательские строки кодируются URL-safe Base64, поэтому табы, переводы строк и Unicode не могут нарушить TSV-структуру. Запись выполняется через временный файл и atomic move; на POSIX-файловой системе устанавливаются права владельца `0600`.
 
-Файл хранит только безопасные метаданные и публичный playback URL. Начиная с `v1.7.0`, тот же `BASKOV_MUSIC_LIBRARY_V1` содержит личные favorite records `F`; старые файлы без них совместимы без миграции. Подробности — в [`FAVORITES-PERSONAL-LIBRARY.md`](FAVORITES-PERSONAL-LIBRARY.md). `AudioTrack`, токены Discord, cookies, OAuth и другие секреты не сериализуются.
+Файл хранит только безопасные метаданные и публичный playback URL. Начиная с `v1.7.0`, тот же `BASKOV_MUSIC_LIBRARY_V1` содержит личные favorite records `F`. В `v1.8.0` добавлен record `U` для personal history; старый файл без `U` best-effort backfill-ится из retained guild history по requester ID. Подробности — в [`FAVORITES-PERSONAL-LIBRARY.md`](FAVORITES-PERSONAL-LIBRARY.md). `AudioTrack`, токены Discord, cookies, OAuth и другие секреты не сериализуются.
 
 ## Потоки и lifecycle
 
