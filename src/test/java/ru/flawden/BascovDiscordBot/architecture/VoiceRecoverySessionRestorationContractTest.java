@@ -51,8 +51,14 @@ class VoiceRecoverySessionRestorationContractTest {
 
         assertTrue(player.contains("restoreHistorySequentially"));
         assertTrue(player.contains("session-history:"));
-        assertTrue(scheduler.contains("restoreHistory(List<TrackRequest> restoredHistory)"));
-        assertTrue(scheduler.contains("historyListener намеренно не вызывается"));
+        String restoreHistory = methodBody(
+                scheduler,
+                "public void restoreHistory(List<TrackRequest> restoredHistory)",
+                "public int clearQueue()"
+        );
+        assertTrue(restoreHistory.contains("history.clear()"));
+        assertTrue(restoreHistory.contains("history::addLast"));
+        assertFalse(restoreHistory.contains("historyListener"));
         assertTrue(interactions.contains("/session recover"));
         assertTrue(interactions.contains("administrationPolicy.canManage(event.getMember())"));
     }
@@ -83,6 +89,14 @@ class VoiceRecoverySessionRestorationContractTest {
         assertTrue(deployCompose.contains("bot-data:/app/data"));
         String deployScript = Files.readString(Path.of("deploy/remote-deploy.sh"));
         assertTrue(deployScript.contains("Voice recovery initialized:"));
+    }
+
+    private static String methodBody(String source, String startMarker, String endMarker) {
+        int start = source.indexOf(startMarker);
+        int end = source.indexOf(endMarker, start);
+        assertTrue(start >= 0, "start marker not found: " + startMarker);
+        assertTrue(end > start, "end marker not found after: " + startMarker);
+        return source.substring(start, end);
     }
 
     private static String read(String relative) throws IOException {
