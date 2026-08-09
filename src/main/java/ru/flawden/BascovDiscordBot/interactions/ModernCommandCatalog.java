@@ -272,6 +272,16 @@ public final class ModernCommandCatalog {
                         .addSubcommands(
                                 new SubcommandData("status", "Показывает checkpoint и состояние recovery этого сервера"),
                                 new SubcommandData("recover", "Повторно запускает сохранённую сессию (manager/admin)")),
+                Commands.slash("moderation", "Least-privilege moderation общей музыкальной очереди")
+                        .addSubcommands(
+                                new SubcommandData("status", "Показывает moderation policy и состояние очереди"),
+                                new SubcommandData("remove", "Удаляет один ожидающий трек по глобальной позиции")
+                                        .addOption(OptionType.INTEGER, "position", "Позиция из /queue", true)
+                                        .addOption(OptionType.INTEGER, "revision", "Ревизия из /queue", false),
+                                new SubcommandData("purge", "Удаляет все ожидающие треки выбранного пользователя")
+                                        .addOption(OptionType.USER, "user", "Пользователь, чьи ожидающие треки нужно убрать", true)
+                                        .addOption(OptionType.INTEGER, "revision", "Ревизия из /queue", false),
+                                new SubcommandData("audit", "Показывает последние administrative/moderation действия")),
                 Commands.slash("settings", "Показывает и изменяет постоянные настройки сервера")
                         .addSubcommands(
                                 new SubcommandData("show", "Показывает сохранённые настройки"),
@@ -319,6 +329,18 @@ public final class ModernCommandCatalog {
                                                 "role",
                                                 "Роль для администрирования Баскова; пусто = очистить",
                                                 false),
+                                new SubcommandData("moderator-role", "Назначает least-privilege роль модератора очереди")
+                                        .addOption(
+                                                OptionType.ROLE,
+                                                "role",
+                                                "Роль для moderation очереди; пусто = очистить",
+                                                false),
+                                new SubcommandData("requester-limit", "Ограничивает число ожидающих треков одного пользователя")
+                                        .addOption(
+                                                OptionType.INTEGER,
+                                                "max",
+                                                "0 = без лимита; иначе 1..100 и не выше max queue size",
+                                                true),
                                 new SubcommandData("voice-channel", "Ограничивает новые музыкальные запросы одним voice/stage каналом")
                                         .addOptions(new OptionData(
                                                 OptionType.CHANNEL,
@@ -339,7 +361,7 @@ public final class ModernCommandCatalog {
                                         .addOption(
                                                 OptionType.STRING,
                                                 "profile",
-                                                "Строка BASKOV_SETTINGS_V1 из /settings export",
+                                                "Строка BASKOV_SETTINGS_V1/V2 из /settings export",
                                                 true),
                                 new SubcommandData("reset", "Запрашивает интерактивное подтверждение полного сброса"))
         );

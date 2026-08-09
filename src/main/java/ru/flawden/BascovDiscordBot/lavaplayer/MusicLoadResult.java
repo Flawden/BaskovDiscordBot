@@ -19,6 +19,7 @@ public record MusicLoadResult(
     public enum Status {
         STARTED,
         QUEUED,
+        REQUESTER_LIMIT,
         QUEUE_FULL,
         TRACK_TOO_LONG,
         STREAM_NOT_ALLOWED,

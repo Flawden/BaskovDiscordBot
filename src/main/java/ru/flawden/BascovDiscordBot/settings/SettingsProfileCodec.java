@@ -12,7 +12,8 @@ import java.util.Map;
  */
 public final class SettingsProfileCodec {
 
-    static final String PREFIX = "BASKOV_SETTINGS_V1.";
+    static final String PREFIX_V1 = "BASKOV_SETTINGS_V1.";
+    static final String PREFIX_V2 = "BASKOV_SETTINGS_V2.";
 
     private SettingsProfileCodec() {
     }
@@ -25,18 +26,26 @@ public final class SettingsProfileCodec {
                 "requestAccess=" + preferences.requestAccessMode().name(),
                 "djRole=" + Long.toUnsignedString(preferences.djRoleId()),
                 "managerRole=" + Long.toUnsignedString(preferences.managerRoleId()),
+                "moderatorRole=" + Long.toUnsignedString(preferences.moderatorRoleId()),
                 "musicChannel=" + Long.toUnsignedString(preferences.musicChannelId()),
-                "voteSkipPercent=" + preferences.voteSkipPercent());
-        return PREFIX + Base64.getUrlEncoder().withoutPadding()
+                "voteSkipPercent=" + preferences.voteSkipPercent(),
+                "requesterQueueLimit=" + preferences.requesterQueueLimit());
+        return PREFIX_V2 + Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(body.getBytes(StandardCharsets.UTF_8));
     }
 
     public static GuildPreferences decode(String encoded) {
-        if (encoded == null || !encoded.startsWith(PREFIX)) {
+        if (encoded == null) {
             throw new IllegalArgumentException("Неизвестный формат профиля настроек");
         }
-        String payload = encoded.substring(PREFIX.length()).trim();
-        if (payload.isEmpty() || payload.length() > 2048) {
+        boolean legacyV1 = encoded.startsWith(PREFIX_V1);
+        boolean currentV2 = encoded.startsWith(PREFIX_V2);
+        if (!legacyV1 && !currentV2) {
+            throw new IllegalArgumentException("Неизвестный формат профиля настроек");
+        }
+        String prefix = legacyV1 ? PREFIX_V1 : PREFIX_V2;
+        String payload = encoded.substring(prefix.length()).trim();
+        if (payload.isEmpty() || payload.length() > 3072) {
             throw new IllegalArgumentException("Профиль настроек пуст или слишком велик");
         }
 
@@ -47,6 +56,52 @@ public final class SettingsProfileCodec {
             throw new IllegalArgumentException("Профиль настроек повреждён", exception);
         }
 
+        Map<String, String> values = parseValues(decoded);
+        if (legacyV1) {
+            requireExactly(values, new String[] {
+                    "volume", "repeat", "playbackAccess", "requestAccess",
+                    "djRole", "managerRole", "musicChannel", "voteSkipPercent"
+            });
+            try {
+                return new GuildPreferences(
+                        Integer.parseInt(values.get("volume")),
+                        RepeatMode.valueOf(values.get("repeat")),
+                        PlaybackAccessMode.valueOf(values.get("playbackAccess")),
+                        RequestAccessMode.valueOf(values.get("requestAccess")),
+                        Long.parseUnsignedLong(values.get("djRole")),
+                        Long.parseUnsignedLong(values.get("managerRole")),
+                        0L,
+                        Long.parseUnsignedLong(values.get("musicChannel")),
+                        Integer.parseInt(values.get("voteSkipPercent")),
+                        0);
+            } catch (IllegalArgumentException exception) {
+                throw new IllegalArgumentException("Профиль настроек содержит недопустимые значения", exception);
+            }
+        }
+
+        requireExactly(values, new String[] {
+                "volume", "repeat", "playbackAccess", "requestAccess",
+                "djRole", "managerRole", "moderatorRole", "musicChannel",
+                "voteSkipPercent", "requesterQueueLimit"
+        });
+        try {
+            return new GuildPreferences(
+                    Integer.parseInt(values.get("volume")),
+                    RepeatMode.valueOf(values.get("repeat")),
+                    PlaybackAccessMode.valueOf(values.get("playbackAccess")),
+                    RequestAccessMode.valueOf(values.get("requestAccess")),
+                    Long.parseUnsignedLong(values.get("djRole")),
+                    Long.parseUnsignedLong(values.get("managerRole")),
+                    Long.parseUnsignedLong(values.get("moderatorRole")),
+                    Long.parseUnsignedLong(values.get("musicChannel")),
+                    Integer.parseInt(values.get("voteSkipPercent")),
+                    Integer.parseInt(values.get("requesterQueueLimit")));
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Профиль настроек содержит недопустимые значения", exception);
+        }
+    }
+
+    private static Map<String, String> parseValues(String decoded) {
         Map<String, String> values = new LinkedHashMap<>();
         for (String line : decoded.split("\\R")) {
             if (line.isBlank()) {
@@ -62,11 +117,10 @@ public final class SettingsProfileCodec {
                 throw new IllegalArgumentException("Профиль настроек содержит повторяющийся ключ: " + key);
             }
         }
+        return values;
+    }
 
-        String[] required = {
-                "volume", "repeat", "playbackAccess", "requestAccess",
-                "djRole", "managerRole", "musicChannel", "voteSkipPercent"
-        };
+    private static void requireExactly(Map<String, String> values, String[] required) {
         if (values.size() != required.length) {
             throw new IllegalArgumentException("Профиль настроек содержит неизвестные или отсутствующие поля");
         }
@@ -74,20 +128,6 @@ public final class SettingsProfileCodec {
             if (!values.containsKey(key)) {
                 throw new IllegalArgumentException("Профиль настроек не содержит поле: " + key);
             }
-        }
-
-        try {
-            return new GuildPreferences(
-                    Integer.parseInt(values.get("volume")),
-                    RepeatMode.valueOf(values.get("repeat")),
-                    PlaybackAccessMode.valueOf(values.get("playbackAccess")),
-                    RequestAccessMode.valueOf(values.get("requestAccess")),
-                    Long.parseUnsignedLong(values.get("djRole")),
-                    Long.parseUnsignedLong(values.get("managerRole")),
-                    Long.parseUnsignedLong(values.get("musicChannel")),
-                    Integer.parseInt(values.get("voteSkipPercent")));
-        } catch (IllegalArgumentException exception) {
-            throw new IllegalArgumentException("Профиль настроек содержит недопустимые значения", exception);
         }
     }
 }

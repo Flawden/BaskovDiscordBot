@@ -31,6 +31,8 @@ class FileGuildPreferencesRepositoryTest {
         repository.saveRequestAccessMode(42L, RequestAccessMode.DJ_ONLY);
         repository.saveDjRoleId(42L, 987654321L);
         repository.saveManagerRoleId(42L, 1122334455L);
+        repository.saveModeratorRoleId(42L, 2233445566L);
+        repository.saveRequesterQueueLimit(42L, 7);
         repository.saveMusicChannelId(42L, 5566778899L);
         repository.saveVoteSkipPercent(42L, 60);
         repository.recordAudit(42L, 777L, "manager-role=1122334455");
@@ -47,8 +49,10 @@ class FileGuildPreferencesRepositoryTest {
                 RequestAccessMode.DJ_ONLY,
                 987654321L,
                 1122334455L,
+                2233445566L,
                 5566778899L,
-                60), restarted.get(42L));
+                60,
+                7), restarted.get(42L));
         assertEquals(2, restarted.recentAudit(42L).size());
         assertEquals("music-channel=5566778899", restarted.recentAudit(42L).get(0).action());
         assertEquals(888L, restarted.recentAudit(42L).get(0).actorUserId());
@@ -89,8 +93,10 @@ class FileGuildPreferencesRepositoryTest {
                 RequestAccessMode.DJ_ONLY,
                 111L,
                 222L,
+                223L,
                 333L,
-                75);
+                75,
+                5);
 
         assertEquals(imported, repository.replace(7L, imported));
         FileGuildPreferencesRepository restarted = repository(storage);
@@ -109,6 +115,8 @@ class FileGuildPreferencesRepositoryTest {
         repository.saveRequestAccessMode(7L, RequestAccessMode.DJ_ONLY);
         repository.saveDjRoleId(7L, 777L);
         repository.saveManagerRoleId(7L, 778L);
+        repository.saveModeratorRoleId(7L, 780L);
+        repository.saveRequesterQueueLimit(7L, 4);
         repository.saveMusicChannelId(7L, 779L);
         repository.saveVoteSkipPercent(7L, 75);
 

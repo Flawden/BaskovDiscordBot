@@ -6,6 +6,19 @@
 
 ## [Unreleased]
 
+## [1.11.0] — 2026-08-09
+
+### Administration & Moderation 2.0
+
+- Добавлена persistent `moderator-role` как least-privilege уровень между обычным слушателем и manager/admin: она может модерировать waiting queue, но не получает права изменять guild settings, импортировать profiles или администрировать persistent library. DJ-role также сохраняет queue-moderation capability.
+- Новый `/moderation status|remove|purge|audit`: status показывает live revision/queue/requester summary и действующие moderation roles; `remove` удаляет одну глобальную позицию, `purge` — все pending requests выбранного пользователя. Обе mutation-команды поддерживают optional queue revision и отклоняют stale позиции без изменения очереди.
+- Добавлен persistent `/settings requester-limit max:<0..100>`: `0` отключает персональный cap, положительное значение ограничивает число **ожидающих** треков одного Discord requester-а. Enforcement находится внутри `TrackScheduler`, поэтому одинаково действует для `/play`, search selection, favorites/history replay и batch playlists; текущий playing track в cap не входит.
+- `MusicLoadResult` получил отдельный `REQUESTER_LIMIT`, чтобы персональный cap не маскировался под общую `QUEUE_FULL`; пользователь получает понятный ответ и может освободить своё место через `/queue-manage mine`.
+- Session recovery использует отдельный internal enqueue-path, который обходит только новый per-requester cap для уже сохранённой очереди, но сохраняет global queue bounds, duration и stream safety. Поэтому новый moderation limit не урезает checkpoint из `v1.10.0` при restart/redeploy.
+- `/settings moderator-role` и requester limit сохраняются в существующем atomic `guild-settings.properties`; administrative/moderation audit увеличен с 10 до 25 bounded entries и теперь также фиксирует успешные `/moderation remove|purge`. Existing persistence backup автоматически покрывает новые поля.
+- Portable settings profile upgraded to `BASKOV_SETTINGS_V2` с `moderatorRole` и `requesterQueueLimit`. Decoder продолжает принимать legacy `BASKOV_SETTINGS_V1`, присваивая новым полям безопасные defaults (`moderatorRole=0`, `requesterQueueLimit=0`).
+- `/settings permissions` расширена отдельной queue-moderation matrix и personal pending limit. `@everyone` по-прежнему запрещён для administrative/operational roles.
+
 ## [1.10.0] — 2026-08-09
 
 ### Playback Sessions & Recovery 2.0

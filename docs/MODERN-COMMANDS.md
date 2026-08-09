@@ -31,7 +31,8 @@
 | `/clear` | Очищает ожидание, не останавливая текущий трек |
 | `/queue-manage ...` | `stats`, `mine`, `community`, ownership-safe `remove-own`, batch remove-range/dedupe и `remove-mine` |
 | `/session status|recover` | Показывает playback checkpoint и позволяет manager/admin повторить pending recovery |
-| `/settings ...` | Guild administration: playback/request access, DJ/manager roles, voice restriction, profiles, audit и reset |
+| `/moderation status|remove|purge|audit` | Least-privilege queue moderation с revision guards и audit |
+| `/settings ...` | Guild administration: playback/request access, DJ/manager/moderator roles, requester limit, profiles, audit и reset |
 | `/help` | Показывает краткую помощь |
 | `/version` | Показывает версию production-сборки |
 | `/status` | Показывает uptime, Discord gateway, музыкальные сессии и агрегированные счётчики |
@@ -109,3 +110,8 @@ DJ-роли и голосование описаны в [`DJ-ROLES-AND-VOTING.md
 ## Playback Sessions & Recovery 2.0
 
 `/session status` — read-only guild-scoped диагностика текущего checkpoint/recovery. `/session recover` не создаёт новую очередь поверх активной сессии и доступен только через существующую `GuildAdministrationPolicy`. V2 checkpoint сохраняет bounded previous-history, поэтому кнопка/команда `/previous` может пережить restart/redeploy. Подробности — в [`VOICE-RECOVERY-SESSION-RESTORATION.md`](VOICE-RECOVERY-SESSION-RESTORATION.md).
+
+
+## Administration & Moderation 2.0
+
+`v1.11.0` добавляет `moderator-role` без полного доступа к guild settings и `/moderation status|remove|purge|audit`. `remove` и `purge` используют optional queue revision. `/settings requester-limit` вводит cap только для pending requests одного пользователя; enforcement находится в `TrackScheduler`, поэтому одинаков для play/search/favorites/history/playlist paths. Settings export теперь V2, а import продолжает принимать V1. Подробности — в [`ADMINISTRATION-MODERATION-2.md`](ADMINISTRATION-MODERATION-2.md).

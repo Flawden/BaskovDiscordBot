@@ -75,6 +75,9 @@ public class GuildMusicManager {
                     }
                 },
                 Objects.requireNonNull(historyListener, "historyListener"));
+        this.scheduler.setRequesterQueueLimit(Math.min(
+                initialPreferences.requesterQueueLimit(),
+                properties.getMaxQueueSize()));
         this.audioPlayer.addListener(this.scheduler);
         this.sendHandler = new AudioPlayerSendHandler(this.audioPlayer);
         log.info("Music session created for guild {}", guild.getId());

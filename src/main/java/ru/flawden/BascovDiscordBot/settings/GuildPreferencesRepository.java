@@ -23,6 +23,10 @@ public interface GuildPreferencesRepository {
 
     GuildPreferences saveManagerRoleId(long guildId, long roleId);
 
+    GuildPreferences saveModeratorRoleId(long guildId, long roleId);
+
+    GuildPreferences saveRequesterQueueLimit(long guildId, int limit);
+
     GuildPreferences saveMusicChannelId(long guildId, long channelId);
 
     GuildPreferences saveVoteSkipPercent(long guildId, int percent);

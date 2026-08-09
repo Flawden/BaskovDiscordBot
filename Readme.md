@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.10.0**.
+Текущая версия релизной ветки: **v1.11.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -101,6 +101,7 @@ GitHub-hosted delivery и резервный self-hosted режим описан
 Интерактивный поиск и безопасный выбор трека описаны в [`docs/SEARCH-TRACK-SELECTION.md`](docs/SEARCH-TRACK-SELECTION.md).
 Постоянные плейлисты, история и replay описаны в [`docs/PLAYLISTS-HISTORY-REPLAY.md`](docs/PLAYLISTS-HISTORY-REPLAY.md), а личное избранное — в [`docs/FAVORITES-PERSONAL-LIBRARY.md`](docs/FAVORITES-PERSONAL-LIBRARY.md).
 DJ-роли, access modes и vote-skip описаны в [`docs/DJ-ROLES-AND-VOTING.md`](docs/DJ-ROLES-AND-VOTING.md), а guild administration — в [`docs/GUILD-ADMINISTRATION.md`](docs/GUILD-ADMINISTRATION.md).
+Least-privilege queue moderation, moderator-role и per-requester pending limit описаны в [`docs/ADMINISTRATION-MODERATION-2.md`](docs/ADMINISTRATION-MODERATION-2.md).
 Очередь и новые команды управления описаны в [`docs/QUEUE-EXPERIENCE.md`](docs/QUEUE-EXPERIENCE.md).
 Расширенный пульт, история и `/previous` описаны в [`docs/ADVANCED-PLAYBACK-CONTROLS.md`](docs/ADVANCED-PLAYBACK-CONTROLS.md).
 Маршрутизация источников и переход на YouTube primary описаны в [`docs/YOUTUBE-PRIMARY-PROVIDER.md`](docs/YOUTUBE-PRIMARY-PROVIDER.md).

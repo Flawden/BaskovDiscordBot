@@ -36,7 +36,8 @@ class GuildAdministration2ContractTest {
         String repository = source("settings/FileGuildPreferencesRepository.java");
         String policy = source("settings/GuildAdministrationPolicy.java");
 
-        assertTrue(repository.contains("MAX_AUDIT_ENTRIES = 10"));
+        assertTrue(repository.contains("MAX_AUDIT_ENTRIES"));
+        assertTrue(repository.contains("updated.size() > MAX_AUDIT_ENTRIES"));
         assertTrue(repository.contains("manager-role"));
         assertTrue(repository.contains("music-channel"));
         assertTrue(repository.contains("request-access"));

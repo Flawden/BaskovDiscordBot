@@ -1,16 +1,16 @@
 # Permissions & Guild Administration
 
-`v1.5.0` разделяет права Баскова на три независимых уровня: администрирование, добавление музыки и управление активным playback.
+`v1.5.0` разделил права Баскова на администрирование, добавление музыки и управление playback. `v1.11.0` добавляет четвёртый, least-privilege слой: moderation waiting queue.
 
-## Кто администрирует Баскова
+## Полное администрирование Баскова
 
-Административные guild settings могут менять:
+Guild settings могут менять:
 
 - владелец Discord-сервера;
 - участник с Discord permission `Manage Server`;
 - участник настроенной `manager-role`.
 
-`manager-role` также считается административной ролью для операций постоянной библиотеки, где раньше требовался owner/`Manage Server`.
+`manager-role` также считается административной для persistent library operations.
 
 ```text
 /settings manager-role role:<@role>
@@ -18,6 +18,30 @@
 ```
 
 Пустая роль очищает настройку. `@everyone` запрещён.
+
+## Queue moderator
+
+`v1.11.0` позволяет выдать права только на порядок в waiting queue без полного доступа к settings:
+
+```text
+/settings moderator-role role:<@role>
+/settings moderator-role
+```
+
+Queue moderation разрешена owner / `Manage Server` / manager-role / moderator-role / DJ-role.
+
+Moderator-role сама по себе **не** может менять guild settings, import/export profiles или администрировать persistent playlists.
+
+Команды:
+
+```text
+/moderation status
+/moderation remove position:<n> [revision:<r>]
+/moderation purge user:<@user> [revision:<r>]
+/moderation audit
+```
+
+Mutation-команды revision-safe. Подробности — в [`ADMINISTRATION-MODERATION-2.md`](ADMINISTRATION-MODERATION-2.md).
 
 ## Раздельные права requests и playback
 
@@ -36,7 +60,15 @@ open  — любой допустимый слушатель может /play, /
 dj    — новые треки может добавлять только DJ или администрация
 ```
 
-Это позволяет, например, оставить vote-skip для слушателей, но запретить им самостоятельно менять очередь новыми запросами.
+## Per-requester queue limit
+
+```text
+/settings requester-limit max:<0..100>
+```
+
+`0` выключает limit. Положительное значение ограничивает только pending tracks одного requester-а; current playing track не учитывается. Deployment `maxQueueSize` остаётся верхней границей.
+
+Enforcement находится в `TrackScheduler`, поэтому одинаково применяется ко всем queueing paths.
 
 ## Voice/stage restriction
 
@@ -53,43 +85,45 @@ dj    — новые треки может добавлять только DJ и
 /settings permissions
 ```
 
-Команда показывает manager-role, DJ-role, request access, playback access, разрешённый voice/stage канал и vote-skip threshold.
+Команда показывает manager/moderator/DJ roles, request/playback access, queue moderation, personal pending limit, разрешённый voice/stage канал и vote-skip threshold.
 
 ## Export / import
 
 ```text
 /settings export
-/settings import profile:<BASKOV_SETTINGS_V1...>
+/settings import profile:<BASKOV_SETTINGS_V2...>
 ```
 
-Export выдаёт ephemeral URL-safe профиль без Discord token или других secrets. Профиль содержит только guild music settings и Discord IDs ролей/канала.
+V2 содержит volume/repeat/access policies, DJ/manager/moderator roles, music channel, vote threshold и requester queue limit. Discord token/secrets не экспортируются.
+
+Decoder остаётся совместимым с `BASKOV_SETTINGS_V1`: новые поля получают defaults `moderatorRole=0` и `requesterQueueLimit=0`.
 
 Import выполняется атомарно. Перед записью Басков проверяет:
 
-- максимальную громкость текущего deployment;
-- существование DJ-role и manager-role в целевой guild;
+- максимальную громкость deployment;
+- существование DJ/manager/moderator roles;
 - существование и audio-тип voice/stage channel;
+- requester limit против локального `maxQueueSize`;
 - версию и целостность profile payload.
 
-Role/channel IDs специфичны для Discord-сервера, поэтому profile с одного сервера может потребовать очистки или перенастройки ролей перед переносом на другой.
+Role/channel IDs специфичны для Discord-сервера.
 
 ## Audit
 
-Каждое успешное изменение через `/settings` добавляет bounded audit entry:
+Успешные settings и queue moderation mutations добавляют bounded audit entry:
 
 ```text
 /settings audit
+/moderation audit
 ```
 
-Хранятся последние 10 записей: timestamp, Discord user ID автора и краткое действие. Audit лежит внутри `guild-settings.properties`, поэтому уже существующий persistence backup автоматически включает его.
+Хранятся последние 25 событий: timestamp, Discord user ID автора и краткое действие. Audit лежит внутри `guild-settings.properties`, поэтому persistence backup включает его автоматически.
 
 ## Reset
-
-`v1.6.0` переводит полный сброс на интерактивное подтверждение:
 
 ```text
 /settings reset
 → [Подтвердить] [Отмена]
 ```
 
-Confirmation живёт две минуты, привязана к guild + пользователю и перед mutation повторно проверяет административные права. `confirm:true` больше не используется.
+Confirmation живёт две минуты, привязана к guild + пользователю и перед mutation повторно проверяет административные права. Reset очищает также moderator-role и requester queue limit.

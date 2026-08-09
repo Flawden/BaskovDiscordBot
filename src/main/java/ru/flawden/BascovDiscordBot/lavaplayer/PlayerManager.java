@@ -245,6 +245,15 @@ public class PlayerManager {
             String identifier,
             TrackRequester requester,
             Consumer<MusicLoadResult> resultConsumer) {
+        loadAndPlay(guild, identifier, requester, false, resultConsumer);
+    }
+
+    private void loadAndPlay(
+            Guild guild,
+            String identifier,
+            TrackRequester requester,
+            boolean recoveryRestore,
+            Consumer<MusicLoadResult> resultConsumer) {
         GuildMusicManager musicManager = getMusicManager(guild);
         musicManager.markActivity();
         log.info("Loading media for guild {}: {}", guild.getId(), identifier);
@@ -253,7 +262,7 @@ public class PlayerManager {
             @Override
             public void trackLoaded(AudioTrack track) {
                 deliverQueueResult(
-                        guild, musicManager, track, requester, List.of(), resultConsumer);
+                        guild, musicManager, track, requester, List.of(), recoveryRestore, resultConsumer);
             }
 
             @Override
@@ -271,7 +280,7 @@ public class PlayerManager {
 
                 List<AudioTrack> fallbacks = searchFallbacks(identifier, playlist, selected);
                 deliverQueueResult(
-                        guild, musicManager, selected, requester, fallbacks, resultConsumer);
+                        guild, musicManager, selected, requester, fallbacks, recoveryRestore, resultConsumer);
             }
 
             @Override
@@ -362,6 +371,7 @@ public class PlayerManager {
                 track,
                 requester,
                 List.of(),
+                false,
                 resultConsumer);
     }
 
@@ -796,6 +806,7 @@ public class PlayerManager {
                 guild,
                 saved.track().playbackIdentifier(),
                 saved.requester(),
+                true,
                 result -> {
                     boolean loaded = result.status() == MusicLoadResult.Status.STARTED
                             || result.status() == MusicLoadResult.Status.QUEUED;
@@ -1172,6 +1183,7 @@ public class PlayerManager {
             AudioTrack track,
             TrackRequester requester,
             List<AudioTrack> fallbackTracks,
+            boolean recoveryRestore,
             Consumer<MusicLoadResult> resultConsumer) {
         if (!musicManager.isActive()) {
             log.info("Ignoring completed media load for closed guild session {}", guild.getId());
@@ -1179,17 +1191,20 @@ public class PlayerManager {
             return;
         }
 
-        TrackScheduler.QueueResult queueResult = musicManager.getScheduler().queue(
-                track, requester, fallbackTracks);
+        TrackScheduler.QueueResult queueResult = recoveryRestore
+                ? musicManager.getScheduler().queueRecovered(track, requester, fallbackTracks)
+                : musicManager.getScheduler().queue(track, requester, fallbackTracks);
         MusicLoadResult.Status status = switch (queueResult.status()) {
             case STARTED -> MusicLoadResult.Status.STARTED;
             case QUEUED -> MusicLoadResult.Status.QUEUED;
+            case REQUESTER_LIMIT -> MusicLoadResult.Status.REQUESTER_LIMIT;
             case QUEUE_FULL -> MusicLoadResult.Status.QUEUE_FULL;
             case TRACK_TOO_LONG -> MusicLoadResult.Status.TRACK_TOO_LONG;
             case STREAM_NOT_ALLOWED -> MusicLoadResult.Status.STREAM_NOT_ALLOWED;
         };
 
-        if (status == MusicLoadResult.Status.QUEUE_FULL
+        if (status == MusicLoadResult.Status.REQUESTER_LIMIT
+                || status == MusicLoadResult.Status.QUEUE_FULL
                 || status == MusicLoadResult.Status.TRACK_TOO_LONG
                 || status == MusicLoadResult.Status.STREAM_NOT_ALLOWED) {
             musicManager.getScheduler().scheduleDisconnectIfIdle();

@@ -56,6 +56,7 @@ import ru.flawden.BascovDiscordBot.settings.GuildPreferences;
 import ru.flawden.BascovDiscordBot.settings.GuildSettingsAuditEntry;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
 import ru.flawden.BascovDiscordBot.settings.PlaybackAccessMode;
+import ru.flawden.BascovDiscordBot.settings.QueueModerationPolicy;
 import ru.flawden.BascovDiscordBot.settings.RequestAccessMode;
 import ru.flawden.BascovDiscordBot.settings.SettingsProfileCodec;
 
@@ -88,6 +89,7 @@ public class ModernInteractions extends ListenerAdapter {
     private final VersionEvent versionEvent;
     private final GuildPreferencesRepository preferencesRepository;
     private final GuildAdministrationPolicy administrationPolicy;
+    private final QueueModerationPolicy moderationPolicy;
     private final OperationalMetrics operationalMetrics;
     private final RuntimeHealthMonitor healthMonitor;
     private final PersistenceReadiness persistenceReadiness;
@@ -107,6 +109,7 @@ public class ModernInteractions extends ListenerAdapter {
             VersionEvent versionEvent,
             GuildPreferencesRepository preferencesRepository,
             GuildAdministrationPolicy administrationPolicy,
+            QueueModerationPolicy moderationPolicy,
             OperationalMetrics operationalMetrics,
             RuntimeHealthMonitor healthMonitor,
             PersistenceReadiness persistenceReadiness,
@@ -124,6 +127,7 @@ public class ModernInteractions extends ListenerAdapter {
         this.versionEvent = versionEvent;
         this.preferencesRepository = preferencesRepository;
         this.administrationPolicy = administrationPolicy;
+        this.moderationPolicy = moderationPolicy;
         this.operationalMetrics = operationalMetrics;
         this.healthMonitor = healthMonitor;
         this.persistenceReadiness = persistenceReadiness;
@@ -172,6 +176,7 @@ public class ModernInteractions extends ListenerAdapter {
                 case "move" -> move(event);
                 case "clear" -> clear(event);
                 case "queue-manage" -> queueManage(event);
+                case "moderation" -> moderation(event);
                 case "settings" -> settings(event);
                 default -> event.replyEmbeds(MusicEmbeds.error(
                                 "❌ Неизвестная slash-команда",
@@ -513,6 +518,7 @@ public class ModernInteractions extends ListenerAdapter {
         playerManager.findMusicManager(guild).ifPresent(manager -> {
             manager.getAudioPlayer().setVolume(preferences.volume());
             manager.getScheduler().setRepeatMode(preferences.repeatMode());
+            manager.getScheduler().setRequesterQueueLimit(preferences.requesterQueueLimit());
         });
         recordSettingsAudit(guild, event.getUser().getIdLong(), "reset-to-defaults");
         event.editMessageEmbeds(settingsEmbed(preferences))
@@ -2473,6 +2479,160 @@ public class ModernInteractions extends ListenerAdapter {
         return revision == null ? OptionalLong.empty() : OptionalLong.of(revision.getAsLong());
     }
 
+    private void moderation(SlashCommandInteractionEvent event) {
+        if (!allowModeration(event)) {
+            return;
+        }
+        String subcommand = event.getSubcommandName();
+        if (subcommand == null || "status".equals(subcommand)) {
+            event.replyEmbeds(moderationStatusEmbed(event.getGuild())).setEphemeral(true).queue();
+            return;
+        }
+        if ("audit".equals(subcommand)) {
+            showAdministrativeAudit(event);
+            return;
+        }
+
+        OptionalLong expectedRevision = queueRevisionOption(event);
+        if (expectedRevision.isPresent() && expectedRevision.getAsLong() < 0L) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🔢 Неверная ревизия",
+                            "Ревизия очереди должна быть неотрицательным числом из `/queue`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        GuildMusicManager manager = playerManager.findMusicManager(event.getGuild()).orElse(null);
+        if (manager == null) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🎵 Музыкальной сессии нет",
+                            "Сейчас нет активной очереди для moderation."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        switch (subcommand) {
+            case "remove" -> moderationRemove(event, manager, expectedRevision);
+            case "purge" -> moderationPurge(event, manager, expectedRevision);
+            default -> event.replyEmbeds(MusicEmbeds.error(
+                            "🛡️ Неизвестная moderation-команда",
+                            "Используй `/moderation status|remove|purge|audit`."))
+                    .setEphemeral(true)
+                    .queue();
+        }
+    }
+
+    private void moderationRemove(
+            SlashCommandInteractionEvent event,
+            GuildMusicManager manager,
+            OptionalLong expectedRevision) {
+        long rawPosition = event.getOption("position", -1L, OptionMapping::getAsLong);
+        if (rawPosition < 1L || rawPosition > Integer.MAX_VALUE) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🗑️ Неверная позиция",
+                            "Укажи глобальную позицию из `/queue`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        TrackScheduler.QueueMutationResult result = manager.getScheduler().removeRange(
+                Math.toIntExact(rawPosition),
+                Math.toIntExact(rawPosition),
+                expectedRevision);
+        if (!replyQueueMutationFailure(event, result)) {
+            return;
+        }
+        TrackRequest removed = result.removed().get(0);
+        recordSettingsAudit(event, "moderation:remove position=" + rawPosition
+                + " requester=" + removed.requester().userId());
+        event.replyEmbeds(MusicEmbeds.success(
+                        "🛡️ Трек удалён модератором",
+                        "Удалён: `" + removed.track().getInfo().title + "`\n"
+                                + "Заказал: " + removed.requester().discordLabel() + "\n"
+                                + "Новая ревизия: `" + result.revision() + "`."))
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private void moderationPurge(
+            SlashCommandInteractionEvent event,
+            GuildMusicManager manager,
+            OptionalLong expectedRevision) {
+        long targetUserId = event.getOption(
+                "user",
+                0L,
+                option -> option.getAsUser().getIdLong());
+        if (targetUserId <= 0L) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "👤 Пользователь не указан",
+                            "Выбери пользователя, чьи ожидающие треки нужно удалить."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        TrackScheduler.QueueMutationResult result = manager.getScheduler().removeRequester(
+                targetUserId,
+                expectedRevision);
+        if (result.status() == TrackScheduler.QueueMutationStatus.NO_CHANGES) {
+            event.replyEmbeds(MusicEmbeds.success(
+                            "🛡️ Очищать нечего",
+                            "У <@" + targetUserId + "> нет ожидающих треков. Ревизия: `"
+                                    + result.revision() + "`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        if (!replyQueueMutationFailure(event, result)) {
+            return;
+        }
+        recordSettingsAudit(event, "moderation:purge requester=" + targetUserId
+                + " removed=" + result.removedCount());
+        event.replyEmbeds(MusicEmbeds.success(
+                        "🛡️ Очередь пользователя очищена",
+                        "Удалено у <@" + targetUserId + ">: `" + result.removedCount() + "` треков\n"
+                                + "Освобождено времени: `"
+                                + MusicEmbeds.humanMillis(result.removedDurationMillis()) + "`\n"
+                                + "Новая ревизия: `" + result.revision() + "`."))
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private MessageEmbed moderationStatusEmbed(Guild guild) {
+        GuildPreferences preferences = preferencesRepository.get(guild.getIdLong());
+        GuildMusicManager manager = playerManager.findMusicManager(guild).orElse(null);
+        TrackScheduler.QueueStats stats = manager == null
+                ? new TrackScheduler.QueueStats(0L, 0, 0L, 0, 0)
+                : manager.getScheduler().queueStats();
+        return new EmbedBuilder()
+                .setTitle("🛡️ Queue moderation")
+                .setColor(Color.ORANGE)
+                .addField("Moderator-role", moderatorRoleLabel(preferences), true)
+                .addField("DJ-role", djRoleLabel(preferences), true)
+                .addField("Manager-role", managerRoleLabel(preferences), true)
+                .addField("Pending / user", requesterQueueLimitLabel(preferences), true)
+                .addField("Очередь", "`" + stats.size() + "` треков", true)
+                .addField("Revision", "`" + stats.revision() + "`", true)
+                .addField("Заказчиков", "`" + stats.uniqueRequesters() + "`", true)
+                .setFooter("remove/purge используют queue revision; moderator-role не может менять settings")
+                .build();
+    }
+
+    private boolean allowModeration(SlashCommandInteractionEvent event) {
+        if (moderationPolicy.canModerate(event.getMember())) {
+            return true;
+        }
+        event.replyEmbeds(MusicEmbeds.error(
+                        "🔐 Moderation недоступна",
+                        "Очередь может модерировать владелец, `Manage Server`, manager-role, moderator-role или DJ-role."))
+                .setEphemeral(true)
+                .queue();
+        return false;
+    }
+
     private void settings(SlashCommandInteractionEvent event) {
         String subcommand = event.getSubcommandName();
         if (subcommand == null || "show".equals(subcommand)) {
@@ -2492,13 +2652,15 @@ public class ModernInteractions extends ListenerAdapter {
             case "request-access" -> updateRequestAccessMode(event);
             case "dj-role" -> updateDjRole(event);
             case "manager-role" -> updateManagerRole(event);
+            case "moderator-role" -> updateModeratorRole(event);
+            case "requester-limit" -> updateRequesterQueueLimit(event);
             case "voice-channel" -> updateMusicVoiceChannel(event);
             case "vote-threshold" -> updateVoteThreshold(event);
             case "permissions" -> event.replyEmbeds(permissionsEmbed(
                             preferencesRepository.get(event.getGuild().getIdLong())))
                     .setEphemeral(true)
                     .queue();
-            case "audit" -> showSettingsAudit(event);
+            case "audit" -> showAdministrativeAudit(event);
             case "export" -> exportSettings(event);
             case "import" -> importSettings(event);
             case "reset" -> resetSettings(event);
@@ -2634,6 +2796,40 @@ public class ModernInteractions extends ListenerAdapter {
         return true;
     }
 
+    private void updateModeratorRole(SlashCommandInteractionEvent event) {
+        Role role = event.getOption("role", null, OptionMapping::getAsRole);
+        if (!validateAdministrativeRole(event, role, "moderator")) {
+            return;
+        }
+
+        GuildPreferences preferences = preferencesRepository.saveModeratorRoleId(
+                event.getGuild().getIdLong(), role == null ? 0L : role.getIdLong());
+        recordSettingsAudit(event, "moderator-role=" + (role == null ? "cleared" : role.getId()));
+        event.replyEmbeds(settingsEmbed(preferences)).setEphemeral(true).queue();
+    }
+
+    private void updateRequesterQueueLimit(SlashCommandInteractionEvent event) {
+        long requested = event.getOption("max", -1L, OptionMapping::getAsLong);
+        int maximum = Math.min(100, musicProperties.getMaxQueueSize());
+        if (requested < 0 || requested > maximum) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "👤 Недопустимый персональный лимит",
+                            "Укажи `0` для отключения лимита или значение от `1` до `"
+                                    + maximum + "`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        int limit = Math.toIntExact(requested);
+        GuildPreferences preferences = preferencesRepository.saveRequesterQueueLimit(
+                event.getGuild().getIdLong(), limit);
+        playerManager.findMusicManager(event.getGuild())
+                .ifPresent(manager -> manager.getScheduler().setRequesterQueueLimit(limit));
+        recordSettingsAudit(event, "requester-queue-limit=" + limit);
+        event.replyEmbeds(settingsEmbed(preferences)).setEphemeral(true).queue();
+    }
+
     private void updateMusicVoiceChannel(SlashCommandInteractionEvent event) {
         OptionMapping option = event.getOption("channel");
         GuildChannel channel = option == null ? null : option.getAsChannel();
@@ -2698,6 +2894,7 @@ public class ModernInteractions extends ListenerAdapter {
         playerManager.findMusicManager(event.getGuild()).ifPresent(manager -> {
             manager.getAudioPlayer().setVolume(preferences.volume());
             manager.getScheduler().setRepeatMode(preferences.repeatMode());
+            manager.getScheduler().setRequesterQueueLimit(preferences.requesterQueueLimit());
         });
         recordSettingsAudit(event, "profile-import");
         event.replyEmbeds(settingsEmbed(preferences)).setEphemeral(true).queue();
@@ -2709,6 +2906,10 @@ public class ModernInteractions extends ListenerAdapter {
         }
         validateImportedRole(guild, preferences.djRoleId(), "DJ-роль");
         validateImportedRole(guild, preferences.managerRoleId(), "manager-role");
+        validateImportedRole(guild, preferences.moderatorRoleId(), "moderator-role");
+        if (preferences.requesterQueueLimit() > musicProperties.getMaxQueueSize()) {
+            throw new IllegalArgumentException("Персональный лимит очереди профиля превышает max queue size этого бота.");
+        }
         if (preferences.musicChannelId() > 0) {
             GuildChannel channel = guild.getGuildChannelById(preferences.musicChannelId());
             if (channel == null || !channel.getType().isAudio()) {
@@ -2727,12 +2928,12 @@ public class ModernInteractions extends ListenerAdapter {
         }
     }
 
-    private void showSettingsAudit(SlashCommandInteractionEvent event) {
+    private void showAdministrativeAudit(SlashCommandInteractionEvent event) {
         List<GuildSettingsAuditEntry> entries = preferencesRepository.recentAudit(event.getGuild().getIdLong());
         if (entries.isEmpty()) {
             event.replyEmbeds(MusicEmbeds.success(
-                            "🧾 Аудит настроек",
-                            "Сохраняемых изменений ещё нет. Новые изменения будут храниться в последних 10 записях."))
+                            "🧾 Administrative audit",
+                            "Сохраняемых administrative/moderation действий ещё нет. Новые записи будут храниться в последних 25 событиях."))
                     .setEphemeral(true)
                     .queue();
             return;
@@ -2747,10 +2948,10 @@ public class ModernInteractions extends ListenerAdapter {
                     + " • <@" + entry.actorUserId() + "> • `" + entry.action() + "`");
         }
         event.replyEmbeds(new EmbedBuilder()
-                        .setTitle("🧾 Последние изменения настроек")
+                        .setTitle("🧾 Administrative & moderation audit")
                         .setDescription(String.join("\n", lines))
                         .setColor(Color.ORANGE)
-                        .setFooter("Хранятся последние 10 изменений в guild-settings.properties")
+                        .setFooter("Хранятся последние 25 administrative/moderation действий в guild-settings.properties")
                         .build())
                 .setEphemeral(true)
                 .queue();
@@ -2763,8 +2964,8 @@ public class ModernInteractions extends ListenerAdapter {
                 ConfirmationStore.Action.RESET_SETTINGS,
                 "",
                 "⚠️ Сбросить guild settings?",
-                "Будут удалены overrides громкости, repeat/access policies, DJ/manager roles, "
-                        + "music-channel restriction и vote-skip threshold. Текущая громкость: `"
+                "Будут удалены overrides громкости, repeat/access policies, DJ/manager/moderator roles, "
+                        + "requester queue limit, music-channel restriction и vote-skip threshold. Текущая громкость: `"
                         + current.volume() + "%`.");
     }
 
@@ -2852,6 +3053,8 @@ public class ModernInteractions extends ListenerAdapter {
                 .addField("Добавление музыки", "`" + preferences.requestAccessMode().label() + "`", true)
                 .addField("DJ-роль", djRoleLabel(preferences), true)
                 .addField("Manager-role", managerRoleLabel(preferences), true)
+                .addField("Moderator-role", moderatorRoleLabel(preferences), true)
+                .addField("Лимит очереди / user", requesterQueueLimitLabel(preferences), true)
                 .addField("Музыкальный канал", musicChannelLabel(preferences), true)
                 .addField("Порог vote-skip", "`" + preferences.voteSkipPercent() + "%`", true)
                 .setFooter("/settings permissions — матрица доступа; /settings audit — последние изменения")
@@ -2869,9 +3072,12 @@ public class ModernInteractions extends ListenerAdapter {
                                 + (preferences.hasMusicChannel()
                                 ? " • только <#" + preferences.musicChannelId() + ">" : ""), false)
                 .addField("Playback controls", "`" + preferences.accessMode().label() + "`", false)
-                .addField("DJ", djRoleLabel(preferences), true)
+                .addField("Queue moderation", "Владелец / `Manage Server` / "
+                        + managerRoleLabel(preferences) + " / " + moderatorRoleLabel(preferences)
+                        + " / " + djRoleLabel(preferences), false)
+                .addField("Лимит pending / user", requesterQueueLimitLabel(preferences), true)
                 .addField("Vote-skip", "`" + preferences.voteSkipPercent() + "%`", true)
-                .setFooter("Manager-role считается привилегированной для управления Басковым")
+                .setFooter("Moderator-role модерирует очередь, но не изменяет guild settings")
                 .build();
     }
 
@@ -2881,6 +3087,18 @@ public class ModernInteractions extends ListenerAdapter {
 
     private static String managerRoleLabel(GuildPreferences preferences) {
         return preferences.hasManagerRole() ? "<@&" + preferences.managerRoleId() + ">" : "`не назначена`";
+    }
+
+    private static String moderatorRoleLabel(GuildPreferences preferences) {
+        return preferences.hasModeratorRole()
+                ? "<@&" + preferences.moderatorRoleId() + ">"
+                : "`не назначена`";
+    }
+
+    private static String requesterQueueLimitLabel(GuildPreferences preferences) {
+        return preferences.hasRequesterQueueLimit()
+                ? "`" + preferences.requesterQueueLimit() + " pending`"
+                : "`без персонального лимита`";
     }
 
     private static String musicChannelLabel(GuildPreferences preferences) {
@@ -3114,6 +3332,7 @@ public class ModernInteractions extends ListenerAdapter {
                 : section;
         GuildPreferences preferences = preferencesRepository.get(member.getGuild().getIdLong());
         boolean canManage = administrationPolicy.canManage(member);
+        boolean canModerate = moderationPolicy.canModerate(member);
 
         EmbedBuilder embed = new EmbedBuilder()
                 .setColor(Color.CYAN)
@@ -3147,6 +3366,9 @@ public class ModernInteractions extends ListenerAdapter {
                     .addField("Основное", "`/queue` `/remove` `/move` `/shuffle` `/clear`", false)
                     .addField("Queue Manager", "`stats` `mine` `community` `remove-own` `remove-range` `dedupe` `remove-mine`", false)
                     .addField("Совместная очередь", "В `/queue` есть кнопки `Мои треки`, `Заказчики` и read-only статус vote-skip.", false)
+                    .addField("Moderation", canModerate
+                            ? "`/moderation status|remove|purge|audit` — у тебя есть queue moderation access."
+                            : "Queue moderation требует DJ/moderator/manager либо Discord admin rights.", false)
                     .addField("Ревизии", "Позиционные операции могут сверять revision, чтобы не удалить уже сдвинувшийся или чужой трек.", false)
                     .addField("Защита clear", "Непустая `/clear` теперь требует отдельной кнопки подтверждения; текущий трек не останавливается.", false);
             case LIBRARY -> embed
@@ -3164,7 +3386,8 @@ public class ModernInteractions extends ListenerAdapter {
                             ? "У тебя есть административный доступ Баскова на этом сервере."
                             : "Для изменения настроек нужны owner, `Manage Server` или manager-role Баскова.")
                     .addField("Посмотреть", "`/settings show` `/settings permissions` `/settings audit`", false)
-                    .addField("Доступ", "`/settings access` `/settings request-access` `/settings dj-role` `/settings manager-role` `/settings voice-channel`", false)
+                    .addField("Доступ", "`/settings access` `/settings request-access` `/settings dj-role` `/settings manager-role` `/settings moderator-role` `/settings voice-channel`", false)
+                    .addField("Moderation", "`/settings requester-limit` + `/moderation status|remove|purge|audit`", false)
                     .addField("Поведение", "`/settings volume` `/settings repeat` `/settings vote-threshold`", false)
                     .addField("Перенос", "`/settings export` `/settings import`", false)
                     .addField("Сброс", "`/settings reset` открывает интерактивное подтверждение; `confirm:true` больше вводить не нужно.", false)

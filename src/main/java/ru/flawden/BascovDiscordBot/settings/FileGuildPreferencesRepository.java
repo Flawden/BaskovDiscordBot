@@ -36,9 +36,9 @@ import java.util.regex.Pattern;
 public class FileGuildPreferencesRepository implements GuildPreferencesRepository {
 
     private static final Pattern KEY_PATTERN = Pattern.compile(
-            "guild\\.(\\d+)\\.(volume|repeat|access|request-access|dj-role|manager-role|music-channel|vote-skip-percent)");
+            "guild\\.(\\d+)\\.(volume|repeat|access|request-access|dj-role|manager-role|moderator-role|music-channel|vote-skip-percent|requester-queue-limit)");
     private static final Pattern AUDIT_KEY_PATTERN = Pattern.compile("guild\\.(\\d+)\\.audit\\.(\\d+)");
-    private static final int MAX_AUDIT_ENTRIES = 10;
+    private static final int MAX_AUDIT_ENTRIES = 25;
     private static final Set<PosixFilePermission> OWNER_ONLY = EnumSet.of(
             PosixFilePermission.OWNER_READ,
             PosixFilePermission.OWNER_WRITE
@@ -132,6 +132,13 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
                             }
                             candidate.managerRoleId = roleId;
                         }
+                        case "moderator-role" -> {
+                            long roleId = Long.parseUnsignedLong(value);
+                            if (roleId < 0) {
+                                throw new IllegalArgumentException("role id cannot be negative");
+                            }
+                            candidate.moderatorRoleId = roleId;
+                        }
                         case "music-channel" -> {
                             long channelId = Long.parseUnsignedLong(value);
                             if (channelId < 0) {
@@ -143,6 +150,11 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
                             int percent = Integer.parseInt(value);
                             validateVoteSkipPercent(percent);
                             candidate.voteSkipPercent = percent;
+                        }
+                        case "requester-queue-limit" -> {
+                            int limit = Integer.parseInt(value);
+                            validateRequesterQueueLimit(limit);
+                            candidate.requesterQueueLimit = limit;
                         }
                         default -> throw new IllegalArgumentException("unknown key");
                     }
@@ -186,8 +198,10 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
                     current.requestAccessMode(),
                     current.djRoleId(),
                     current.managerRoleId(),
+                    current.moderatorRoleId(),
                     current.musicChannelId(),
-                    current.voteSkipPercent());
+                    current.voteSkipPercent(),
+                    current.requesterQueueLimit());
             GuildPreferences previous = preferences.put(guildId, updated);
             try {
                 persistLocked();
@@ -214,8 +228,10 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
                     current.requestAccessMode(),
                     current.djRoleId(),
                     current.managerRoleId(),
+                    current.moderatorRoleId(),
                     current.musicChannelId(),
-                    current.voteSkipPercent());
+                    current.voteSkipPercent(),
+                    current.requesterQueueLimit());
             GuildPreferences previous = preferences.put(guildId, updated);
             try {
                 persistLocked();
@@ -242,8 +258,10 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
                     current.requestAccessMode(),
                     current.djRoleId(),
                     current.managerRoleId(),
+                    current.moderatorRoleId(),
                     current.musicChannelId(),
-                    current.voteSkipPercent());
+                    current.voteSkipPercent(),
+                    current.requesterQueueLimit());
             GuildPreferences previous = preferences.put(guildId, updated);
             try {
                 persistLocked();
@@ -265,7 +283,8 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
             GuildPreferences current = preferences.getOrDefault(guildId, defaults());
             return replaceLocked(guildId, new GuildPreferences(
                     current.volume(), current.repeatMode(), current.accessMode(), accessMode,
-                    current.djRoleId(), current.managerRoleId(), current.musicChannelId(), current.voteSkipPercent()));
+                    current.djRoleId(), current.managerRoleId(), current.moderatorRoleId(),
+                    current.musicChannelId(), current.voteSkipPercent(), current.requesterQueueLimit()));
         }
     }
 
@@ -284,8 +303,10 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
                     current.requestAccessMode(),
                     roleId,
                     current.managerRoleId(),
+                    current.moderatorRoleId(),
                     current.musicChannelId(),
-                    current.voteSkipPercent());
+                    current.voteSkipPercent(),
+                    current.requesterQueueLimit());
             GuildPreferences previous = preferences.put(guildId, updated);
             try {
                 persistLocked();
@@ -307,7 +328,36 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
             GuildPreferences current = preferences.getOrDefault(guildId, defaults());
             return replaceLocked(guildId, new GuildPreferences(
                     current.volume(), current.repeatMode(), current.accessMode(), current.requestAccessMode(),
-                    current.djRoleId(), roleId, current.musicChannelId(), current.voteSkipPercent()));
+                    current.djRoleId(), roleId, current.moderatorRoleId(), current.musicChannelId(),
+                    current.voteSkipPercent(), current.requesterQueueLimit()));
+        }
+    }
+
+    @Override
+    public GuildPreferences saveModeratorRoleId(long guildId, long roleId) {
+        validateGuildId(guildId);
+        if (roleId < 0) {
+            throw new IllegalArgumentException("roleId cannot be negative");
+        }
+        synchronized (mutationLock) {
+            GuildPreferences current = preferences.getOrDefault(guildId, defaults());
+            return replaceLocked(guildId, new GuildPreferences(
+                    current.volume(), current.repeatMode(), current.accessMode(), current.requestAccessMode(),
+                    current.djRoleId(), current.managerRoleId(), roleId, current.musicChannelId(),
+                    current.voteSkipPercent(), current.requesterQueueLimit()));
+        }
+    }
+
+    @Override
+    public GuildPreferences saveRequesterQueueLimit(long guildId, int limit) {
+        validateGuildId(guildId);
+        validateRequesterQueueLimit(limit);
+        synchronized (mutationLock) {
+            GuildPreferences current = preferences.getOrDefault(guildId, defaults());
+            return replaceLocked(guildId, new GuildPreferences(
+                    current.volume(), current.repeatMode(), current.accessMode(), current.requestAccessMode(),
+                    current.djRoleId(), current.managerRoleId(), current.moderatorRoleId(), current.musicChannelId(),
+                    current.voteSkipPercent(), limit));
         }
     }
 
@@ -321,7 +371,8 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
             GuildPreferences current = preferences.getOrDefault(guildId, defaults());
             return replaceLocked(guildId, new GuildPreferences(
                     current.volume(), current.repeatMode(), current.accessMode(), current.requestAccessMode(),
-                    current.djRoleId(), current.managerRoleId(), channelId, current.voteSkipPercent()));
+                    current.djRoleId(), current.managerRoleId(), current.moderatorRoleId(), channelId,
+                    current.voteSkipPercent(), current.requesterQueueLimit()));
         }
     }
 
@@ -338,8 +389,10 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
                     current.requestAccessMode(),
                     current.djRoleId(),
                     current.managerRoleId(),
+                    current.moderatorRoleId(),
                     current.musicChannelId(),
-                    percent);
+                    percent,
+                    current.requesterQueueLimit());
             GuildPreferences previous = preferences.put(guildId, updated);
             try {
                 persistLocked();
@@ -359,6 +412,7 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
         }
         validateVolume(replacement.volume());
         validateVoteSkipPercent(replacement.voteSkipPercent());
+        validateRequesterQueueLimit(replacement.requesterQueueLimit());
         synchronized (mutationLock) {
             return replaceLocked(guildId, replacement);
         }
@@ -459,7 +513,9 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
                 0L,
                 0L,
                 0L,
-                GuildPreferences.DEFAULT_VOTE_SKIP_PERCENT);
+                0L,
+                GuildPreferences.DEFAULT_VOTE_SKIP_PERCENT,
+                0);
     }
 
     private void validateVolume(int volume) {
@@ -472,6 +528,12 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
     private static void validateVoteSkipPercent(int percent) {
         if (percent < 25 || percent > 100) {
             throw new IllegalArgumentException("vote skip percent must be between 25 and 100");
+        }
+    }
+
+    private static void validateRequesterQueueLimit(int limit) {
+        if (limit < 0 || limit > 100) {
+            throw new IllegalArgumentException("requester queue limit must be between 0 and 100");
         }
     }
 
@@ -494,8 +556,10 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
                     stored.setProperty(prefix + "request-access", value.requestAccessMode().name());
                     stored.setProperty(prefix + "dj-role", Long.toUnsignedString(value.djRoleId()));
                     stored.setProperty(prefix + "manager-role", Long.toUnsignedString(value.managerRoleId()));
+                    stored.setProperty(prefix + "moderator-role", Long.toUnsignedString(value.moderatorRoleId()));
                     stored.setProperty(prefix + "music-channel", Long.toUnsignedString(value.musicChannelId()));
                     stored.setProperty(prefix + "vote-skip-percent", Integer.toString(value.voteSkipPercent()));
+                    stored.setProperty(prefix + "requester-queue-limit", Integer.toString(value.requesterQueueLimit()));
                 });
         audit.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
@@ -560,8 +624,10 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
         private RequestAccessMode requestAccessMode;
         private long djRoleId;
         private long managerRoleId;
+        private long moderatorRoleId;
         private long musicChannelId;
         private int voteSkipPercent;
+        private int requesterQueueLimit;
 
         private MutablePreferences(GuildPreferences defaults) {
             this.volume = defaults.volume();
@@ -570,14 +636,16 @@ public class FileGuildPreferencesRepository implements GuildPreferencesRepositor
             this.requestAccessMode = defaults.requestAccessMode();
             this.djRoleId = defaults.djRoleId();
             this.managerRoleId = defaults.managerRoleId();
+            this.moderatorRoleId = defaults.moderatorRoleId();
             this.musicChannelId = defaults.musicChannelId();
             this.voteSkipPercent = defaults.voteSkipPercent();
+            this.requesterQueueLimit = defaults.requesterQueueLimit();
         }
 
         private GuildPreferences toImmutable() {
             return new GuildPreferences(
                     volume, repeatMode, accessMode, requestAccessMode,
-                    djRoleId, managerRoleId, musicChannelId, voteSkipPercent);
+                    djRoleId, managerRoleId, moderatorRoleId, musicChannelId, voteSkipPercent, requesterQueueLimit);
         }
     }
 }

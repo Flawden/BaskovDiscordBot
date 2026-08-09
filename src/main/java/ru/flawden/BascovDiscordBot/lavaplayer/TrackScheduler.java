@@ -42,6 +42,7 @@ public class TrackScheduler extends AudioEventAdapter {
     private volatile TrackRequest currentRequest;
     private volatile long currentTrackStartedAtNanos;
     private volatile RepeatMode repeatMode = RepeatMode.OFF;
+    private volatile int requesterQueueLimit;
 
     public TrackScheduler(
             AudioPlayer audioPlayer,
@@ -131,6 +132,26 @@ public class TrackScheduler extends AudioEventAdapter {
             AudioTrack track,
             TrackRequester requester,
             List<AudioTrack> fallbackTracks) {
+        return queueInternal(track, requester, fallbackTracks, true);
+    }
+
+    /**
+     * Внутренний recovery-path: сохранённая очередь должна восстанавливаться полностью,
+     * даже если после рестарта действует более строгий per-requester cap. Global queue
+     * bounds и media safety при этом остаются обязательными.
+     */
+    QueueResult queueRecovered(
+            AudioTrack track,
+            TrackRequester requester,
+            List<AudioTrack> fallbackTracks) {
+        return queueInternal(track, requester, fallbackTracks, false);
+    }
+
+    private QueueResult queueInternal(
+            AudioTrack track,
+            TrackRequester requester,
+            List<AudioTrack> fallbackTracks,
+            boolean enforceRequesterLimit) {
         Objects.requireNonNull(track, "track");
 
         if (track.getInfo().isStream) {
@@ -153,6 +174,15 @@ public class TrackScheduler extends AudioEventAdapter {
             }
 
             long estimatedWaitMillis = estimatedWaitMillisLocked();
+            if (enforceRequesterLimit
+                    && requesterQueueLimit > 0
+                    && requester != null
+                    && requester.userId() > 0L
+                    && requesterQueuedCountLocked(requester.userId()) >= requesterQueueLimit) {
+                log.info("Requester queue limit reached: user={}, limit={}, guild queue={}",
+                        requester.userId(), requesterQueueLimit, queue.size());
+                return new QueueResult(QueueStatus.REQUESTER_LIMIT, queue.size(), estimatedWaitMillis, request);
+            }
             if (queue.size() >= maxQueueSize || !queue.offerLast(request)) {
                 log.warn("Queue limit reached; rejected track: {}", track.getInfo().title);
                 return new QueueResult(QueueStatus.QUEUE_FULL, queue.size(), estimatedWaitMillis, request);
@@ -586,6 +616,38 @@ public class TrackScheduler extends AudioEventAdapter {
         return currentRequest;
     }
 
+    public int setRequesterQueueLimit(int limit) {
+        if (limit < 0 || limit > maxQueueSize) {
+            throw new IllegalArgumentException("requester queue limit must be between 0 and " + maxQueueSize);
+        }
+        requesterQueueLimit = limit;
+        onActivity.run();
+        return limit;
+    }
+
+    public int requesterQueueLimit() {
+        return requesterQueueLimit;
+    }
+
+    public int requesterQueuedCount(long requesterUserId) {
+        synchronized (mutationLock) {
+            return requesterQueuedCountLocked(requesterUserId);
+        }
+    }
+
+    private int requesterQueuedCountLocked(long requesterUserId) {
+        if (requesterUserId <= 0L) {
+            return 0;
+        }
+        int count = 0;
+        for (TrackRequest request : queue) {
+            if (request.requester().userId() == requesterUserId) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     public long queueRevision() {
         synchronized (mutationLock) {
             return queueRevision;
@@ -843,6 +905,7 @@ public class TrackScheduler extends AudioEventAdapter {
     public enum QueueStatus {
         STARTED,
         QUEUED,
+        REQUESTER_LIMIT,
         QUEUE_FULL,
         TRACK_TOO_LONG,
         STREAM_NOT_ALLOWED

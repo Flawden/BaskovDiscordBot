@@ -57,6 +57,11 @@ public final class MusicEmbeds {
                             + "\n**Позиция:** `" + result.queuePosition() + "`"
                             + "\n**Примерно начнётся через:** `"
                             + humanMillis(result.estimatedWaitMillis()) + "`");
+            case REQUESTER_LIMIT -> embed
+                    .setColor(Color.RED)
+                    .setTitle("👤 Персональный лимит очереди")
+                    .setDescription("У тебя уже максимально разрешённое число ожидающих треков. "
+                            + "Дождись начала одного из них или удали свой трек через `/queue-manage mine`.");
             case QUEUE_FULL -> embed
                     .setColor(Color.RED)
                     .setTitle("🚧 Очередь заполнена")

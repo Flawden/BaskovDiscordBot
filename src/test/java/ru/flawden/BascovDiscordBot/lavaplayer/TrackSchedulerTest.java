@@ -38,6 +38,61 @@ class TrackSchedulerTest {
     }
 
     @Test
+    void enforcesRequesterPendingLimitWithoutBlockingOtherUsers() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        TrackScheduler scheduler = new TrackScheduler(
+                player, 10, Duration.ofHours(4), () -> { }, () -> { });
+        scheduler.setRequesterQueueLimit(2);
+        TrackRequester firstUser = new TrackRequester(42L, "First");
+        TrackRequester secondUser = new TrackRequester(43L, "Second");
+        AudioTrack first = track("First", Duration.ofMinutes(1));
+        AudioTrack second = track("Second", Duration.ofMinutes(1));
+        AudioTrack third = track("Third", Duration.ofMinutes(1));
+        AudioTrack other = track("Other", Duration.ofMinutes(1));
+        when(player.startTrack(first, true)).thenReturn(false);
+        when(player.startTrack(second, true)).thenReturn(false);
+        when(player.startTrack(third, true)).thenReturn(false);
+        when(player.startTrack(other, true)).thenReturn(false);
+
+        assertEquals(TrackScheduler.QueueStatus.QUEUED, scheduler.queue(first, firstUser).status());
+        assertEquals(TrackScheduler.QueueStatus.QUEUED, scheduler.queue(second, firstUser).status());
+        assertEquals(TrackScheduler.QueueStatus.REQUESTER_LIMIT, scheduler.queue(third, firstUser).status());
+        assertEquals(TrackScheduler.QueueStatus.QUEUED, scheduler.queue(other, secondUser).status());
+        assertEquals(2, scheduler.requesterQueuedCount(firstUser.userId()));
+        assertEquals(1, scheduler.requesterQueuedCount(secondUser.userId()));
+        assertEquals(3, scheduler.queueSize());
+    }
+
+    @Test
+    void recoveryBypassesRequesterLimitButKeepsGlobalQueueBounds() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        TrackScheduler scheduler = new TrackScheduler(
+                player, 3, Duration.ofHours(4), () -> { }, () -> { });
+        scheduler.setRequesterQueueLimit(1);
+        TrackRequester requester = new TrackRequester(42L, "Recovered");
+        AudioTrack first = track("First", Duration.ofMinutes(1));
+        AudioTrack normalRejected = track("Normal rejected", Duration.ofMinutes(1));
+        AudioTrack recoveredSecond = track("Recovered second", Duration.ofMinutes(1));
+        AudioTrack recoveredThird = track("Recovered third", Duration.ofMinutes(1));
+        AudioTrack globalRejected = track("Global rejected", Duration.ofMinutes(1));
+        when(player.startTrack(first, true)).thenReturn(false);
+        when(player.startTrack(normalRejected, true)).thenReturn(false);
+        when(player.startTrack(recoveredSecond, true)).thenReturn(false);
+        when(player.startTrack(recoveredThird, true)).thenReturn(false);
+        when(player.startTrack(globalRejected, true)).thenReturn(false);
+
+        assertEquals(TrackScheduler.QueueStatus.QUEUED, scheduler.queue(first, requester).status());
+        assertEquals(TrackScheduler.QueueStatus.REQUESTER_LIMIT, scheduler.queue(normalRejected, requester).status());
+        assertEquals(TrackScheduler.QueueStatus.QUEUED,
+                scheduler.queueRecovered(recoveredSecond, requester, List.of()).status());
+        assertEquals(TrackScheduler.QueueStatus.QUEUED,
+                scheduler.queueRecovered(recoveredThird, requester, List.of()).status());
+        assertEquals(TrackScheduler.QueueStatus.QUEUE_FULL,
+                scheduler.queueRecovered(globalRejected, requester, List.of()).status());
+        assertEquals(3, scheduler.queueSize());
+    }
+
+    @Test
     void rejectsTracksLongerThanConfiguredLimitBeforeStartingPlayer() {
         AudioPlayer player = mock(AudioPlayer.class);
         TrackScheduler scheduler = new TrackScheduler(

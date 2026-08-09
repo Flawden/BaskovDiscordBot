@@ -23,7 +23,7 @@ class ModernCommandCatalogTest {
         assertEquals(Set.of(
                 "help", "version", "status", "play", "search", "discover", "history", "replay", "favorites", "playlist",
                 "pause", "resume", "previous", "skip", "voteskip", "stop", "queue", "now", "seek",
-                "volume", "repeat", "shuffle", "remove", "move", "clear", "queue-manage", "session", "settings"), names);
+                "volume", "repeat", "shuffle", "remove", "move", "clear", "queue-manage", "session", "moderation", "settings"), names);
     }
 
     @Test
@@ -95,6 +95,19 @@ class ModernCommandCatalogTest {
     }
 
     @Test
+    void moderationCommandExposesRevisionSafeQueueActions() {
+        SlashCommandData moderation = command("moderation");
+        assertEquals(Set.of("status", "remove", "purge", "audit"),
+                moderation.getSubcommands().stream()
+                        .map(subcommand -> subcommand.getName())
+                        .collect(Collectors.toSet()));
+        assertTrue(moderation.getSubcommands().stream()
+                .filter(subcommand -> Set.of("remove", "purge").contains(subcommand.getName()))
+                .flatMap(subcommand -> subcommand.getOptions().stream())
+                .anyMatch(option -> "revision".equals(option.getName())));
+    }
+
+    @Test
     void favoritesCommandExposesPersonalLibraryLifecycle() {
         SlashCommandData favorites = command("favorites");
         assertEquals(Set.of("list", "add", "play", "play-all", "remove", "search", "clear"),
@@ -131,7 +144,8 @@ class ModernCommandCatalogTest {
         SlashCommandData settings = command("settings");
         assertEquals(Set.of(
                         "show", "volume", "repeat", "access", "request-access", "dj-role", "manager-role",
-                        "voice-channel", "vote-threshold", "permissions", "audit", "export", "import", "reset"),
+                        "moderator-role", "requester-limit", "voice-channel", "vote-threshold",
+                        "permissions", "audit", "export", "import", "reset"),
                 settings.getSubcommands().stream()
                 .map(subcommand -> subcommand.getName())
                 .collect(Collectors.toSet()));
