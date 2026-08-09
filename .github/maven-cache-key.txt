@@ -1,0 +1,13 @@
+# Maven dependency-cache identity.
+# Keep this file stable across application-only version bumps.
+# DependencyCompatibilityContractTest verifies the pinned values against pom.xml/wrapper metadata.
+spring-boot=3.4.3
+jda=6.5.0
+lavaplayer=2.2.3
+youtube-source=1.18.2
+libdave=ce725965e
+lombok=1.18.36
+maven-compiler-plugin=3.13.0
+maven-wrapper-script=3.3.2
+maven-wrapper=3.9.9
+cache-epoch=1

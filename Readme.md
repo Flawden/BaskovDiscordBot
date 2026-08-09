@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.6.0**.
+Текущая версия релизной ветки: **v1.6.1**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -118,10 +118,11 @@ Native libDAVE runtime, platform profiles и startup fail-fast описаны в
 
 `.github/workflows/ci.yml` запускается для pull request и вручную. Он:
 
-1. поднимает Java 17;
-2. выполняет `./mvnw clean verify` без настоящего Discord-подключения;
-3. проверяет сборку Docker-образа;
-4. сохраняет Surefire reports как artifact.
+1. поднимает Java 17 через `actions/setup-java@v5` и восстанавливает dependency cache по стабильному dependency fingerprint, который не меняется от одного bump версии приложения;
+2. печатает bounded network probes для Maven Central и обоих Lavalink repository;
+3. выполняет `clean verify` через `.github/scripts/maven-ci.sh`: transfer progress виден, одна network/timeout ошибка получает ровно один retry, а каждый Maven attempt ограничен 7 минутами;
+4. проверяет сборку Docker-образа;
+5. всегда сохраняет Maven diagnostics и Surefire reports как artifacts.
 
 ### Delivery
 
@@ -133,7 +134,7 @@ Native libDAVE runtime, platform profiles и startup fail-fast описаны в
 
 В текущем режиме разработки релизы отправляются напрямую в `master`; ветка `dev` остаётся технически поддерживаемой, но не используется.
 
-Каждая доставка сначала выполняет Maven verification, затем публикует в GHCR:
+Каждая доставка сначала выполняет Maven diagnostics + bounded Maven verification. `setup-java` настроен с `show-download-progress: true`, поэтому dependency resolution больше не выглядит как бесконечная тишина; cache restore segment ограничен двумя минутами, а Maven verification — двумя попытками максимум по семь минут. После этого workflow публикует в GHCR:
 
 ```text
 ghcr.io/<owner>/<repository>:sha-<full-git-sha>

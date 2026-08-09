@@ -48,12 +48,13 @@ class DependencyCompatibilityContractTest {
         String workflows = ci + "\n" + delivery;
 
         assertTrue(workflows.contains("actions/checkout@v4"));
-        assertTrue(workflows.contains("actions/setup-java@v4"));
+        assertTrue(workflows.contains("actions/setup-java@v5"));
         assertTrue(workflows.contains("actions/upload-artifact@v4"));
         assertTrue(workflows.contains("docker/setup-buildx-action@v3"));
         assertTrue(workflows.contains("docker/login-action@v3"));
         assertTrue(workflows.contains("docker/build-push-action@v6"));
 
+        assertFalse(workflows.contains("actions/setup-java@v4"));
         assertFalse(workflows.contains("actions/checkout@v7"));
         assertFalse(workflows.contains("docker/build-push-action@v7"));
     }

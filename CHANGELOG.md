@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [1.6.1] — 2026-08-09
+
+### Maven Delivery Diagnostics & Resilience
+
+- GitHub-hosted Java setup переведён с deprecated `actions/setup-java@v4` на `@v5`; Maven transfer progress явно включён через `show-download-progress: true`.
+- Dependency cache больше не инвалидируется обычным bump версии приложения: `.github/maven-cache-key.txt` содержит отдельный fingerprint закреплённых runtime/build dependencies, а contract test сверяет его с `pom.xml` и Maven Wrapper.
+- Добавлен `.github/scripts/maven-ci.sh`: bounded probes Maven Central/Lavalink, environment snapshot, два Maven attempts максимум по 420 секунд, retry только для timeout/network failures и очистка `*.lastUpdated` перед повтором.
+- Compile/test failure не ретраится: настоящий красный код остаётся быстрым и однозначным failure.
+- `SEGMENT_DOWNLOAD_TIMEOUT_MINS=2` ограничивает зависший restore cache segment; CI job timeout поднят до 30 минут как внешний last-resort guard.
+- CI и delivery всегда сохраняют `maven-diagnostics-<run-id>` artifact, поэтому сетевой stall больше не превращается в 30 минут без данных.
+- Runtime Java/Discord/music/persistence code не меняется; релиз касается только CI/CD delivery tooling, документации и contract coverage.
+
 ## [1.6.0] — 2026-08-09
 
 ### Discord Experience

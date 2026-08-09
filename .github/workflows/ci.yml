@@ -15,7 +15,9 @@ jobs:
   verify:
     name: Maven and Docker verification
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    env:
+      SEGMENT_DOWNLOAD_TIMEOUT_MINS: '2'
 
     steps:
       - name: Checkout repository
@@ -24,14 +26,16 @@ jobs:
           persist-credentials: false
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
           cache: maven
+          cache-dependency-path: .github/maven-cache-key.txt
+          show-download-progress: true
 
-      - name: Make Maven wrapper executable
-        run: chmod +x ./mvnw
+      - name: Make Maven tooling executable
+        run: chmod +x ./mvnw .github/scripts/maven-ci.sh
 
       - name: Validate operational assets
         shell: bash
@@ -52,18 +56,29 @@ jobs:
             docker compose -f deploy/docker-compose.yml \
               -f deploy/docker-compose.host-network.yml config >/dev/null
 
+      - name: Diagnose Maven delivery environment
+        run: ./.github/scripts/maven-ci.sh diagnose
+
       - name: Run Maven verification
-        run: ./mvnw --batch-mode --no-transfer-progress clean verify
+        run: ./.github/scripts/maven-ci.sh verify
 
       - name: Build container image
         shell: bash
         run: |
           set -Eeuo pipefail
-          version="$(./mvnw --batch-mode --no-transfer-progress help:evaluate \
-            -Dexpression=project.version -DforceStdout -q)"
+          version="$(./.github/scripts/maven-ci.sh version)"
           docker build --pull \
             --build-arg "APP_VERSION=${version}" \
             --tag baskov-discord-bot:ci .
+
+      - name: Upload Maven diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maven-diagnostics-${{ github.run_id }}
+          path: ${{ runner.temp }}/baskov-maven-diagnostics/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload test reports
         if: always()

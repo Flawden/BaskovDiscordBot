@@ -59,3 +59,18 @@ docker exec baskov-discord-bot sh -c 'ls -lah /app/data/backups 2>/dev/null || t
 ## Выпуск с Android
 
 Полный эквивалент PowerShell-процесса для Termux находится в [`TERMUX-RELEASE.md`](TERMUX-RELEASE.md). Он включает `/storage/emulated/0/Download/`, SHA-256, `git apply --check`, Maven verification, commit, push, tag и rollback.
+
+## Maven delivery diagnostics
+
+Начиная с `v1.6.1`, GitHub-hosted workflows не вызывают `clean verify` напрямую. Используется общий helper:
+
+```bash
+./.github/scripts/maven-ci.sh diagnose
+./.github/scripts/maven-ci.sh verify
+```
+
+Если Maven завис на dependency resolution, одна попытка завершается через 420 секунд, затем разрешён один network-only retry. Compile/test failures не ретраятся. Transfer progress должен оставаться видимым (`show-download-progress: true`).
+
+При failure скачайте artifact `maven-diagnostics-<run-id>` и проверьте `repository-probes.log`, `environment.log` и `verify-attempt-*.log` до изменения application code.
+
+Если изменяются закреплённые dependency/build-tool версии, одновременно обновить `.github/maven-cache-key.txt`; contract test не даст случайно оставить старый fingerprint.
