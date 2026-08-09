@@ -1642,7 +1642,7 @@ public class ModernInteractions extends ListenerAdapter {
     private void now(SlashCommandInteractionEvent event) {
         GuildMusicManager manager = playerManager.findMusicManager(event.getGuild()).orElse(null);
         event.replyEmbeds(MusicEmbeds.nowPlaying(manager))
-                .setComponents(MusicControls.nowRows())
+                .setComponents(MusicControls.nowRows(manager))
                 .queue();
     }
 
@@ -1694,10 +1694,11 @@ public class ModernInteractions extends ListenerAdapter {
             long requestedPosition) {
         long clamped = Math.max(0L, Math.min(requestedPosition, track.getDuration()));
         track.setPosition(clamped);
+        GuildMusicManager manager = playerManager.findMusicManager(event.getGuild()).orElse(null);
         event.replyEmbeds(MusicEmbeds.success(
                         "⏳ Трек перемотан",
                         "Новая позиция: `" + MusicEmbeds.formatTime(clamped) + "`."))
-                .setComponents(MusicControls.nowRows())
+                .setComponents(MusicControls.nowRows(manager))
                 .queue();
     }
 

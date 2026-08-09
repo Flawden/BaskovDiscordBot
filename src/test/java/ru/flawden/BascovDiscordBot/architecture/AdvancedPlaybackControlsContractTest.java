@@ -36,6 +36,16 @@ class AdvancedPlaybackControlsContractTest {
     }
 
     @Test
+    void nowAndSeekResponsesAlwaysRenderControlsFromLiveManagerState() throws IOException {
+        String interactions = source("src/main/java/ru/flawden/BascovDiscordBot/interactions/ModernInteractions.java");
+
+        assertFalse(interactions.contains(".setComponents(MusicControls.nowRows())"));
+        assertTrue(interactions.contains("private void now(SlashCommandInteractionEvent event)"));
+        assertTrue(interactions.contains("GuildMusicManager manager = playerManager.findMusicManager(event.getGuild()).orElse(null);"));
+        assertTrue(interactions.contains(".setComponents(MusicControls.nowRows(manager))"));
+    }
+
+    @Test
     void previousHistoryIsBoundedAndDoesNotRecordBrokenSources() throws IOException {
         String scheduler = source("src/main/java/ru/flawden/BascovDiscordBot/lavaplayer/TrackScheduler.java");
 

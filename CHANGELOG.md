@@ -1,3 +1,12 @@
+## [1.6.4] — 2026-08-09
+
+### Now Playing Controls State Hotfix
+
+- `/now` теперь сразу строит двухрядный пульт из живого `GuildMusicManager`, поэтому кнопки pause/seek/next/shuffle/repeat/stop получают корректные enabled/disabled состояния уже в первом ответе.
+- Slash `/seek` после успешной перемотки также возвращает state-aware пульт вместо zero-state fallback.
+- Добавлен regression contract: production interaction responses больше не могут использовать `MusicControls.nowRows()` без manager там, где состояние музыкальной сессии доступно.
+- Playback engine, queue/history semantics, persistence formats, voice recovery и CI/Maven bootstrap не меняются.
+
 # Changelog
 
 Все заметные изменения Baskov Discord Bot фиксируются в этом файле.

@@ -63,3 +63,8 @@ Stop-кнопка под `/now` использует тот же pipeline.
 - legacy prefix compatibility layer.
 
 `/settings reset confirm:true` удалён из slash schema: теперь `/settings reset` всегда использует кнопочное подтверждение.
+## v1.6.4 — state-aware `/now` hotfix
+
+Первичный ответ `/now` и ответ slash `/seek` всегда строят `MusicControls.nowRows(manager)` из живого `GuildMusicManager`. Поэтому доступность `Пауза`, `±15 сек`, `Следующий`, `Перемешать`, `Повтор` и `Стоп` соответствует реальному текущему треку/очереди сразу при создании сообщения, без обязательного ручного `↻ Обновить`.
+
+Zero-state `nowRows()` остаётся совместимым вспомогательным API, но production interaction responses не используют его там, где manager уже известен. Contract test запрещает возврат этого регресса.
