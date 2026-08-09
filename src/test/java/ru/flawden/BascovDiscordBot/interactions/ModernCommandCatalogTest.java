@@ -38,7 +38,7 @@ class ModernCommandCatalogTest {
     @Test
     void discoverCommandExposesSearchContinuationModes() {
         SlashCommandData discover = command("discover");
-        assertEquals(Set.of("recent", "again", "related", "history"),
+        assertEquals(Set.of("recent", "again", "related", "history", "profile", "for-me"),
                 discover.getSubcommands().stream()
                         .map(subcommand -> subcommand.getName())
                         .collect(Collectors.toSet()));
