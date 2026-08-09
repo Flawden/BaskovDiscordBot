@@ -6,6 +6,23 @@
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-08-09
+
+### Discord Experience
+
+- `/help` превращён в компактную интерактивную справку с разделами `overview`, `playback`, `queue`, `library`, `admin` и кнопочным переключением без повторной slash-команды.
+- `/status` получил read-only кнопку `↻ Обновить статус`: live storage probe, backup/recovery/gateway/command metrics пересчитываются в том же ephemeral-сообщении.
+- `/stop`, непустой `/clear`, `/playlist delete` и `/settings reset` теперь используют одноразовые двухминутные confirmation sessions с кнопками `Подтвердить` / `Отмена`.
+- Confirmation token привязан к Discord guild + user, потребляется атомарно и повторно проверяет права непосредственно перед destructive mutation; повторный/просроченный клик ничего не выполняет.
+- Stop-кнопка под `/now` использует ту же confirmation-модель, что и slash `/stop`.
+- `/settings reset` больше не требует текстового `confirm:true`: подтверждение перенесено в Discord component UI.
+
+### Safety & compatibility
+
+- Подтверждение не хранит secrets и не переживает restart процесса; его назначение — защита от случайного клика, а не persistent workflow.
+- Playback, queue, library, guild-settings и backup форматы не меняются. Старые prefix-команды остаются compatibility layer.
+- Повторная авторизация перед подтверждённым действием защищает от изменения DJ/manager permissions между slash-командой и нажатием кнопки.
+
 ## [1.5.0] — 2026-08-08
 
 ### Permissions & Guild Administration

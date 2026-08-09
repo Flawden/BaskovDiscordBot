@@ -19,7 +19,17 @@ public final class ModernCommandCatalog {
 
     public static List<CommandData> commands() {
         return List.of(
-                Commands.slash("help", "Показывает современные команды Баскова"),
+                Commands.slash("help", "Показывает современные команды Баскова")
+                        .addOptions(new OptionData(
+                                OptionType.STRING,
+                                "section",
+                                "Раздел справки",
+                                false)
+                                .addChoice("Обзор", "overview")
+                                .addChoice("Воспроизведение", "playback")
+                                .addChoice("Очередь", "queue")
+                                .addChoice("Библиотека", "library")
+                                .addChoice("Администрирование", "admin")),
                 Commands.slash("version", "Показывает версию запущенного бота"),
                 Commands.slash("status", "Показывает состояние Discord, музыки и команд"),
                 Commands.slash("play", "Ищет и добавляет песню")
@@ -288,12 +298,7 @@ public final class ModernCommandCatalog {
                                                 "profile",
                                                 "Строка BASKOV_SETTINGS_V1 из /settings export",
                                                 true),
-                                new SubcommandData("reset", "Возвращает настройки сервера к значениям по умолчанию")
-                                        .addOption(
-                                                OptionType.BOOLEAN,
-                                                "confirm",
-                                                "Подтверди полный сброс постоянных guild settings",
-                                                true))
+                                new SubcommandData("reset", "Запрашивает интерактивное подтверждение полного сброса"))
         );
     }
 }

@@ -80,3 +80,15 @@ DJ-роли и голосование описаны в [`DJ-ROLES-AND-VOTING.md
 ## Discovery
 
 `/discover recent` показывает локальную историю поиска пользователя, `/discover again` повторяет последний запрос, а `related` и `history` строят новый текстовый запрос из уже известных `author + title`. Все эти режимы используют тот же интерактивный `/search` pipeline и не обходят существующие ограничения загрузки и voice-policy.
+
+## Discord Experience 1.6
+
+`v1.6.0` добавляет интерактивный слой поверх существующих slash-команд без изменения music/session persistence.
+
+`/help [section]` поддерживает разделы `overview`, `playback`, `queue`, `library`, `admin`. Ephemeral help-сообщение содержит кнопки разделов; переключение редактирует то же сообщение и не создаёт новый command invocation.
+
+`/status` содержит кнопку `↻ Обновить статус`. Она заново строит live snapshot, включая storage probe, backup health, gateway, voice recovery и command metrics. Кнопка read-only и не меняет music state.
+
+Опасные действия `/stop`, непустой `/clear`, `/playlist delete` и `/settings reset` создают одноразовую confirmation session на две минуты. Token привязан к guild и пользователю, а перед выполнением права проверяются повторно. Stop-кнопка под `/now` использует ту же модель.
+
+После `Подтвердить` token потребляется до mutation; повторный клик не может выполнить действие второй раз. `Отмена` также потребляет token. Confirmation sessions in-memory и намеренно не переживают restart процесса.

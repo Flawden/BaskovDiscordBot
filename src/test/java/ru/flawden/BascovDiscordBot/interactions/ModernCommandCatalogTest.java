@@ -113,6 +113,25 @@ class ModernCommandCatalogTest {
                 .collect(Collectors.toSet()));
     }
 
+
+    @Test
+    void helpExposesDirectSectionsAndResetUsesInteractiveConfirmation() {
+        SlashCommandData help = command("help");
+        SlashCommandData settings = command("settings");
+
+        assertEquals(Set.of("section"), help.getOptions().stream()
+                .map(option -> option.getName())
+                .collect(Collectors.toSet()));
+        assertEquals(5, help.getOptions().get(0).getChoices().size());
+
+        assertTrue(settings.getSubcommands().stream()
+                .filter(subcommand -> "reset".equals(subcommand.getName()))
+                .findFirst()
+                .orElseThrow()
+                .getOptions()
+                .isEmpty());
+    }
+
     private static SlashCommandData command(String name) {
         CommandData command = ModernCommandCatalog.commands().stream()
                 .filter(candidate -> candidate.getName().equals(name))

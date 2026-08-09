@@ -88,6 +88,7 @@ public class ModernInteractions extends ListenerAdapter {
     private final PersistenceReadiness persistenceReadiness;
     private final PersistenceBackupService persistenceBackupService;
     private final DaveRuntimeInfo daveRuntimeInfo;
+    private final ConfirmationStore confirmationStore;
 
     public ModernInteractions(
             PlayerManager playerManager,
@@ -105,7 +106,8 @@ public class ModernInteractions extends ListenerAdapter {
             RuntimeHealthMonitor healthMonitor,
             PersistenceReadiness persistenceReadiness,
             PersistenceBackupService persistenceBackupService,
-            DaveRuntimeInfo daveRuntimeInfo) {
+            DaveRuntimeInfo daveRuntimeInfo,
+            ConfirmationStore confirmationStore) {
         this.playerManager = playerManager;
         this.controlPolicy = controlPolicy;
         this.queryResolver = queryResolver;
@@ -122,6 +124,7 @@ public class ModernInteractions extends ListenerAdapter {
         this.persistenceReadiness = persistenceReadiness;
         this.persistenceBackupService = persistenceBackupService;
         this.daveRuntimeInfo = daveRuntimeInfo;
+        this.confirmationStore = confirmationStore;
     }
 
     @Override
@@ -137,7 +140,7 @@ public class ModernInteractions extends ListenerAdapter {
 
         try {
             switch (event.getName()) {
-                case "help" -> event.replyEmbeds(helpEmbed()).setEphemeral(true).queue();
+                case "help" -> help(event);
                 case "version" -> event.replyEmbeds(versionEvent.buildEmbed()).setEphemeral(true).queue();
                 case "status" -> status(event);
                 case "play" -> play(event);
@@ -267,15 +270,21 @@ public class ModernInteractions extends ListenerAdapter {
 
     @Override
     public void onButtonInteraction(@NotNull ButtonInteractionEvent event) {
-        if (!MusicControls.supports(event.getComponentId())) {
+        boolean experienceButton = ExperienceControls.supports(event.getComponentId());
+        boolean musicButton = MusicControls.supports(event.getComponentId());
+        if (!experienceButton && !musicButton) {
             return;
         }
         try {
-            handleMusicButton(event);
+            if (experienceButton) {
+                handleExperienceButton(event);
+            } else {
+                handleMusicButton(event);
+            }
             operationalMetrics.recordSuccess(OperationalMetrics.Channel.BUTTON);
         } catch (RuntimeException exception) {
             operationalMetrics.recordFailure(OperationalMetrics.Channel.BUTTON);
-            log.error("Music button '{}' failed for user {}",
+            log.error("Interaction button '{}' failed for user {}",
                     event.getComponentId(), event.getUser().getId(), exception);
             MessageEmbed failureEmbed = MusicEmbeds.error(
                     "💥 Кнопка не сработала",
@@ -290,6 +299,197 @@ public class ModernInteractions extends ListenerAdapter {
                         .queue();
             }
         }
+    }
+
+    private void handleExperienceButton(ButtonInteractionEvent event) {
+        Guild guild = event.getGuild();
+        Member member = event.getMember();
+        if (guild == null || member == null) {
+            event.replyEmbeds(MusicEmbeds.error("🏠 Нужен сервер", "Эта кнопка работает только на сервере."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        var helpSection = ExperienceControls.helpSection(event.getComponentId());
+        if (helpSection.isPresent()) {
+            ExperienceControls.HelpSection section = helpSection.get();
+            event.editMessageEmbeds(helpEmbed(section, member))
+                    .setComponents(ExperienceControls.helpRows(section))
+                    .queue();
+            return;
+        }
+
+        if (ExperienceControls.STATUS_REFRESH.equals(event.getComponentId())) {
+            event.editMessageEmbeds(statusEmbed(guild))
+                    .setComponents(ExperienceControls.statusRows())
+                    .queue();
+            return;
+        }
+
+        var confirmationAction = ExperienceControls.confirmationAction(event.getComponentId());
+        if (confirmationAction.isEmpty()) {
+            return;
+        }
+
+        ExperienceControls.ConfirmationAction componentAction = confirmationAction.get();
+        if (componentAction.decision() == ExperienceControls.Decision.CANCEL) {
+            ConfirmationStore.ClaimStatus status = confirmationStore.cancel(
+                    componentAction.token(),
+                    guild.getIdLong(),
+                    event.getUser().getIdLong());
+            if (status == ConfirmationStore.ClaimStatus.FORBIDDEN) {
+                event.replyEmbeds(MusicEmbeds.error(
+                                "🔐 Это не твоё подтверждение",
+                                "Подтвердить или отменить действие может только пользователь, который его запросил."))
+                        .setEphemeral(true)
+                        .queue();
+                return;
+            }
+            String details = status == ConfirmationStore.ClaimStatus.CANCELLED
+                    ? "Никакие данные и playback-состояние не изменены."
+                    : "Подтверждение уже использовано или истекло.";
+            event.editMessageEmbeds(MusicEmbeds.success("↩️ Действие отменено", details))
+                    .setComponents(List.of())
+                    .queue();
+            return;
+        }
+
+        ConfirmationStore.ClaimResult claim = confirmationStore.claim(
+                componentAction.token(),
+                guild.getIdLong(),
+                event.getUser().getIdLong());
+        if (!claim.claimed()) {
+            if (claim.status() == ConfirmationStore.ClaimStatus.FORBIDDEN) {
+                event.replyEmbeds(MusicEmbeds.error(
+                                "🔐 Это не твоё подтверждение",
+                                "Подтвердить действие может только пользователь, который его запросил."))
+                        .setEphemeral(true)
+                        .queue();
+                return;
+            }
+            event.editMessageEmbeds(MusicEmbeds.error(
+                            "⌛ Подтверждение устарело",
+                            "Запусти команду ещё раз: подтверждения живут не больше двух минут и одноразовые."))
+                    .setComponents(List.of())
+                    .queue();
+            return;
+        }
+
+        executeConfirmedAction(event, guild, member, claim.confirmation());
+    }
+
+    private void executeConfirmedAction(
+            ButtonInteractionEvent event,
+            Guild guild,
+            Member member,
+            ConfirmationStore.PendingConfirmation confirmation) {
+        switch (confirmation.action()) {
+            case STOP -> confirmStop(event, guild, member);
+            case CLEAR_QUEUE -> confirmClearQueue(event, guild, member);
+            case DELETE_PLAYLIST -> confirmDeletePlaylist(event, guild, member, confirmation.payload());
+            case RESET_SETTINGS -> confirmResetSettings(event, guild, member);
+        }
+    }
+
+    private void confirmStop(ButtonInteractionEvent event, Guild guild, Member member) {
+        MusicControlPolicy.Decision decision = controlDecision(guild, member);
+        if (!decision.allowed()) {
+            event.editMessageEmbeds(MusicEmbeds.error("🎧 Управление недоступно", decision.message()))
+                    .setComponents(List.of())
+                    .queue();
+            return;
+        }
+        AudioPlayer player = currentPlayer(guild);
+        if (player == null || player.getPlayingTrack() == null) {
+            event.editMessageEmbeds(MusicEmbeds.error("⏹️ Уже остановлено", "Сейчас ничего не играет."))
+                    .setComponents(List.of())
+                    .queue();
+            return;
+        }
+        String title = player.getPlayingTrack().getInfo().title;
+        playerManager.stopAndRelease(guild);
+        voteSkipService.reset(guild.getIdLong());
+        event.editMessageEmbeds(MusicEmbeds.success(
+                        "⏹️ Воспроизведение остановлено",
+                        "Песня `" + title + "` остановлена, очередь очищена, бот отключён."))
+                .setComponents(List.of())
+                .queue();
+    }
+
+    private void confirmClearQueue(ButtonInteractionEvent event, Guild guild, Member member) {
+        MusicControlPolicy.Decision decision = controlDecision(guild, member);
+        if (!decision.allowed()) {
+            event.editMessageEmbeds(MusicEmbeds.error("🎧 Управление недоступно", decision.message()))
+                    .setComponents(List.of())
+                    .queue();
+            return;
+        }
+        GuildMusicManager manager = playerManager.findMusicManager(guild).orElse(null);
+        if (manager == null) {
+            event.editMessageEmbeds(MusicEmbeds.error(
+                            "🎵 Музыкальной сессии нет",
+                            "Сначала добавь песню через `/play`."))
+                    .setComponents(List.of())
+                    .queue();
+            return;
+        }
+        int removed = manager.getScheduler().clearQueue();
+        event.editMessageEmbeds(MusicEmbeds.success(
+                        "🧹 Очередь очищена",
+                        removed == 0
+                                ? "Ожидающих треков уже не было. Текущая песня продолжает играть."
+                                : "Удалено ожидающих треков: `" + removed + "`. Текущая песня продолжает играть."))
+                .setComponents(List.of())
+                .queue();
+    }
+
+    private void confirmDeletePlaylist(
+            ButtonInteractionEvent event,
+            Guild guild,
+            Member member,
+            String playlistName) {
+        PlaylistOperationResult result = musicLibraryRepository.deletePlaylist(
+                guild.getIdLong(),
+                playlistName,
+                event.getUser().getIdLong(),
+                administrationPolicy.canManage(member));
+        MessageEmbed embed = switch (result.status()) {
+            case DELETED -> MusicEmbeds.success(
+                    "🗑️ Плейлист удалён",
+                    "Плейлист `" + result.playlist().name() + "` удалён.");
+            case NOT_FOUND -> MusicEmbeds.error(
+                    "📚 Плейлист уже отсутствует",
+                    "Возможно, его удалили после запроса подтверждения.");
+            case FORBIDDEN -> MusicEmbeds.error(
+                    "🔐 Недостаточно прав",
+                    "После запроса подтверждения права изменились; удаление отменено.");
+            default -> MusicEmbeds.error(
+                    "📚 Удаление не выполнено",
+                    "Состояние библиотеки изменилось. Открой `/playlist list` и повтори операцию.");
+        };
+        event.editMessageEmbeds(embed).setComponents(List.of()).queue();
+    }
+
+    private void confirmResetSettings(ButtonInteractionEvent event, Guild guild, Member member) {
+        if (!administrationPolicy.canManage(member)) {
+            event.editMessageEmbeds(MusicEmbeds.error(
+                            "🔐 Недостаточно прав",
+                            "После запроса подтверждения административные права изменились; сброс отменён."))
+                    .setComponents(List.of())
+                    .queue();
+            return;
+        }
+        GuildPreferences preferences = preferencesRepository.reset(guild.getIdLong());
+        voteSkipService.reset(guild.getIdLong());
+        playerManager.findMusicManager(guild).ifPresent(manager -> {
+            manager.getAudioPlayer().setVolume(preferences.volume());
+            manager.getScheduler().setRepeatMode(preferences.repeatMode());
+        });
+        recordSettingsAudit(guild, event.getUser().getIdLong(), "reset-to-defaults");
+        event.editMessageEmbeds(settingsEmbed(preferences))
+                .setComponents(List.of())
+                .queue();
     }
 
     private void handleMusicButton(ButtonInteractionEvent event) {
@@ -460,18 +660,38 @@ public class ModernInteractions extends ListenerAdapter {
                 }));
     }
 
+    private void help(SlashCommandInteractionEvent event) {
+        String rawSection = event.getOption(
+                "section",
+                ExperienceControls.HelpSection.OVERVIEW.id(),
+                OptionMapping::getAsString);
+        ExperienceControls.HelpSection section = ExperienceControls.HelpSection.parse(rawSection)
+                .orElse(ExperienceControls.HelpSection.OVERVIEW);
+        event.replyEmbeds(helpEmbed(section, event.getMember()))
+                .setComponents(ExperienceControls.helpRows(section))
+                .setEphemeral(true)
+                .queue();
+    }
+
     private void status(SlashCommandInteractionEvent event) {
+        event.replyEmbeds(statusEmbed(event.getGuild()))
+                .setComponents(ExperienceControls.statusRows())
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private MessageEmbed statusEmbed(Guild guild) {
         RuntimeHealthMonitor.Snapshot runtime = healthMonitor.snapshot();
         OperationalMetrics.Snapshot commands = operationalMetrics.snapshot();
         MusicRuntimeSnapshot music = playerManager.runtimeSnapshot();
-        VoiceDiagnosticSnapshot voice = playerManager.voiceDiagnosticsSnapshot(event.getGuild());
+        VoiceDiagnosticSnapshot voice = playerManager.voiceDiagnosticsSnapshot(guild);
         SessionRecoverySnapshot recovery = playerManager.sessionRecoverySnapshot();
 
         String discord = StatusMessageFormatter.discord(runtime, JdaRuntimeInfo.version());
         String daveState = StatusMessageFormatter.dave(daveRuntimeInfo.snapshot());
         String musicState = StatusMessageFormatter.music(music);
         String playbackState = StatusMessageFormatter.playback(
-                playerManager.findMusicManager(event.getGuild()).orElse(null));
+                playerManager.findMusicManager(guild).orElse(null));
         String voiceState = StatusMessageFormatter.voice(voice);
         String voiceHistory = StatusMessageFormatter.voiceHistory(voice);
         String recoveryState = StatusMessageFormatter.recovery(recovery);
@@ -481,7 +701,7 @@ public class ModernInteractions extends ListenerAdapter {
         String backupState = StatusMessageFormatter.backups(backups);
         String reliabilityState = StatusMessageFormatter.reliability(runtime, storage, backups, recovery);
         String commandState = StatusMessageFormatter.commands(commands);
-        GuildPreferences accessPreferences = preferencesRepository.get(event.getGuild().getIdLong());
+        GuildPreferences accessPreferences = preferencesRepository.get(guild.getIdLong());
         String accessState = String.join("\n",
                 "Playback: `" + accessPreferences.accessMode().label() + "`",
                 "Requests: `" + accessPreferences.requestAccessMode().label() + "`",
@@ -490,34 +710,32 @@ public class ModernInteractions extends ListenerAdapter {
                 "Music channel: " + musicChannelLabel(accessPreferences),
                 "Vote-skip: `" + accessPreferences.voteSkipPercent() + "%`");
         String libraryState = "Плейлистов: `"
-                + musicLibraryRepository.playlists(event.getGuild().getIdLong()).size()
+                + musicLibraryRepository.playlists(guild.getIdLong()).size()
                 + "`\nИстория: `"
-                + musicLibraryRepository.history(event.getGuild().getIdLong()).size()
+                + musicLibraryRepository.history(guild.getIdLong()).size()
                 + "/" + MusicLibraryRepository.MAX_HISTORY_PER_GUILD + "`";
 
-        event.replyEmbeds(new EmbedBuilder()
-                        .setTitle("🩺 Состояние Baskov Discord Bot")
-                        .setDescription("Uptime: `" + formatDuration(commands.uptime()) + "`")
-                        .setColor("CONNECTED".equals(runtime.jdaStatus())
-                                && storage.ready()
-                                && backups.healthy() ? Color.GREEN : Color.ORANGE)
-                        .addField("Discord gateway", discord, true)
-                        .addField("DAVE / E2EE", daveState, true)
-                        .addField("Музыка", musicState, true)
-                        .addField("Playback modes", playbackState, true)
-                        .addField("Voice transport", voiceState, true)
-                        .addField("Voice history", voiceHistory, false)
-                        .addField("Voice recovery", recoveryState, false)
-                        .addField("Persistent library", libraryState, true)
-                        .addField("Storage readiness", storageState, true)
-                        .addField("Persistence backups", backupState, true)
-                        .addField("DJ & voting", accessState, true)
-                        .addField("Reliability", reliabilityState, true)
-                        .addField("Команды с запуска", commandState, false)
-                        .setFooter("Health heartbeat обновляется каждые 10 секунд")
-                        .build())
-                .setEphemeral(true)
-                .queue();
+        return new EmbedBuilder()
+                .setTitle("🩺 Состояние Baskov Discord Bot")
+                .setDescription("Uptime: `" + formatDuration(commands.uptime()) + "`")
+                .setColor("CONNECTED".equals(runtime.jdaStatus())
+                        && storage.ready()
+                        && backups.healthy() ? Color.GREEN : Color.ORANGE)
+                .addField("Discord gateway", discord, true)
+                .addField("DAVE / E2EE", daveState, true)
+                .addField("Музыка", musicState, true)
+                .addField("Playback modes", playbackState, true)
+                .addField("Voice transport", voiceState, true)
+                .addField("Voice history", voiceHistory, false)
+                .addField("Voice recovery", recoveryState, false)
+                .addField("Persistent library", libraryState, true)
+                .addField("Storage readiness", storageState, true)
+                .addField("Persistence backups", backupState, true)
+                .addField("DJ & voting", accessState, true)
+                .addField("Reliability", reliabilityState, true)
+                .addField("Команды с запуска", commandState, false)
+                .setFooter("Health heartbeat каждые 10 секунд • кнопка ниже пересчитывает live probes")
+                .build();
     }
 
     private void search(SlashCommandInteractionEvent event) {
@@ -941,12 +1159,34 @@ public class ModernInteractions extends ListenerAdapter {
     }
 
     private void deletePlaylist(SlashCommandInteractionEvent event, String name) {
-        PlaylistOperationResult result = musicLibraryRepository.deletePlaylist(
-                event.getGuild().getIdLong(),
-                name,
-                event.getUser().getIdLong(),
-                administrationPolicy.canManage(event.getMember()));
-        replyPlaylistMutation(event, result);
+        StoredPlaylist playlist = musicLibraryRepository
+                .playlist(event.getGuild().getIdLong(), name)
+                .orElse(null);
+        if (playlist == null) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "📚 Плейлист не найден",
+                            "Проверь название через `/playlist list`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        boolean canManage = playlist.ownerUserId() == event.getUser().getIdLong()
+                || administrationPolicy.canManage(event.getMember());
+        if (!canManage) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🔐 Недостаточно прав",
+                            "Удалить этот плейлист может его создатель или администратор Баскова."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        requestConfirmation(
+                event,
+                ConfirmationStore.Action.DELETE_PLAYLIST,
+                playlist.name(),
+                "🗑️ Удалить плейлист?",
+                "Плейлист `" + playlist.name() + "` содержит `" + playlist.tracks().size()
+                        + "` треков. Это действие нельзя отменить кнопкой после подтверждения.");
     }
 
     private void replyPlaylistMutation(
@@ -1371,12 +1611,12 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
         String title = player.getPlayingTrack().getInfo().title;
-        playerManager.stopAndRelease(guild);
-        voteSkipService.reset(guild.getIdLong());
-        event.replyEmbeds(MusicEmbeds.success(
-                "⏹️ Воспроизведение остановлено",
-                "Песня `" + title + "` остановлена, очередь очищена, бот отключён."))
-                .queue();
+        requestConfirmation(
+                event,
+                ConfirmationStore.Action.STOP,
+                title,
+                "⏹️ Остановить музыкальную сессию?",
+                "Будет остановлен `" + title + "`, очищена очередь и закрыто voice-соединение.");
     }
 
     private void queue(SlashCommandInteractionEvent event) {
@@ -1606,14 +1846,21 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
-        int removed = manager.getScheduler().clearQueue();
-        event.replyEmbeds(MusicEmbeds.success(
-                        "🧹 Очередь очищена",
-                        removed == 0
-                                ? "Ожидающих треков уже не было. Текущая песня продолжает играть."
-                                : "Удалено ожидающих треков: `" + removed
-                                + "`. Текущая песня продолжает играть."))
-                .queue();
+        int queued = manager.getScheduler().queueSize();
+        if (queued == 0) {
+            event.replyEmbeds(MusicEmbeds.success(
+                            "🧹 Очередь уже пуста",
+                            "Ожидающих треков нет. Текущая песня продолжает играть."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        requestConfirmation(
+                event,
+                ConfirmationStore.Action.CLEAR_QUEUE,
+                String.valueOf(queued),
+                "🧹 Очистить ожидающую очередь?",
+                "Будет удалено `" + queued + "` ожидающих треков. Текущая песня продолжит играть.");
     }
 
     private void queueManage(SlashCommandInteractionEvent event) {
@@ -2076,37 +2323,75 @@ public class ModernInteractions extends ListenerAdapter {
     }
 
     private void resetSettings(SlashCommandInteractionEvent event) {
-        boolean confirmed = event.getOption("confirm", false, OptionMapping::getAsBoolean);
-        if (!confirmed) {
-            event.replyEmbeds(MusicEmbeds.error(
-                            "⚠️ Сброс не подтверждён",
-                            "Повтори `/settings reset confirm:true`, если действительно хочешь удалить все overrides сервера."))
-                    .setEphemeral(true)
-                    .queue();
-            return;
-        }
+        GuildPreferences current = preferencesRepository.get(event.getGuild().getIdLong());
+        requestConfirmation(
+                event,
+                ConfirmationStore.Action.RESET_SETTINGS,
+                "",
+                "⚠️ Сбросить guild settings?",
+                "Будут удалены overrides громкости, repeat/access policies, DJ/manager roles, "
+                        + "music-channel restriction и vote-skip threshold. Текущая громкость: `"
+                        + current.volume() + "%`.");
+    }
 
-        GuildPreferences preferences = preferencesRepository.reset(event.getGuild().getIdLong());
-        voteSkipService.reset(event.getGuild().getIdLong());
-        playerManager.findMusicManager(event.getGuild()).ifPresent(manager -> {
-            manager.getAudioPlayer().setVolume(preferences.volume());
-            manager.getScheduler().setRepeatMode(preferences.repeatMode());
-        });
-        recordSettingsAudit(event, "reset-to-defaults");
-        event.replyEmbeds(settingsEmbed(preferences))
+    private void requestConfirmation(
+            SlashCommandInteractionEvent event,
+            ConfirmationStore.Action action,
+            String payload,
+            String title,
+            String description) {
+        ConfirmationStore.PendingConfirmation confirmation = confirmationStore.create(
+                action,
+                event.getGuild().getIdLong(),
+                event.getUser().getIdLong(),
+                payload);
+        event.replyEmbeds(confirmationEmbed(title, description, confirmation))
+                .setComponents(ExperienceControls.confirmationRows(confirmation.token()))
                 .setEphemeral(true)
                 .queue();
     }
 
+    private void requestConfirmation(
+            ButtonInteractionEvent event,
+            ConfirmationStore.Action action,
+            String payload,
+            String title,
+            String description) {
+        ConfirmationStore.PendingConfirmation confirmation = confirmationStore.create(
+                action,
+                event.getGuild().getIdLong(),
+                event.getUser().getIdLong(),
+                payload);
+        event.replyEmbeds(confirmationEmbed(title, description, confirmation))
+                .setComponents(ExperienceControls.confirmationRows(confirmation.token()))
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private static MessageEmbed confirmationEmbed(
+            String title,
+            String description,
+            ConfirmationStore.PendingConfirmation confirmation) {
+        return new EmbedBuilder()
+                .setTitle(title)
+                .setDescription(description
+                        + "\n\nПодтверждение одноразовое и истекает <t:"
+                        + confirmation.expiresAt().getEpochSecond() + ":R>.")
+                .setColor(Color.ORANGE)
+                .setFooter("Нажми «Подтвердить» или «Отмена» — повторный клик ничего не выполнит")
+                .build();
+    }
+
     private void recordSettingsAudit(SlashCommandInteractionEvent event, String action) {
+        recordSettingsAudit(event.getGuild(), event.getUser().getIdLong(), action);
+    }
+
+    private void recordSettingsAudit(Guild guild, long userId, String action) {
         try {
-            preferencesRepository.recordAudit(
-                    event.getGuild().getIdLong(),
-                    event.getUser().getIdLong(),
-                    action);
+            preferencesRepository.recordAudit(guild.getIdLong(), userId, action);
         } catch (RuntimeException exception) {
             log.error("Cannot persist guild settings audit for guild {} action {}",
-                    event.getGuild().getId(), action, exception);
+                    guild.getId(), action, exception);
         }
     }
 
@@ -2350,13 +2635,13 @@ public class ModernInteractions extends ListenerAdapter {
                     .queue();
             return;
         }
-        playerManager.stopAndRelease(guild);
-        voteSkipService.reset(guild.getIdLong());
-        event.replyEmbeds(MusicEmbeds.success(
-                        "⏹️ Воспроизведение остановлено",
-                        "Очередь очищена, бот отключён от голосового канала."))
-                .setEphemeral(true)
-                .queue();
+        String title = player.getPlayingTrack().getInfo().title;
+        requestConfirmation(
+                event,
+                ConfirmationStore.Action.STOP,
+                title,
+                "⏹️ Остановить музыкальную сессию?",
+                "Будет остановлен `" + title + "`, очищена очередь и закрыто voice-соединение.");
     }
 
     private void repeatFromButton(ButtonInteractionEvent event, Guild guild) {
@@ -2389,24 +2674,67 @@ public class ModernInteractions extends ListenerAdapter {
         return "%02d:%02d:%02d".formatted(hours, minutes, remainingSeconds);
     }
 
-    private MessageEmbed helpEmbed() {
-        return new EmbedBuilder()
-                .setTitle("🎤 Современные команды Баскова")
-                .setDescription("Slash-команды — основной интерфейс. Старые `!`-команды пока продолжают работать.")
+    private MessageEmbed helpEmbed(ExperienceControls.HelpSection section, Member member) {
+        ExperienceControls.HelpSection safeSection = section == null
+                ? ExperienceControls.HelpSection.OVERVIEW
+                : section;
+        GuildPreferences preferences = preferencesRepository.get(member.getGuild().getIdLong());
+        boolean canManage = administrationPolicy.canManage(member);
+
+        EmbedBuilder embed = new EmbedBuilder()
                 .setColor(Color.CYAN)
-                .addField("▶️ Воспроизведение", "`/play` `/search` `/discover` `/pause` `/resume` `/previous` `/skip` `/voteskip` `/stop` `/seek`", false)
-                .addField("📋 Очередь", "`/queue` `/remove` `/move` `/shuffle` `/clear` `/queue-manage`", false)
-                .addField("📚 Библиотека", "`/playlist` `/history` `/replay`", false)
-                .addField("🎚️ Режимы", "`/volume` `/repeat` `/now`", false)
-                .addField("⚙️ Настройки", "`/settings show` `/settings permissions` `/settings access` `/settings request-access` `/settings dj-role` `/settings manager-role` `/settings voice-channel` `/settings vote-threshold` `/settings export` `/settings import` `/settings audit` `/settings reset`", false)
-                .addField("ℹ️ Сервис", "`/version` `/status` `/help`", false)
-                .addField("🖱️ Кнопки", "Под `/now` доступны предыдущий трек, ±15 секунд, пауза, следующий трек, shuffle, repeat, очередь и stop.", false)
-                .addField("🔎 Выбор трека", "`/search` показывает до пяти результатов YouTube с кнопками выбора. Результаты живут пять минут и доступны только автору.", false)
-                .addField("💡 Autocomplete", "`/play` и `/search` объединяют твои недавние запросы с треками из истории и плейлистов; `/playlist` предлагает сохранённые названия.", false)
-                .addField("🧭 Discovery", "`/discover recent` показывает недавние запросы, `again` повторяет последний поиск, а `related`/`history` запускают новый поиск по данным знакомого трека.", false)
-                .addField("🎧 DJ и администрирование", "Playback и добавление музыки настраиваются отдельно. Владелец/`Manage Server` может назначить DJ и manager-role, ограничить voice/stage канал и включить vote-skip.", false)
-                .addField("🧰 Queue Manager", "`/queue-manage` показывает ревизию, удаляет диапазон, чистит дубликаты и позволяет удалить только свои ожидающие треки.", false)
-                .addField("💾 Постоянное хранение", "Плейлисты, история и правила DJ переживают restart контейнера.", false)
-                .build();
+                .setFooter("Кнопки ниже переключают разделы без новой slash-команды");
+
+        switch (safeSection) {
+            case OVERVIEW -> embed
+                    .setTitle("🎤 Басков • быстрый обзор")
+                    .setDescription("Slash-команды — основной интерфейс. Выбери раздел кнопками ниже.")
+                    .addField("▶️ Быстрый старт", "`/play` → `/now` → `/queue`", false)
+                    .addField("🔎 Найти трек", "`/search` показывает до пяти вариантов; `/discover` продолжает знакомый поиск.", false)
+                    .addField("📚 Сохранить музыку", "`/playlist` и `/history` переживают restart контейнера.", false)
+                    .addField("🩺 Проверить сервис", "`/status` теперь можно обновлять кнопкой без новой команды.", false)
+                    .addField("Твои права здесь", canManage
+                            ? "`admin` — можно менять guild settings и административно управлять библиотекой."
+                            : "`listener` — административные действия зависят от ролей сервера.", false)
+                    .addField("Политики сервера", "Requests: `" + preferences.requestAccessMode().label()
+                            + "` • Playback: `" + preferences.accessMode().label() + "`", false);
+            case PLAYBACK -> embed
+                    .setTitle("▶️ Воспроизведение")
+                    .setDescription("Команды активной музыкальной сессии.")
+                    .addField("Запуск", "`/play` `/search` `/discover` `/replay` `/playlist play`", false)
+                    .addField("Управление", "`/pause` `/resume` `/previous` `/skip` `/voteskip` `/seek` `/volume` `/repeat`", false)
+                    .addField("Пульт `/now`", "Предыдущий, ±15 секунд, pause/resume, skip, shuffle, repeat, очередь, refresh и stop.", false)
+                    .addField("Защита stop", "`/stop` и кнопка Stop сначала показывают одноразовое подтверждение на 2 минуты.", false)
+                    .addField("Voice policy", "Добавление музыки: `" + preferences.requestAccessMode().label()
+                            + "` • Music channel: " + musicChannelLabel(preferences), false);
+            case QUEUE -> embed
+                    .setTitle("📋 Очередь")
+                    .setDescription("Просмотр и безопасное изменение ожидающих треков.")
+                    .addField("Основное", "`/queue` `/remove` `/move` `/shuffle` `/clear`", false)
+                    .addField("Queue Manager", "`/queue-manage stats` `remove-range` `dedupe` `remove-mine`", false)
+                    .addField("Ревизии", "Batch-операции могут сверять revision, чтобы не удалить уже сдвинувшиеся позиции.", false)
+                    .addField("Защита clear", "Непустая `/clear` теперь требует отдельной кнопки подтверждения; текущий трек не останавливается.", false);
+            case LIBRARY -> embed
+                    .setTitle("📚 Библиотека и discovery")
+                    .setDescription("Постоянные плейлисты, история и повторное воспроизведение.")
+                    .addField("Плейлисты", "`/playlist list|create|show|add|play|remove|move|rename|copy|dedupe|capture-queue|add-history|search|delete`", false)
+                    .addField("История", "`/history` `/replay` `/discover history`", false)
+                    .addField("Discovery", "`/discover recent|again|related|history`", false)
+                    .addField("Безопасное удаление", "`/playlist delete` теперь только под одноразовым интерактивным подтверждением.", false)
+                    .addField("Autocomplete", "`/play`, `/search` и playlist names используют локальные подсказки без сетевого запроса на каждый символ.", false);
+            case ADMIN -> embed
+                    .setTitle("⚙️ Guild Administration")
+                    .setDescription(canManage
+                            ? "У тебя есть административный доступ Баскова на этом сервере."
+                            : "Для изменения настроек нужны owner, `Manage Server` или manager-role Баскова.")
+                    .addField("Посмотреть", "`/settings show` `/settings permissions` `/settings audit`", false)
+                    .addField("Доступ", "`/settings access` `/settings request-access` `/settings dj-role` `/settings manager-role` `/settings voice-channel`", false)
+                    .addField("Поведение", "`/settings volume` `/settings repeat` `/settings vote-threshold`", false)
+                    .addField("Перенос", "`/settings export` `/settings import`", false)
+                    .addField("Сброс", "`/settings reset` открывает интерактивное подтверждение; `confirm:true` больше вводить не нужно.", false)
+                    .addField("Диагностика", "`/status` — gateway, voice, storage, backups, recovery и command failure rate.", false);
+        }
+        return embed.build();
     }
+
 }

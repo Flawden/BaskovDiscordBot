@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.5.0**.
+Текущая версия релизной ветки: **v1.6.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -15,6 +15,7 @@
 - Queue Manager 2.0: ревизия ожидающей очереди, stale-safe batch mutations, `/queue-manage stats|remove-range|dedupe|remove-mine`, сводка длительности/заказчиков/дубликатов и self-service очистка собственных ожидающих треков;
 - постоянные guild settings: громкость, repeat, playback/request access, DJ/manager roles, voice-channel restriction и vote-skip;
 - `/now` с визуальным прогрессом, state-aware двухрядным пультом previous/±15s/pause/next/shuffle/repeat, disabled-состояниями и кнопкой refresh; `/status` с активными playback modes, uptime, Discord gateway, voice transport snapshot и последними voice/source ошибками;
+- Discord Experience 1.6: секционная `/help` с кнопочной навигацией, live refresh `/status` и одноразовые owner/guild-bound подтверждения для stop/clear/delete/reset;
 - динамический Docker heartbeat, который подтверждает свежее подключение к Discord, считает gateway transitions/disconnected samples и показывает последнее CONNECTED;
 - atomic persistence backups трёх storage-файлов внутри `/app/data/backups` с bounded retention и owner-only permissions;
 - live storage probe в `/status`, агрегированный reliability state и command failure rate/последняя ошибка;
@@ -94,6 +95,7 @@ Live-потоки отключены. Подробные правила voice-д
 Voice recovery и восстановление сессий после restart/redeploy описаны в [`docs/VOICE-RECOVERY-SESSION-RESTORATION.md`](docs/VOICE-RECOVERY-SESSION-RESTORATION.md).
 GitHub-hosted delivery и резервный self-hosted режим описаны в [`docs/SELF-HOSTED-DELIVERY.md`](docs/SELF-HOSTED-DELIVERY.md).
 Современный Discord-интерфейс описан в [`docs/MODERN-COMMANDS.md`](docs/MODERN-COMMANDS.md).
+Интерактивная помощь, status refresh и destructive confirmations описаны в [`docs/DISCORD-EXPERIENCE.md`](docs/DISCORD-EXPERIENCE.md).
 Интерактивный поиск и безопасный выбор трека описаны в [`docs/SEARCH-TRACK-SELECTION.md`](docs/SEARCH-TRACK-SELECTION.md).
 Постоянные плейлисты, история и replay описаны в [`docs/PLAYLISTS-HISTORY-REPLAY.md`](docs/PLAYLISTS-HISTORY-REPLAY.md).
 DJ-роли, access modes и vote-skip описаны в [`docs/DJ-ROLES-AND-VOTING.md`](docs/DJ-ROLES-AND-VOTING.md), а guild administration — в [`docs/GUILD-ADMINISTRATION.md`](docs/GUILD-ADMINISTRATION.md).
