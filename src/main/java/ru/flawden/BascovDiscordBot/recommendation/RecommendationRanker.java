@@ -16,14 +16,26 @@ public final class RecommendationRanker {
             List<RecommendationCandidate> candidates,
             RadioStrategy strategy,
             RecommendationContext context) {
+        return best(candidates, strategy, context, new FeatureHashRecommendationEmbeddingProvider());
+    }
+
+    public static Optional<ScoredCandidate> best(
+            List<RecommendationCandidate> candidates,
+            RadioStrategy strategy,
+            RecommendationContext context,
+            RecommendationEmbeddingProvider embeddingProvider) {
         if (candidates == null || candidates.isEmpty()) {
             return Optional.empty();
         }
         RecommendationContext safe = context == null ? RecommendationContext.empty() : context;
         RadioStrategy mode = strategy == null ? RadioStrategy.SIMILAR : strategy;
+        RecommendationEmbeddingProvider provider = embeddingProvider == null
+                ? new FeatureHashRecommendationEmbeddingProvider()
+                : embeddingProvider;
+        PersonalTasteVector tasteVector = PersonalTasteVectorModel.build(safe.personalTaste(), provider);
 
         return candidates.stream()
-                .map(candidate -> score(candidate, mode, safe))
+                .map(candidate -> score(candidate, mode, safe, provider, tasteVector))
                 .filter(scored -> !scored.rejected())
                 .max(Comparator
                         .comparingDouble(ScoredCandidate::score)
@@ -33,7 +45,9 @@ public final class RecommendationRanker {
     private static ScoredCandidate score(
             RecommendationCandidate candidate,
             RadioStrategy strategy,
-            RecommendationContext context) {
+            RecommendationContext context,
+            RecommendationEmbeddingProvider embeddingProvider,
+            PersonalTasteVector tasteVector) {
         String identity = candidate.identity();
         String artist = RecommendationIdentity.normalizeArtist(candidate.artist());
         boolean known = context.knownTrackIdentities().contains(identity);
@@ -41,7 +55,7 @@ public final class RecommendationRanker {
         boolean artistRecent = context.recentArtists().contains(artist);
 
         if (recent || (strategy.hardNovelty() && known)) {
-            return rejected(candidate, known, artistRecent, context.personalTaste(), strategy);
+            return rejected(candidate, known, artistRecent, context.personalTaste(), strategy, embeddingProvider, tasteVector);
         }
 
         double novelty = known ? 0.0d : 1.0d;
@@ -68,8 +82,17 @@ public final class RecommendationRanker {
             case DISCOVERY -> 0.40d;
         } * context.personalTaste().confidence();
         double personalContribution = taste.personalTaste() * personalWeight;
+        double vectorSimilarity = tasteVector.available()
+                ? RecommendationVectorMath.cosine(tasteVector.vector(), embeddingProvider.embed(candidate))
+                : 0.0d;
+        double vectorWeight = switch (strategy) {
+            case FAMILIAR -> 0.06d;
+            case SIMILAR -> 0.14d;
+            case DISCOVERY -> 0.18d;
+        } * tasteVector.confidence();
+        double vectorContribution = vectorSimilarity * vectorWeight;
         double finalScore = Math.max(-1.0d, Math.min(1.25d,
-                baseScore + personalContribution + taste.explorationBonus()));
+                baseScore + personalContribution + vectorContribution + taste.explorationBonus()));
 
         return new ScoredCandidate(
                 candidate,
@@ -83,7 +106,12 @@ public final class RecommendationRanker {
                 taste.tagAffinity(),
                 taste.personalTaste(),
                 taste.explorationRate(),
-                taste.explorationBonus());
+                taste.explorationBonus(),
+                vectorSimilarity,
+                vectorContribution,
+                tasteVector.confidence(),
+                embeddingProvider.name(),
+                embeddingProvider.dimensions());
     }
 
     private static ScoredCandidate rejected(
@@ -91,7 +119,9 @@ public final class RecommendationRanker {
             boolean known,
             boolean artistRecent,
             PersonalTasteProfile profile,
-            RadioStrategy strategy) {
+            RadioStrategy strategy,
+            RecommendationEmbeddingProvider embeddingProvider,
+            PersonalTasteVector tasteVector) {
         PersonalRankingModel.TasteScore taste = PersonalRankingModel.score(candidate, profile, strategy);
         return new ScoredCandidate(
                 candidate,
@@ -105,7 +135,12 @@ public final class RecommendationRanker {
                 taste.tagAffinity(),
                 taste.personalTaste(),
                 taste.explorationRate(),
-                0.0d);
+                0.0d,
+                0.0d,
+                0.0d,
+                tasteVector == null ? 0.0d : tasteVector.confidence(),
+                embeddingProvider == null ? "none" : embeddingProvider.name(),
+                embeddingProvider == null ? 0 : embeddingProvider.dimensions());
     }
 
     public record ScoredCandidate(
@@ -120,6 +155,11 @@ public final class RecommendationRanker {
             double tagAffinity,
             double personalTaste,
             double explorationRate,
-            double explorationBonus) {
+            double explorationBonus,
+            double vectorSimilarity,
+            double vectorContribution,
+            double vectorConfidence,
+            String embeddingProvider,
+            int embeddingDimensions) {
     }
 }

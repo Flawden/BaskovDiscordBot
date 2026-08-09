@@ -1,6 +1,7 @@
 package ru.flawden.BascovDiscordBot.recommendation;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.DiscoveryProperties;
 import ru.flawden.BascovDiscordBot.library.StoredTrack;
@@ -18,10 +19,20 @@ public class SmartDiscoveryEngine {
 
     private final RecommendationProvider provider;
     private final DiscoveryProperties properties;
+    private final RecommendationEmbeddingProvider embeddingProvider;
 
-    public SmartDiscoveryEngine(LastFmRecommendationProvider provider, DiscoveryProperties properties) {
+    @Autowired
+    public SmartDiscoveryEngine(
+            LastFmRecommendationProvider provider,
+            DiscoveryProperties properties,
+            FeatureHashRecommendationEmbeddingProvider embeddingProvider) {
         this.provider = Objects.requireNonNull(provider, "provider");
         this.properties = Objects.requireNonNull(properties, "properties");
+        this.embeddingProvider = Objects.requireNonNull(embeddingProvider, "embeddingProvider");
+    }
+
+    SmartDiscoveryEngine(LastFmRecommendationProvider provider, DiscoveryProperties properties) {
+        this(provider, properties, new FeatureHashRecommendationEmbeddingProvider());
     }
 
     public boolean externalAvailable() {
@@ -67,7 +78,7 @@ public class SmartDiscoveryEngine {
             RadioStrategy strategy,
             RecommendationContext context,
             List<RecommendationCandidate> candidates) {
-        return RecommendationRanker.best(candidates, strategy, context)
+        return RecommendationRanker.best(candidates, strategy, context, embeddingProvider)
                 .map(scored -> {
                     RecommendationCandidate candidate = scored.candidate();
                     String reason = buildReason(candidate, strategy, scored);
@@ -112,6 +123,13 @@ public class SmartDiscoveryEngine {
         }
         if (Math.abs(scored.tagAffinity()) >= 0.01d) {
             reason.append(" • tags ").append(signedPercent(scored.tagAffinity()));
+        }
+        if (Math.abs(scored.vectorContribution()) >= 0.005d) {
+            reason.append(" • vector ")
+                    .append(signedPercent(scored.vectorSimilarity()))
+                    .append(" @ ")
+                    .append(Math.round(scored.vectorConfidence() * 100.0d))
+                    .append("% confidence");
         }
         if (scored.explorationBonus() > 0.0d) {
             reason.append(" • exploration +")

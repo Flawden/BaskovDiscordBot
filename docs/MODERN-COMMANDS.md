@@ -132,7 +132,7 @@ DJ-роли и голосование описаны в [`DJ-ROLES-AND-VOTING.md
 
 Doctor намеренно не делает внешние HTTP/Maven/YouTube probes из Discord-команды: зависший upstream не должен подвешивать саму диагностику. Failure journal не хранит Discord user IDs, stack traces или secrets.
 
-## Smart Radio / Discovery / Personal Ranking (v1.16.0)
+## Smart Radio / Discovery / Personal Ranking / Embeddings (v1.17.0)
 
 ```text
 /radio start [mode:personal|server] [strategy:familiar|similar|discovery]
@@ -157,4 +157,4 @@ Radio продолжает только действительно пустую 
 
 ### `/radio model`
 
-Read-only personal ranking snapshot: evidence/confidence, adaptive exploration rate, strongest artist and tag affinity.
+Read-only personal ranking snapshot: evidence/confidence, adaptive exploration rate, strongest artist/tag affinity и локальный 64D taste-vector (`feature-hash-v1`) с vector confidence/coverage.

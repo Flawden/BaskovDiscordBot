@@ -108,7 +108,7 @@ public class LastFmRecommendationProvider implements RecommendationProvider {
         HttpRequest request = HttpRequest.newBuilder(uri)
                 .timeout(properties.getRequestTimeout())
                 .header("Accept", "application/json")
-                .header("User-Agent", "BaskovDiscordBot/1.16.0 personal-ranking")
+                .header("User-Agent", "BaskovDiscordBot/1.17.0 embeddings-foundation")
                 .GET()
                 .build();
         try {
@@ -240,7 +240,7 @@ public class LastFmRecommendationProvider implements RecommendationProvider {
             HttpRequest request = HttpRequest.newBuilder(uri)
                     .timeout(properties.getRequestTimeout())
                     .header("Accept", "application/json")
-                    .header("User-Agent", "BaskovDiscordBot/1.16.0 personal-ranking")
+                    .header("User-Agent", "BaskovDiscordBot/1.17.0 embeddings-foundation")
                     .GET()
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());

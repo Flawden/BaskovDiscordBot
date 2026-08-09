@@ -6,6 +6,17 @@
 
 ## [Unreleased]
 
+## [1.17.0] — 2026-08-09
+
+### Recommendation Model / Embeddings Foundation
+
+- Добавлен provider-neutral `RecommendationEmbeddingProvider` и локальная реализация `feature-hash-v1`: детерминированный 64-мерный signed feature-hash по normalized artist/title/tags. Это намеренно не neural/semantic model, а стабильный vector API без network/runtime dependency.
+- `PersonalTasteVectorModel` пересобирает bounded taste-vector из существующих track/artist/tag affinity `PersonalTasteProfile`; отдельного embedding-файла и новой миграции persistence нет. Положительные и отрицательные feedback weights направляют vector в разные стороны, а empty/low-evidence profile даёт нулевой contribution.
+- `RecommendationRanker` добавляет bounded cosine similarity как отдельный персональный сигнал поверх provider similarity, novelty/diversity и v1.16 affinity score. Вес vector signal зависит от strategy и vector confidence; `discovery` hard novelty/recent rejection выполняется до vector scoring и не может быть отменён embedding-ом.
+- `/radio why` показывает material vector similarity + confidence; `/radio model` показывает embedding provider, размерность, количество contributing features и vector confidence вместе с прежними explainable artist/tag weights.
+- `SmartDiscoveryEngine` получает embedding-provider через DI, но старый `ytsearch:` → load → policy → queue → playback boundary не меняется. Интерфейс позволяет позже заменить локальный feature hash на semantic embeddings без переписывания voice/queue слоя.
+- Добавлены vector math/embedding regression tests: детерминизм и L2-normalization, bounded cosine, positive/negative taste direction, near-tie reranking и отдельный architecture-contract, запрещающий embeddings обходить novelty или зависеть от LavaPlayer/HTTP.
+
 ## [1.16.0] — 2026-08-09
 
 ### Personal Ranking Model

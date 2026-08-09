@@ -43,6 +43,9 @@ import ru.flawden.BascovDiscordBot.recommendation.RecommendationFeedbackEntry;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationFeedbackService;
 import ru.flawden.BascovDiscordBot.recommendation.PersonalRankingModel;
 import ru.flawden.BascovDiscordBot.recommendation.PersonalTasteProfile;
+import ru.flawden.BascovDiscordBot.recommendation.PersonalTasteVector;
+import ru.flawden.BascovDiscordBot.recommendation.PersonalTasteVectorModel;
+import ru.flawden.BascovDiscordBot.recommendation.FeatureHashRecommendationEmbeddingProvider;
 import ru.flawden.BascovDiscordBot.library.FavoriteOperationResult;
 import ru.flawden.BascovDiscordBot.library.FavoriteSearchHit;
 import ru.flawden.BascovDiscordBot.library.PersonalListeningInsights;
@@ -1041,6 +1044,8 @@ public class ModernInteractions extends ListenerAdapter {
 
     private MessageEmbed recommendationModelEmbed(long guildId, long userId) {
         PersonalTasteProfile profile = recommendationFeedback.tasteProfile(guildId, userId);
+        FeatureHashRecommendationEmbeddingProvider embeddings = new FeatureHashRecommendationEmbeddingProvider();
+        PersonalTasteVector vector = PersonalTasteVectorModel.build(profile, embeddings);
         double similarExplore = PersonalRankingModel.explorationRate(profile, RadioStrategy.SIMILAR);
         double discoveryExplore = PersonalRankingModel.explorationRate(profile, RadioStrategy.DISCOVERY);
         EmbedBuilder embed = new EmbedBuilder()
@@ -1048,13 +1053,16 @@ public class ModernInteractions extends ListenerAdapter {
                 .setColor(profile.evidenceSignals() == 0 ? Color.GRAY : Color.CYAN)
                 .addField("Evidence", "`" + profile.evidenceSignals() + "` signals • confidence `"
                         + Math.round(profile.confidence() * 100.0d) + "%`", false)
+                .addField("Vector model", "`" + vector.provider() + "` • `" + vector.dimensions()
+                        + "D` • confidence `" + Math.round(vector.confidence() * 100.0d)
+                        + "%` • features `" + vector.contributingFeatures() + "`", false)
                 .addField("Explore / exploit",
                         "similar: `" + Math.round(similarExplore * 100.0d) + "% explore` • discovery: `"
                                 + Math.round(discoveryExplore * 100.0d) + "% explore`", false);
         if (profile.evidenceSignals() == 0) {
             return embed
                     .setDescription("Модель пока нейтральная. Дай несколько radio-рекомендаций, дослушивай/скипай/добавляй в favorites — веса появятся автоматически.")
-                    .setFooter("Track + artist + tag affinity • ranking применяется только к personal radio")
+                    .setFooter("Track + artist + tag affinity + 64D vector taste • ranking применяется только к personal radio")
                     .build();
         }
         String artists = profile.topArtists(5).stream()
@@ -1065,7 +1073,7 @@ public class ModernInteractions extends ListenerAdapter {
                 .collect(java.util.stream.Collectors.joining(" • "));
         embed.addField("Artist affinity", artists.isBlank() ? "`пока нет`" : artists, false)
                 .addField("Tag affinity", tags.isBlank() ? "`пока нет metadata`" : tags, false)
-                .setFooter("Веса берутся только из bounded recommendation-feedback; /radio why показывает влияние на конкретный выбор");
+                .setFooter("Веса и taste-vector пересобираются из bounded feedback; /radio why показывает personal + vector вклад");
         return embed.build();
     }
 
