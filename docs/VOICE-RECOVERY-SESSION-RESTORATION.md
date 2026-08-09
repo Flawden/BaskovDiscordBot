@@ -13,6 +13,7 @@
 - pause state;
 - volume;
 - repeat mode;
+- bounded previous-history (до 25 треков, начиная с `v1.10.0`);
 - время снимка.
 
 Файл по умолчанию:
@@ -30,8 +31,10 @@ data/music-sessions.tsv
 Он использует существующий persistent volume `bot-data` и заголовок:
 
 ```text
-BASKOV_MUSIC_SESSIONS_V1
+BASKOV_MUSIC_SESSIONS_V2
 ```
+
+`v1.10.0` читает также legacy `BASKOV_MUSIC_SESSIONS_V1`: такие записи получают пустую previous-history и автоматически переходят в V2 при следующем save.
 
 Checkpoint обновляется каждые пять секунд и повторно перед graceful shutdown. Запись выполняется через временный файл и atomic move; на POSIX применяется `0600`.
 
@@ -63,7 +66,8 @@ Checkpoint обновляется каждые пять секунд и повт
 2. загружает текущий трек по публичному identifier;
 3. восстанавливает позицию с защитным отступом от самого конца;
 4. загружает очередь последовательно;
-5. возвращает volume, repeat и pause state.
+5. отдельно резолвит bounded previous-history и восстанавливает её без вызова persistent listening-history listener;
+6. возвращает volume, repeat и pause state.
 
 Если канал пуст, checkpoint не удаляется. Первый человек, вернувшийся в этот канал в пределах TTL, запускает восстановление автоматически.
 
@@ -103,6 +107,7 @@ Checkpoint-сессий
 Восстановлений сейчас
 Transport A/S/F
 Startup restored/failed
+Previous restored/failed
 Последнее событие
 ```
 
@@ -128,3 +133,14 @@ Startup restored/failed
 - recovery attempts: от 1 до 10;
 - recovery backoff: от 0 до одной минуты;
 - очередь checkpoint: не более 1000 треков, дополнительно ограничивается runtime `maxQueueSize`.
+
+
+## Ручная диагностика и retry (`v1.10.0`)
+
+`/session status` показывает состояние конкретной guild без mutation: `NONE`, `SAVED`, `RESTORING` или `ACTIVE`, сохранённый voice channel, возраст checkpoint, число current+queue и previous-history треков, resume position, pause/volume/repeat и последнее recovery-событие.
+
+`/session recover` доступен только владельцу сервера, участникам с `Manage Server` или configured manager-role. Перед запуском он проверяет, что нет активной/уже восстанавливающейся сессии, checkpoint не истёк, сохранённый voice channel существует и при `REQUIRE_HUMAN_LISTENER=true` в нём есть человек. Сам restore остаётся тем же bounded startup recovery path.
+
+### Downgrade
+
+После первой записи `BASKOV_MUSIC_SESSIONS_V2` бинарники до `v1.10.0` не смогут прочитать header. Перед rollback ниже `v1.10.0` сохраните backup `music-sessions.tsv`.

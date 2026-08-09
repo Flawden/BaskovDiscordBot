@@ -501,6 +501,36 @@ class TrackSchedulerTest {
     }
 
     @Test
+    void restoreHistoryPreservesNewestFirstWithoutPersistentListenerSideEffects() {
+        AudioPlayer player = mock(AudioPlayer.class);
+        AtomicInteger persisted = new AtomicInteger();
+        TrackScheduler scheduler = new TrackScheduler(
+                player,
+                10,
+                Duration.ofHours(4),
+                RepeatMode.OFF,
+                () -> { },
+                () -> { },
+                TrackScheduler.Diagnostics.noop(),
+                ignored -> persisted.incrementAndGet());
+        AudioTrack newest = track("Newest", Duration.ofMinutes(3));
+        AudioTrack older = track("Older", Duration.ofMinutes(4));
+        AudioTrack newestClone = track("Newest", Duration.ofMinutes(3));
+        AudioTrack olderClone = track("Older", Duration.ofMinutes(4));
+        when(newest.makeClone()).thenReturn(newestClone);
+        when(older.makeClone()).thenReturn(olderClone);
+
+        scheduler.restoreHistory(List.of(
+                TrackRequest.create(newest, new TrackRequester(1L, "A"), List.of()),
+                TrackRequest.create(older, new TrackRequester(2L, "B"), List.of())));
+
+        assertEquals(2, scheduler.historySize());
+        assertEquals(List.of(newestClone, olderClone),
+                scheduler.historyRequests().stream().map(TrackRequest::track).toList());
+        assertEquals(0, persisted.get());
+    }
+
+    @Test
     void previousReportsEmptyHistoryWithoutReplacingCurrentTrack() {
         AudioPlayer player = mock(AudioPlayer.class);
         TrackScheduler scheduler = new TrackScheduler(

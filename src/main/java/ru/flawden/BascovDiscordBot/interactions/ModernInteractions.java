@@ -49,6 +49,7 @@ import ru.flawden.BascovDiscordBot.operations.PersistenceBackupService;
 import ru.flawden.BascovDiscordBot.operations.PersistenceReadiness;
 import ru.flawden.BascovDiscordBot.operations.RuntimeHealthMonitor;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
+import ru.flawden.BascovDiscordBot.session.SessionRecoveryDetails;
 import ru.flawden.BascovDiscordBot.session.SessionRecoverySnapshot;
 import ru.flawden.BascovDiscordBot.settings.GuildAdministrationPolicy;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferences;
@@ -61,6 +62,7 @@ import ru.flawden.BascovDiscordBot.settings.SettingsProfileCodec;
 import java.awt.Color;
 import java.util.ArrayList;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -146,6 +148,7 @@ public class ModernInteractions extends ListenerAdapter {
                 case "help" -> help(event);
                 case "version" -> event.replyEmbeds(versionEvent.buildEmbed()).setEphemeral(true).queue();
                 case "status" -> status(event);
+                case "session" -> session(event);
                 case "play" -> play(event);
                 case "search" -> search(event);
                 case "discover" -> discover(event);
@@ -724,6 +727,82 @@ public class ModernInteractions extends ListenerAdapter {
                 .setComponents(ExperienceControls.statusRows())
                 .setEphemeral(true)
                 .queue();
+    }
+
+    private void session(SlashCommandInteractionEvent event) {
+        String subcommand = event.getSubcommandName();
+        if (subcommand == null || "status".equals(subcommand)) {
+            event.replyEmbeds(sessionRecoveryEmbed(event.getGuild()))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        if (!"recover".equals(subcommand)) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "❌ Неизвестная session-команда",
+                            "Используй `/session status` или `/session recover`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        if (!administrationPolicy.canManage(event.getMember())) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🔒 Недостаточно прав",
+                            "Ручной recovery доступен владельцу сервера, участникам с `Manage Server` "
+                                    + "или настроенной manager-role."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        PlayerManager.ManualSessionRecoveryResult result = playerManager.retryPersistedSession(event.getGuild());
+        boolean started = result.status() == PlayerManager.ManualSessionRecoveryStatus.STARTED;
+        event.replyEmbeds(new EmbedBuilder()
+                        .setTitle(started ? "♻️ Recovery запущен" : "🧭 Recovery не запущен")
+                        .setDescription(result.details())
+                        .setColor(started ? Color.GREEN : Color.ORANGE)
+                        .addField("Статус", "`" + result.status() + "`", true)
+                        .build())
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private MessageEmbed sessionRecoveryEmbed(Guild guild) {
+        SessionRecoveryDetails details = playerManager.sessionRecoveryDetails(guild);
+        String checkpointAge = details.capturedAtEpochMillis() <= 0L
+                ? "—"
+                : formatDuration(Duration.between(
+                        Instant.ofEpochMilli(details.capturedAtEpochMillis()), Instant.now()).abs());
+        String channel = details.voiceChannelId() <= 0L ? "—" : "<#" + details.voiceChannelId() + ">";
+        String position = details.resumePositionMillis() <= 0L
+                ? "0:00"
+                : formatDuration(Duration.ofMillis(details.resumePositionMillis()));
+        return new EmbedBuilder()
+                .setTitle("♻️ Playback Session Recovery")
+                .setColor(details.state() == SessionRecoveryDetails.State.ACTIVE
+                        ? Color.GREEN
+                        : details.state() == SessionRecoveryDetails.State.NONE ? Color.GRAY : Color.ORANGE)
+                .addField("Состояние", "`" + details.state() + "`", true)
+                .addField("Voice channel", channel, true)
+                .addField("Возраст checkpoint", "`" + checkpointAge + "`", true)
+                .addField("Playback", String.join("\n",
+                        "Треков current+queue: `" + details.savedTracks() + "`",
+                        "Previous history: `" + details.savedHistoryTracks() + "`",
+                        "Resume position: `" + position + "`"), true)
+                .addField("Modes", String.join("\n",
+                        "Paused: `" + details.paused() + "`",
+                        "Volume: `" + details.volume() + "%`",
+                        "Repeat: `" + details.repeatMode().label() + "`"), true)
+                .addField("Последнее recovery-событие", "`" + sanitizeInline(details.lastEvent()) + "`", false)
+                .setFooter("/session recover доступен manager/admin и не создаёт новую очередь поверх активной сессии")
+                .build();
+    }
+
+    private static String sanitizeInline(String value) {
+        if (value == null || value.isBlank()) {
+            return "none";
+        }
+        String safe = value.replace('`', '\'').replace('\n', ' ').replace('\r', ' ').trim();
+        return safe.length() > 900 ? safe.substring(0, 897) + "..." : safe;
     }
 
     private MessageEmbed statusEmbed(Guild guild) {
@@ -3047,7 +3126,7 @@ public class ModernInteractions extends ListenerAdapter {
                     .addField("▶️ Быстрый старт", "`/play` → `/now` → `/queue`", false)
                     .addField("🔎 Найти трек", "`/search` показывает до пяти вариантов; `/discover` продолжает знакомый поиск.", false)
                     .addField("📚 Сохранить музыку", "`/favorites`, `/playlist` и `/history` переживают restart контейнера.", false)
-                    .addField("🩺 Проверить сервис", "`/status` теперь можно обновлять кнопкой без новой команды.", false)
+                    .addField("🩺 Проверить сервис", "`/status` и `/session status` показывают live health и playback recovery.", false)
                     .addField("Твои права здесь", canManage
                             ? "`admin` — можно менять guild settings и административно управлять библиотекой."
                             : "`listener` — административные действия зависят от ролей сервера.", false)
@@ -3089,7 +3168,7 @@ public class ModernInteractions extends ListenerAdapter {
                     .addField("Поведение", "`/settings volume` `/settings repeat` `/settings vote-threshold`", false)
                     .addField("Перенос", "`/settings export` `/settings import`", false)
                     .addField("Сброс", "`/settings reset` открывает интерактивное подтверждение; `confirm:true` больше вводить не нужно.", false)
-                    .addField("Диагностика", "`/status` — gateway, voice, storage, backups, recovery и command failure rate.", false);
+                    .addField("Диагностика", "`/status` — gateway, voice, storage, backups и failures; `/session status|recover` — checkpoint и ручной recovery.", false);
         }
         return embed.build();
     }

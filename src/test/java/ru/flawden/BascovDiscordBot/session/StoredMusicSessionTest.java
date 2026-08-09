@@ -33,9 +33,11 @@ class StoredMusicSessionTest {
                 100,
                 RepeatMode.QUEUE,
                 new StoredSessionTrack(track(180_000L), 30_000L),
-                List.of(new StoredSessionTrack(track(200_000L), 0L)));
+                List.of(new StoredSessionTrack(track(200_000L), 0L)),
+                List.of(new StoredSessionTrack(track(210_000L), 0L)));
 
         assertEquals(2, session.trackCount());
+        assertEquals(3, session.recoveryTrackCount());
         assertFalse(session.expired(
                 Instant.parse("2026-08-06T05:59:59Z"),
                 Duration.ofHours(6)));
@@ -43,7 +45,7 @@ class StoredMusicSessionTest {
                 Instant.parse("2026-08-06T06:00:01Z"),
                 Duration.ofHours(6)));
         assertThrows(IllegalArgumentException.class, () -> new StoredMusicSession(
-                10L, 20L, capturedAt, false, 100, RepeatMode.OFF, null, List.of()));
+                10L, 20L, capturedAt, false, 100, RepeatMode.OFF, null, List.of(), List.of()));
     }
 
     private static StoredTrack track(long duration) {

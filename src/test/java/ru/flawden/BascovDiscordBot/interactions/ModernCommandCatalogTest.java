@@ -23,7 +23,7 @@ class ModernCommandCatalogTest {
         assertEquals(Set.of(
                 "help", "version", "status", "play", "search", "discover", "history", "replay", "favorites", "playlist",
                 "pause", "resume", "previous", "skip", "voteskip", "stop", "queue", "now", "seek",
-                "volume", "repeat", "shuffle", "remove", "move", "clear", "queue-manage", "settings"), names);
+                "volume", "repeat", "shuffle", "remove", "move", "clear", "queue-manage", "session", "settings"), names);
     }
 
     @Test
@@ -82,6 +82,16 @@ class ModernCommandCatalogTest {
                         .contains(subcommand.getName()))
                 .flatMap(subcommand -> subcommand.getOptions().stream())
                 .anyMatch(option -> option.getName().equals("revision")));
+    }
+
+    @Test
+    void sessionCommandExposesRecoveryStatusAndManualRetry() {
+        SlashCommandData session = command("session");
+        assertEquals(Set.of("status", "recover"),
+                session.getSubcommands().stream()
+                        .map(subcommand -> subcommand.getName())
+                        .collect(Collectors.toSet()));
+        assertTrue(session.getSubcommands().stream().allMatch(subcommand -> subcommand.getOptions().isEmpty()));
     }
 
     @Test

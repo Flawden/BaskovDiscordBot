@@ -82,6 +82,8 @@ class StatusMessageFormatterTest {
                 1L,
                 2L,
                 1L,
+                5L,
+                1L,
                 "2026-08-06T02:00:00Z voice recovery complete");
 
         String rendered = StatusMessageFormatter.recovery(snapshot);
@@ -89,6 +91,7 @@ class StatusMessageFormatterTest {
         assertTrue(rendered.contains("Checkpoint-сессий: `2`"));
         assertTrue(rendered.contains("Transport A/S/F: `4/3/1`"));
         assertTrue(rendered.contains("Startup restored/failed: `2/1`"));
+        assertTrue(rendered.contains("Previous restored/failed: `5/1`"));
         assertTrue(rendered.contains("voice recovery complete"));
     }
 
@@ -216,7 +219,7 @@ class StatusMessageFormatterTest {
                 1L,
                 0L);
         SessionRecoverySnapshot recovery = new SessionRecoverySnapshot(
-                1, 0, 4L, 4L, 0L, 1L, 0L, "ready");
+                1, 0, 4L, 4L, 0L, 1L, 0L, 3L, 0L, "ready");
 
         String backupSection = StatusMessageFormatter.backups(backup);
         String reliabilitySection = StatusMessageFormatter.reliability(runtime, storage, backup, recovery);

@@ -18,11 +18,14 @@ class VoiceRecoverySessionRestorationContractTest {
         String repository = read("session/FileMusicSessionRepository.java");
         String stored = read("session/StoredMusicSession.java");
 
+        assertTrue(repository.contains("BASKOV_MUSIC_SESSIONS_V2"));
         assertTrue(repository.contains("BASKOV_MUSIC_SESSIONS_V1"));
         assertTrue(repository.contains("ATOMIC_MOVE"));
         assertTrue(repository.contains("OWNER_READ"));
         assertTrue(repository.contains("OWNER_WRITE"));
         assertTrue(stored.contains("queue.size() > 1_000"));
+        assertTrue(stored.contains("history.size() > 25"));
+        assertTrue(repository.contains("legacyV1 ? List.of() : decodeTracks(parts[9])"));
         assertFalse(repository.contains("ObjectOutputStream"));
         assertFalse(repository.contains("AudioTrack track"));
     }
@@ -38,6 +41,20 @@ class VoiceRecoverySessionRestorationContractTest {
         assertTrue(player.contains("hasHumanListener"));
         assertTrue(player.contains("stored.expired"));
         assertTrue(player.contains("safeResumePositionMillis"));
+    }
+
+    @Test
+    void recoveryV2RestoresPreviousHistoryWithoutReplayingListeningTelemetry() throws IOException {
+        String player = read("lavaplayer/PlayerManager.java");
+        String scheduler = read("lavaplayer/TrackScheduler.java");
+        String interactions = read("interactions/ModernInteractions.java");
+
+        assertTrue(player.contains("restoreHistorySequentially"));
+        assertTrue(player.contains("session-history:"));
+        assertTrue(scheduler.contains("restoreHistory(List<TrackRequest> restoredHistory)"));
+        assertTrue(scheduler.contains("historyListener намеренно не вызывается"));
+        assertTrue(interactions.contains("/session recover"));
+        assertTrue(interactions.contains("administrationPolicy.canManage(event.getMember())"));
     }
 
     @Test

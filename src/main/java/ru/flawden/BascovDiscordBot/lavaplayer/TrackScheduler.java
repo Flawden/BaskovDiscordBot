@@ -290,6 +290,35 @@ public class TrackScheduler extends AudioEventAdapter {
         }
     }
 
+    /**
+     * Snapshot предыдущих треков, newest-first. Используется только для
+     * session checkpoint и не изменяет persistent listening history.
+     */
+    public List<TrackRequest> historyRequests() {
+        synchronized (mutationLock) {
+            return List.copyOf(history);
+        }
+    }
+
+    /**
+     * Восстанавливает bounded previous-history после restart/deploy.
+     * Listener намеренно не вызывается, чтобы recovery не создавал ложные
+     * повторные записи в persistent listening history.
+     */
+    public void restoreHistory(List<TrackRequest> restoredHistory) {
+        synchronized (mutationLock) {
+            history.clear();
+            if (restoredHistory == null || restoredHistory.isEmpty()) {
+                return;
+            }
+            restoredHistory.stream()
+                    .filter(Objects::nonNull)
+                    .limit(maxHistorySize)
+                    .map(TrackScheduler::cloneRequest)
+                    .forEach(history::addLast);
+        }
+    }
+
     public int clearQueue() {
         synchronized (mutationLock) {
             int removed = queue.size();

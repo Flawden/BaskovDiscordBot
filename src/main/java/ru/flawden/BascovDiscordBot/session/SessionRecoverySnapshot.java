@@ -11,5 +11,7 @@ public record SessionRecoverySnapshot(
         long transportFailures,
         long startupRestoreSuccesses,
         long startupRestoreFailures,
+        long startupHistoryTracksRestored,
+        long startupHistoryTrackFailures,
         String lastEvent) {
 }

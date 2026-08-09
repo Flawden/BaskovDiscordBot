@@ -32,7 +32,8 @@ import java.util.concurrent.ConcurrentHashMap;
 @Repository
 public class FileMusicSessionRepository implements MusicSessionRepository {
 
-    static final String HEADER = "BASKOV_MUSIC_SESSIONS_V1";
+    static final String HEADER = "BASKOV_MUSIC_SESSIONS_V2";
+    static final String LEGACY_HEADER_V1 = "BASKOV_MUSIC_SESSIONS_V1";
     private static final Base64.Encoder ENCODER = Base64.getUrlEncoder().withoutPadding();
     private static final Base64.Decoder DECODER = Base64.getUrlDecoder();
     private static final Set<PosixFilePermission> OWNER_ONLY = EnumSet.of(
@@ -65,16 +66,18 @@ public class FileMusicSessionRepository implements MusicSessionRepository {
                 log.warn("Music session checkpoint file is empty: {}", file);
                 return;
             }
-            if (!HEADER.equals(lines.get(0))) {
+            String header = lines.get(0);
+            if (!HEADER.equals(header) && !LEGACY_HEADER_V1.equals(header)) {
                 throw new IllegalStateException("Unsupported music session checkpoint format in " + file);
             }
+            boolean legacyV1 = LEGACY_HEADER_V1.equals(header);
             for (int index = 1; index < lines.size(); index++) {
                 String line = lines.get(index);
                 if (line.isBlank() || line.startsWith("#")) {
                     continue;
                 }
                 try {
-                    StoredMusicSession session = decodeSession(line);
+                    StoredMusicSession session = decodeSession(line, legacyV1);
                     sessions.put(session.guildId(), session);
                 } catch (RuntimeException exception) {
                     log.warn("Ignoring malformed music session checkpoint line {}: {}",
@@ -167,9 +170,8 @@ public class FileMusicSessionRepository implements MusicSessionRepository {
 
     private String encodeSession(StoredMusicSession session) {
         String current = session.currentTrack() == null ? "-" : encodeTrack(session.currentTrack());
-        String queue = session.queue().isEmpty()
-                ? "-"
-                : session.queue().stream().map(this::encodeTrack).reduce((a, b) -> a + ";" + b).orElse("-");
+        String queue = encodeTracks(session.queue());
+        String history = encodeTracks(session.history());
         return String.join("\t",
                 "S",
                 Long.toString(session.guildId()),
@@ -179,23 +181,19 @@ public class FileMusicSessionRepository implements MusicSessionRepository {
                 Integer.toString(session.volume()),
                 session.repeatMode().name(),
                 current,
-                queue);
+                queue,
+                history);
     }
 
-    private StoredMusicSession decodeSession(String line) {
+    private StoredMusicSession decodeSession(String line, boolean legacyV1) {
         String[] parts = line.split("\\t", -1);
-        if (parts.length != 9 || !"S".equals(parts[0])) {
-            throw new IllegalArgumentException("expected 9-column session line");
+        int expectedColumns = legacyV1 ? 9 : 10;
+        if (parts.length != expectedColumns || !"S".equals(parts[0])) {
+            throw new IllegalArgumentException("expected " + expectedColumns + "-column session line");
         }
         StoredSessionTrack current = "-".equals(parts[7]) ? null : decodeTrack(parts[7]);
-        List<StoredSessionTrack> queue = new ArrayList<>();
-        if (!"-".equals(parts[8])) {
-            for (String encoded : parts[8].split(";")) {
-                if (!encoded.isBlank()) {
-                    queue.add(decodeTrack(encoded));
-                }
-            }
-        }
+        List<StoredSessionTrack> queue = decodeTracks(parts[8]);
+        List<StoredSessionTrack> history = legacyV1 ? List.of() : decodeTracks(parts[9]);
         return new StoredMusicSession(
                 Long.parseLong(parts[1]),
                 Long.parseLong(parts[2]),
@@ -204,7 +202,28 @@ public class FileMusicSessionRepository implements MusicSessionRepository {
                 Integer.parseInt(parts[5]),
                 RepeatMode.valueOf(parts[6]),
                 current,
-                queue);
+                queue,
+                history);
+    }
+
+    private String encodeTracks(List<StoredSessionTrack> tracks) {
+        if (tracks == null || tracks.isEmpty()) {
+            return "-";
+        }
+        return tracks.stream().map(this::encodeTrack).reduce((a, b) -> a + ";" + b).orElse("-");
+    }
+
+    private List<StoredSessionTrack> decodeTracks(String encodedTracks) {
+        if ("-".equals(encodedTracks)) {
+            return List.of();
+        }
+        List<StoredSessionTrack> tracks = new ArrayList<>();
+        for (String encoded : encodedTracks.split(";")) {
+            if (!encoded.isBlank()) {
+                tracks.add(decodeTrack(encoded));
+            }
+        }
+        return List.copyOf(tracks);
     }
 
     private String encodeTrack(StoredSessionTrack sessionTrack) {

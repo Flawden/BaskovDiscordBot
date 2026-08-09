@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [1.10.0] — 2026-08-09
+
+### Playback Sessions & Recovery 2.0
+
+- Session checkpoint upgraded to `BASKOV_MUSIC_SESSIONS_V2`: in addition to current track, resume position, waiting queue, pause, volume and repeat, it now stores bounded previous-history (up to 25 tracks) so `/previous` survives restart/redeploy.
+- `FileMusicSessionRepository` remains backward-compatible with `BASKOV_MUSIC_SESSIONS_V1`; legacy checkpoints load with empty previous-history and are upgraded to V2 on the next save. Atomic temp→replace and owner-only permissions remain unchanged.
+- Startup restoration resolves saved previous-history separately from the active queue and injects it through `TrackScheduler.restoreHistory(...)` without invoking the persistent listening-history listener, so recovery cannot fabricate extra listening records. Individual unavailable previous tracks are skipped without failing the playable current/queue restore.
+- `/session status` exposes guild-scoped checkpoint/recovery state: saved channel, checkpoint age, current+queue count, saved previous-history count, resume position, pause/volume/repeat and the latest recovery event. It is read-only.
+- `/session recover` gives existing guild administrators (owner, `Manage Server`, manager-role) an explicit retry for a pending checkpoint. It refuses to layer recovery over an active/restoring session, enforces checkpoint TTL/channel existence and respects the configured human-listener requirement.
+- `/status` recovery diagnostics now include previous-history restored/failed counters in addition to transport and startup restore counters.
+- Downgrade warning: binaries before v1.10.0 do not understand the V2 checkpoint header. Back up `music-sessions.tsv` before rollback once V2 has been written.
+
 ## [1.9.0] — 2026-08-09
 
 ### Queue Collaboration & Social UX

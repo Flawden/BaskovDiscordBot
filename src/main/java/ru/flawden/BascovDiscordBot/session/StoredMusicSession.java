@@ -18,7 +18,8 @@ public record StoredMusicSession(
         int volume,
         RepeatMode repeatMode,
         StoredSessionTrack currentTrack,
-        List<StoredSessionTrack> queue) {
+        List<StoredSessionTrack> queue,
+        List<StoredSessionTrack> history) {
 
     public StoredMusicSession {
         if (guildId <= 0L) {
@@ -35,8 +36,12 @@ public record StoredMusicSession(
         }
         repeatMode = Objects.requireNonNullElse(repeatMode, RepeatMode.OFF);
         queue = queue == null ? List.of() : List.copyOf(queue);
+        history = history == null ? List.of() : List.copyOf(history);
         if (queue.size() > 1_000) {
             throw new IllegalArgumentException("queue cannot contain more than 1000 tracks");
+        }
+        if (history.size() > 25) {
+            throw new IllegalArgumentException("history cannot contain more than 25 tracks");
         }
         if (currentTrack == null && queue.isEmpty()) {
             throw new IllegalArgumentException("session must contain a current or queued track");
@@ -51,5 +56,9 @@ public record StoredMusicSession(
 
     public int trackCount() {
         return (currentTrack == null ? 0 : 1) + queue.size();
+    }
+
+    public int recoveryTrackCount() {
+        return trackCount() + history.size();
     }
 }

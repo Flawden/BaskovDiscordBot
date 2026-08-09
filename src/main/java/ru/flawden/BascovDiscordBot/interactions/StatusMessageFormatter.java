@@ -68,6 +68,8 @@ final class StatusMessageFormatter {
                         + recovery.transportSuccesses() + "/" + recovery.transportFailures() + "`",
                 "Startup restored/failed: `" + recovery.startupRestoreSuccesses() + "/"
                         + recovery.startupRestoreFailures() + "`",
+                "Previous restored/failed: `" + recovery.startupHistoryTracksRestored() + "/"
+                        + recovery.startupHistoryTrackFailures() + "`",
                 "Последнее событие: " + inline(recovery.lastEvent()));
     }
 

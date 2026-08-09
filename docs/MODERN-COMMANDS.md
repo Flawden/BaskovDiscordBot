@@ -30,6 +30,7 @@
 | `/move from to` | Перемещает трек в очереди |
 | `/clear` | Очищает ожидание, не останавливая текущий трек |
 | `/queue-manage ...` | `stats`, `mine`, `community`, ownership-safe `remove-own`, batch remove-range/dedupe и `remove-mine` |
+| `/session status|recover` | Показывает playback checkpoint и позволяет manager/admin повторить pending recovery |
 | `/settings ...` | Guild administration: playback/request access, DJ/manager roles, voice restriction, profiles, audit и reset |
 | `/help` | Показывает краткую помощь |
 | `/version` | Показывает версию production-сборки |
@@ -103,3 +104,8 @@ DJ-роли и голосование описаны в [`DJ-ROLES-AND-VOTING.md
 ## Queue Collaboration & Social UX 1.9
 
 `/queue-manage mine` показывает собственные ожидающие треки с глобальными позициями, а `remove-own` удаляет только позицию, requester user ID которой совпадает с автором команды. Чужой трек этим путём удалить нельзя. `/queue-manage community` агрегирует только live waiting queue и не создаёт persistent social profile. Подробности — в [`QUEUE-COLLABORATION.md`](QUEUE-COLLABORATION.md).
+
+
+## Playback Sessions & Recovery 2.0
+
+`/session status` — read-only guild-scoped диагностика текущего checkpoint/recovery. `/session recover` не создаёт новую очередь поверх активной сессии и доступен только через существующую `GuildAdministrationPolicy`. V2 checkpoint сохраняет bounded previous-history, поэтому кнопка/команда `/previous` может пережить restart/redeploy. Подробности — в [`VOICE-RECOVERY-SESSION-RESTORATION.md`](VOICE-RECOVERY-SESSION-RESTORATION.md).

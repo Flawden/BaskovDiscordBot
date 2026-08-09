@@ -34,6 +34,8 @@ class FileMusicSessionRepositoryTest {
         assertEquals("Трава у дома", restored.currentTrack().track().title());
         assertEquals(31_500L, restored.currentTrack().positionMillis());
         assertEquals(1, restored.queue().size());
+        assertEquals(1, restored.history().size());
+        assertEquals("Previous", restored.history().get(0).track().title());
         assertEquals(RepeatMode.QUEUE, restored.repeatMode());
     }
 
@@ -59,6 +61,27 @@ class FileMusicSessionRepositoryTest {
         FileMusicSessionRepository reloaded = repository(file);
 
         assertTrue(reloaded.sessions().isEmpty());
+    }
+
+    @Test
+    void loadsLegacyV1CheckpointWithoutHistoryAndUpgradesOnNextSave() throws Exception {
+        Path file = tempDir.resolve("legacy-v1.tsv");
+        FileMusicSessionRepository writer = repository(file);
+        writer.save(session("Legacy", 12_000L));
+        List<String> v2 = Files.readAllLines(file);
+        String legacyLine = String.join("\t", v2.get(1).split("\t", -1)[0],
+                v2.get(1).split("\t", -1)[1], v2.get(1).split("\t", -1)[2],
+                v2.get(1).split("\t", -1)[3], v2.get(1).split("\t", -1)[4],
+                v2.get(1).split("\t", -1)[5], v2.get(1).split("\t", -1)[6],
+                v2.get(1).split("\t", -1)[7], v2.get(1).split("\t", -1)[8]);
+        Files.write(file, List.of(FileMusicSessionRepository.LEGACY_HEADER_V1, legacyLine));
+
+        FileMusicSessionRepository legacy = repository(file);
+        StoredMusicSession restored = legacy.session(10L).orElseThrow();
+        assertTrue(restored.history().isEmpty());
+
+        legacy.save(restored);
+        assertEquals(FileMusicSessionRepository.HEADER, Files.readAllLines(file).get(0));
     }
 
     @Test
@@ -93,7 +116,8 @@ class FileMusicSessionRepositoryTest {
                 85,
                 RepeatMode.QUEUE,
                 new StoredSessionTrack(current, position),
-                List.of(new StoredSessionTrack(queued, 0L)));
+                List.of(new StoredSessionTrack(queued, 0L)),
+                List.of(new StoredSessionTrack(track("Previous", "previous"), 0L)));
     }
 
     private static StoredTrack track(String title, String id) {

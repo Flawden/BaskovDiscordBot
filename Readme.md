@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.9.0**.
+Текущая версия релизной ветки: **v1.10.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -23,7 +23,7 @@
 - live storage probe в `/status`, агрегированный reliability state и command failure rate/последняя ошибка;
 - JDA 6.5.0 с настоящей JNI libDAVE `ce725965e`, положительной protocol version и подтверждением playback только после реального запроса аудиофрейма Discord media transport;
 - bounded voice recovery: отключённый JDA auto-reconnect, до трёх контролируемых повторных подключений с backoff и сохранением checkpoint при исчерпании попыток;
-- восстановление активной музыкальной сессии после restart/redeploy: voice channel, текущий трек и позиция, очередь, pause, volume и repeat сохраняются в atomic checkpoint;
+- Playback Sessions & Recovery 2.0: atomic checkpoint V2 сохраняет voice channel, текущий трек/позицию, очередь, pause, volume, repeat и bounded previous-history; `/session status` показывает guild-scoped recovery state, а `/session recover` даёт manager/admin безопасно повторить pending recovery;
 - YouTube как основной провайдер текстового поиска через отдельный modern `youtube-source 1.18.2`; встроенный legacy extractor LavaPlayer отключён, а SoundCloud остаётся только для прямых ссылок и совместимости;
 - переключаемый diagnostic network mode `bridge|host` для A/B-проверки Docker UDP/NAT;
 - ограничения CPU, памяти, PID и ротация Docker-логов;

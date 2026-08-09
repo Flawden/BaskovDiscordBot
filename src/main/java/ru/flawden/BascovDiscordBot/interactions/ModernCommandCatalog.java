@@ -268,6 +268,10 @@ public final class ModernCommandCatalog {
                                         .addOption(OptionType.INTEGER, "revision", "Ревизия из /queue; защищает от устаревших позиций", false),
                                 new SubcommandData("remove-mine", "Удаляет все твои ожидающие треки")
                                         .addOption(OptionType.INTEGER, "revision", "Ревизия из /queue; защищает от устаревших позиций", false)),
+                Commands.slash("session", "Диагностика и ручное восстановление playback checkpoint")
+                        .addSubcommands(
+                                new SubcommandData("status", "Показывает checkpoint и состояние recovery этого сервера"),
+                                new SubcommandData("recover", "Повторно запускает сохранённую сессию (manager/admin)")),
                 Commands.slash("settings", "Показывает и изменяет постоянные настройки сервера")
                         .addSubcommands(
                                 new SubcommandData("show", "Показывает сохранённые настройки"),
