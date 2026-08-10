@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.23.0**.
+Текущая версия релизной ветки: **v1.24.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -14,6 +14,7 @@
 - Contextual Bandit & Exploration Learning: `/radio bandit` показывает online-policy `safe|balanced|bold`; модель учит reward каждого similarity-risk arm отдельно по стратегии из уже существующего feedback, учитывает session momentum и даёт только bounded вклад ±12%, не обходя hard novelty;
 - Daily Mixes & Station Continuity: `/mix list|themes|start|resume|status|stop` включает «Микс дня» и «Открытия дня» со стабильным daily seed-набором, а bounded process-local continuity до 36 часов сохраняет station/date/seed cursor/anti-repeat memory для явного `/mix resume`; restart/deploy не автозапускает музыку и новых persistence-файлов нет;
 - Mix Generation & Diversity Control: curated mix теперь разводит исполнителей и насыщенные tags на уровне seed/ranker/final transport, `/mix themes` строит положительные темы из feedback V2, а `station:theme` создаёт динамический тематический поток без нового persistence; hard novelty остаётся выше diversity/theme scoring;
+- Personalized Home / Music Hub: `/home` собирает client-neutral `HomeSnapshot` с continuation, daily/for-you mix cards, positive themes, library counters, recent preview и taste maturity; Discord только рендерит snapshot, а domain/service не зависит от JDA и уже готов стать read-model будущего Product API/Android;
 - `/search` с пятью результатами YouTube, одноразовыми кнопками выбора и пятиминутной owner-bound сессией; autocomplete последних запросов работает в `/play` и `/search`;
 - личное persistent избранное до 100 треков на пользователя и сервер через `/favorites list|add|play|play-all|remove|search|clear`; favorites участвуют в локальном autocomplete и используют существующий ordered batch playback;
 - постоянная история до 50 треков на сервер плюс personal history до 200 заказанных и реально дошедших до истории треков на пользователя; `/history scope:server|mine`, `/replay scope:server|mine`, `/discover profile|for-me` и серверные плейлисты с owner/admin-управлением, autocomplete, lifecycle-операциями, поиском, capture queue и ordered batch playback;
@@ -107,6 +108,7 @@ GitHub-hosted delivery и резервный self-hosted режим описан
 Современный Discord-интерфейс описан в [`docs/MODERN-COMMANDS.md`](docs/MODERN-COMMANDS.md).
 Contextual online exploration policy описана в [`docs/CONTEXTUAL-BANDIT-EXPLORATION.md`](docs/CONTEXTUAL-BANDIT-EXPLORATION.md).
 Готовые персональные станции и их mapping описаны в [`docs/PERSONALIZED-MIXES-STATIONS.md`](docs/PERSONALIZED-MIXES-STATIONS.md), а daily-выпуски и `/mix resume` — в [`docs/DAILY-MIXES-CONTINUITY.md`](docs/DAILY-MIXES-CONTINUITY.md). Diversity/thematic generation описаны в [`docs/MIX-GENERATION-DIVERSITY.md`](docs/MIX-GENERATION-DIVERSITY.md).
+Персональный Home read-model и граница будущих клиентов описаны в [`docs/PERSONALIZED-HOME-MUSIC-HUB.md`](docs/PERSONALIZED-HOME-MUSIC-HUB.md).
 Интерактивная помощь, status refresh и destructive confirmations описаны в [`docs/DISCORD-EXPERIENCE.md`](docs/DISCORD-EXPERIENCE.md).
 Интерактивный поиск и безопасный выбор трека описаны в [`docs/SEARCH-TRACK-SELECTION.md`](docs/SEARCH-TRACK-SELECTION.md).
 Постоянные плейлисты, история и replay описаны в [`docs/PLAYLISTS-HISTORY-REPLAY.md`](docs/PLAYLISTS-HISTORY-REPLAY.md), а личное избранное — в [`docs/FAVORITES-PERSONAL-LIBRARY.md`](docs/FAVORITES-PERSONAL-LIBRARY.md).
@@ -125,6 +127,17 @@ Root-cause voice diagnostics и bridge/host A/B-тест описаны в [`doc
 DAVE voice migration и переход JDA 5 → 6 описаны в [`docs/DAVE-VOICE-MIGRATION.md`](docs/DAVE-VOICE-MIGRATION.md).
 Native libDAVE runtime, platform profiles и startup fail-fast описаны в [`docs/NATIVE-DAVE.md`](docs/NATIVE-DAVE.md).
 Релиз с Android описан в [`docs/TERMUX-RELEASE.md`](docs/TERMUX-RELEASE.md).
+
+
+## Personalized Home / Music Hub (v1.24.0)
+
+```text
+/home
+```
+
+`/home` — первый client-neutral product surface Baskov Music. `MusicHomeService` строит immutable `HomeSnapshot` через read-only `MusicHomeReadPort`; snapshot содержит active/resumable station, `Микс дня`/`Открытия дня`, персональные curated stations, positive themes, counters библиотеки, preview personal history и зрелость taste-profile.
+
+Discord-слой только превращает этот snapshot в embed. Home не стартует playback, не меняет очередь и не создаёт отдельный persistence: он читает существующие library/feedback/runtime состояния. Такая граница нужна специально для будущего Product API и Android-клиента — тот же semantic snapshot сможет отображаться без переноса recommendation/mix логики в Kotlin.
 
 ## Mix Generation & Diversity Control (v1.23.0)
 

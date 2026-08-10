@@ -32,6 +32,7 @@ public final class ModernCommandCatalog {
                                 .addChoice("Администрирование", "admin")),
                 Commands.slash("version", "Показывает версию запущенного бота"),
                 Commands.slash("status", "Показывает состояние Discord, музыки и команд"),
+                Commands.slash("home", "Открывает персональный музыкальный хаб Баскова"),
                 Commands.slash("doctor", "Диагностирует подсистемы и подсказывает следующий шаг")
                         .addSubcommands(
                                 new SubcommandData("summary", "Общая health-сводка и приоритет проблем"),

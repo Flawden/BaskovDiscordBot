@@ -24,6 +24,8 @@ import ru.flawden.BascovDiscordBot.commands.music.MusicControlPolicy;
 import ru.flawden.BascovDiscordBot.commands.music.MusicEmbeds;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
 import ru.flawden.BascovDiscordBot.dave.DaveRuntimeInfo;
+import ru.flawden.BascovDiscordBot.home.HomeSnapshot;
+import ru.flawden.BascovDiscordBot.home.MusicHomeService;
 import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.BatchMusicLoadResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.MusicLoadResult;
@@ -117,6 +119,7 @@ public class ModernInteractions extends ListenerAdapter {
     private final DaveRuntimeInfo daveRuntimeInfo;
     private final ConfirmationStore confirmationStore;
     private final RecommendationFeedbackService recommendationFeedback;
+    private final MusicHomeService musicHomeService;
 
     public ModernInteractions(
             PlayerManager playerManager,
@@ -138,7 +141,8 @@ public class ModernInteractions extends ListenerAdapter {
             PersistenceBackupService persistenceBackupService,
             DaveRuntimeInfo daveRuntimeInfo,
             ConfirmationStore confirmationStore,
-            RecommendationFeedbackService recommendationFeedback) {
+            RecommendationFeedbackService recommendationFeedback,
+            MusicHomeService musicHomeService) {
         this.playerManager = playerManager;
         this.controlPolicy = controlPolicy;
         this.queryResolver = queryResolver;
@@ -159,6 +163,7 @@ public class ModernInteractions extends ListenerAdapter {
         this.daveRuntimeInfo = daveRuntimeInfo;
         this.confirmationStore = confirmationStore;
         this.recommendationFeedback = recommendationFeedback;
+        this.musicHomeService = musicHomeService;
     }
 
     @Override
@@ -178,6 +183,7 @@ public class ModernInteractions extends ListenerAdapter {
                 case "version" -> event.replyEmbeds(versionEvent.buildEmbed()).setEphemeral(true).queue();
                 case "status" -> status(event);
                 case "doctor" -> doctor(event);
+                case "home" -> home(event);
                 case "radio" -> radio(event);
                 case "mix" -> mix(event);
                 case "session" -> session(event);
@@ -879,6 +885,77 @@ public class ModernInteractions extends ListenerAdapter {
                 .map(SystemDoctor.Check::severity)
                 .max(SystemDoctor.Severity::compareTo)
                 .orElse(SystemDoctor.Severity.OK);
+    }
+
+    private void home(SlashCommandInteractionEvent event) {
+        long guildId = event.getGuild().getIdLong();
+        long userId = event.getUser().getIdLong();
+        HomeSnapshot snapshot = musicHomeService.snapshot(guildId, userId);
+
+        EmbedBuilder embed = new EmbedBuilder()
+                .setTitle("🏠 Твой Baskov Music")
+                .setColor(Color.CYAN)
+                .setDescription("Персональная home-сводка на `" + snapshot.date()
+                        + "`: что продолжить, что включить сегодня и как развивается твой музыкальный профиль.");
+
+        snapshot.continuation().ifPresent(card -> {
+            String action = card.kind() == HomeSnapshot.ContinuationCard.Kind.ACTIVE
+                    ? "Сейчас активно • `/mix status`"
+                    : "Можно продолжить • `/mix resume`";
+            String details = "**" + card.label() + "** — " + action
+                    + (card.releaseDate() == null ? "" : "\nВыпуск: `" + card.releaseDate() + "`")
+                    + (card.theme().isBlank() ? "" : "\nТема: `" + sanitizeInline(card.theme()) + "`")
+                    + "\nСгенерировано: `" + card.generatedTracks() + "`";
+            embed.addField("▶ Продолжить", details, false);
+        });
+
+        embed.addField("☀ Сегодня", homeMixLines(snapshot.today()), false);
+        embed.addField("✨ Для тебя", homeMixLines(snapshot.forYou()), false);
+
+        if (!snapshot.themes().isEmpty()) {
+            StringBuilder themes = new StringBuilder();
+            for (HomeSnapshot.ThemeCard theme : snapshot.themes()) {
+                themes.append("• `").append(sanitizeInline(theme.name())).append("`\n");
+            }
+            themes.append("`/mix themes` • `/mix start station:theme theme:<тег>`");
+            embed.addField("🎨 Твои темы", themes.toString(), false);
+        }
+
+        embed.addField(
+                "❤️ Библиотека",
+                "Избранное: `" + snapshot.library().favorites() + "` • personal history: `"
+                        + snapshot.library().personalHistory() + "`\n`/favorites list` • `/history`",
+                false);
+
+        if (!snapshot.recent().isEmpty()) {
+            StringBuilder recent = new StringBuilder();
+            for (HomeSnapshot.TrackPreview track : snapshot.recent()) {
+                recent.append("• **")
+                        .append(sanitizeInline(track.artist()))
+                        .append("** — ")
+                        .append(sanitizeInline(track.title()))
+                        .append('\n');
+            }
+            embed.addField("🕘 Недавнее", recent.toString(), false);
+        }
+
+        embed.setFooter("Taste evidence: " + snapshot.taste().evidenceSignals()
+                + " • confidence " + Math.round(snapshot.taste().confidence() * 100.0d)
+                + "% • HomeSnapshot не зависит от Discord UI и готов для будущего Product API");
+
+        event.replyEmbeds(embed.build()).setEphemeral(true).queue();
+    }
+
+    private static String homeMixLines(List<HomeSnapshot.MixCard> cards) {
+        StringBuilder body = new StringBuilder();
+        for (HomeSnapshot.MixCard card : cards) {
+            body.append(card.available() ? "🟢 " : "⚪ ")
+                    .append("**").append(card.label()).append("** — `/mix start station:")
+                    .append(card.stationSlug()).append("`")
+                    .append(card.available() ? "" : " _(нужны favorites/history)_")
+                    .append('\n');
+        }
+        return body.toString();
     }
 
     private void mix(SlashCommandInteractionEvent event) {
@@ -4160,6 +4237,7 @@ public class ModernInteractions extends ListenerAdapter {
             case OVERVIEW -> embed
                     .setTitle("🎤 Басков • быстрый обзор")
                     .setDescription("Slash-команды — основной интерфейс. Выбери раздел кнопками ниже.")
+                    .addField("🏠 Главный экран", "`/home` собирает продолжение, миксы дня, темы, библиотеку и недавнее в одну персональную сводку.", false)
                     .addField("▶️ Быстрый старт", "`/play` → `/now` → `/queue`", false)
                     .addField("🔎 Найти трек", "`/search` показывает до пяти вариантов; `/discover` продолжает знакомый поиск.", false)
                     .addField("📚 Сохранить музыку", "`/favorites`, `/playlist` и `/history` переживают restart контейнера.", false)

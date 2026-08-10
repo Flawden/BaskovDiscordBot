@@ -6,6 +6,17 @@
 
 ## [Unreleased]
 
+## [1.24.0] — 2026-08-10
+
+### Personalized Home / Music Hub
+
+- Добавлена top-level slash-команда `/home`, которая собирает персональный музыкальный хаб: active/resumable station, `Микс дня`/`Открытия дня`, основные `for-you` станции, positive themes, counters favorites/history, preview последних personal tracks и зрелость долгосрочного taste-profile.
+- Добавлен client-neutral immutable `HomeSnapshot` с отдельными `ContinuationCard`, `MixCard`, `ThemeCard`, `LibraryCard`, `TrackPreview` и `TasteCard`. Read-model не импортирует JDA/Discord UI и не кодирует embed/slash semantics.
+- `MusicHomeService` зависит только от read-only `MusicHomeReadPort`; текущие `PlayerManager`, `MusicLibraryRepository` и `RecommendationFeedbackService` подключаются через `RuntimeMusicHomeReadAdapter`. Это создаёт явный порт между product-home доменом и runtime/storage implementation.
+- Discord `ModernInteractions.home(...)` только рендерит `HomeSnapshot` и не пересчитывает recommendation model, не читает storage напрямую и не владеет playback orchestration. Home остаётся read-only: никаких start/stop/queue mutation, нового transport или persistence-файла не добавлено.
+- Home surface намеренно проектируется как будущая форма `GET /api/v1/home`: Android/Web смогут отображать те же sections, не перенося mix/recommendation logic в клиент. Пока HTTP API не добавляется — его граница запланирована отдельным релизом.
+- Добавлены unit/architecture regressions на stable sections, active-vs-resumable precedence, availability flags, positive themes, client-neutral imports, read-port boundary и публикацию top-level `/home`.
+
 ## [1.23.0] — 2026-08-10
 
 ### Mix Generation & Diversity Control

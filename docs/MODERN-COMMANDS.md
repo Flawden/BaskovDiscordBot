@@ -145,6 +145,14 @@ Doctor намеренно не делает внешние HTTP/Maven/YouTube pr
 /radio stop
 ```
 
+### `/home` — персональный музыкальный хаб
+
+```text
+/home
+```
+
+`/home` собирает read-only `HomeSnapshot`: что сейчас активно/можно продолжить, daily и for-you stations, top positive themes, favorites/history counters, bounded recent preview и maturity taste-profile. Discord-команда только рендерит client-neutral snapshot; playback/recommendation/storage mutation остаются в существующих подсистемах.
+
 ### `/mix` — готовые персональные станции
 
 ```text

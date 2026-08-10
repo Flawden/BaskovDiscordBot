@@ -21,9 +21,17 @@ class ModernCommandCatalogTest {
 
         assertEquals(commands.size(), names.size());
         assertEquals(Set.of(
-                "help", "version", "status", "doctor", "radio", "mix", "play", "search", "discover", "history", "replay", "favorites", "playlist",
+                "help", "version", "status", "home", "doctor", "radio", "mix", "play", "search", "discover", "history", "replay", "favorites", "playlist",
                 "pause", "resume", "previous", "skip", "voteskip", "stop", "queue", "now", "seek",
                 "volume", "repeat", "shuffle", "remove", "move", "clear", "queue-manage", "session", "moderation", "settings"), names);
+    }
+
+
+    @Test
+    void homeCommandIsTopLevelProductSurfaceWithoutDiscordSpecificOptions() {
+        SlashCommandData home = command("home");
+        assertTrue(home.getOptions().isEmpty());
+        assertTrue(home.getSubcommands().isEmpty());
     }
 
     @Test
