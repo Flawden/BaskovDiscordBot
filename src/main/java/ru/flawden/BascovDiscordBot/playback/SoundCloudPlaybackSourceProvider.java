@@ -8,7 +8,7 @@ import ru.flawden.BascovDiscordBot.commands.music.MediaQueryResolver;
 import java.util.Optional;
 
 /**
- * Secondary transport candidate. Automatic provider failover is intentionally deferred to v1.27.
+ * Secondary Discord search transport and automatic fallback candidate.
  */
 @Component
 public class SoundCloudPlaybackSourceProvider implements PlaybackSourceProvider {

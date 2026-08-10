@@ -29,7 +29,7 @@ YouTube search   priority 100   primary
 SoundCloud search priority 200  secondary candidate
 ```
 
-Это только разрешение/ordering. Автоматический retry, health score, circuit breaker и provider cooldown относятся к следующему resilience-релизу.
+`v1.27.0` добавляет поверх этого ordering runtime provider health и automatic fallback. Активный cooldown исключает provider из новых resolutions, а после cooldown он возвращается как probe. Подробности: `docs/PROVIDER-HEALTH-FALLBACK.md`.
 
 ## Provider boundary
 
@@ -64,6 +64,6 @@ provider
 
 остаются совместимыми. `PlaybackResolver` — runtime boundary, а не новая persisted identity model.
 
-## Следующий этап
+## Resilience layer
 
-`v1.27` должен добавить provider health/fallback поверх этой границы: bounded failure journal, health score/cooldown и controlled failover между уже разрешёнными resolver candidates.
+`v1.27` реализует provider health/fallback поверх этой границы: technical failures открывают bounded cooldown, `noMatches` остаётся track-specific miss, Smart Radio последовательно пробует уже разрешённые resolver candidates, а `/doctor source` показывает runtime health без network probe.

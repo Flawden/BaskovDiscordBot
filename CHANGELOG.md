@@ -6,6 +6,17 @@
 
 ## [Unreleased]
 
+## [1.27.0] — 2026-08-10
+
+### Provider Health & Automatic Fallback
+
+- Добавлен process-local `PlaybackProviderHealthRegistry` со статусами `HEALTHY|DEGRADED|COOLDOWN|PROBE`, счётчиками success/failure/miss/fallback и bounded consecutive-failure circuit breaker. По умолчанию 3 подряд technical load failures открывают cooldown на 90 секунд; настройки доступны через `DISCORD_BOT_PLAYBACK_PROVIDER_FAILURE_THRESHOLD` и `DISCORD_BOT_PLAYBACK_PROVIDER_COOLDOWN`.
+- `PlaybackResolver` теперь учитывает runtime health: provider в активном cooldown исключается из новых resolutions, после истечения cooldown возвращается как probe с исходным provider priority, а успешная загрузка сбрасывает consecutive failures и закрывает circuit. Если все разрешённые providers охлаждаются, resolution возвращает bounded `retryAfter` вместо выдумывания transport.
+- Smart Radio/Mix автоматически проходит ordered resolver candidates: `loadFailed` регистрирует technical failure и переключает на следующий provider; `noMatches` тоже переключает source, но учитывается отдельно как track-specific miss и не ухудшает health. Recommendation candidate/novelty/ranking при fallback не пересчитываются.
+- Explicit `/play`, `/search` и прямые URL не переводятся через automatic fallback: пользовательский source остаётся выбранным пользователем. Resilience layer применяется к system-selected recommendation transport.
+- `/doctor source` теперь включает runtime provider states/counters и показывает cooldown/degraded состояние без внешнего network probe. Health намеренно не persisted: restart/deploy сбрасывает provider circuit state, не затрагивая library/session/feedback storage.
+- Добавлены unit/architecture regressions на threshold/cooldown/probe recovery, no-match semantics, health-aware resolver ordering, all-provider retry delay, sequential Smart Radio fallback, explicit-source isolation и отсутствие нового persistence. User-Agent внешних recommendation/collaborative запросов обновлён до `v1.27.0 provider-resilience`.
+
 ## [1.26.0] — 2026-08-10
 
 ### Playback Source Abstraction & Resolver

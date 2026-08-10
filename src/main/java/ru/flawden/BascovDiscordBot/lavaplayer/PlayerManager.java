@@ -23,6 +23,7 @@ import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnostics;
 import ru.flawden.BascovDiscordBot.playback.PlaybackClientCapabilities;
 import ru.flawden.BascovDiscordBot.playback.PlaybackResolution;
+import ru.flawden.BascovDiscordBot.playback.PlaybackProviderHealthSnapshot;
 import ru.flawden.BascovDiscordBot.playback.PlaybackResolver;
 import ru.flawden.BascovDiscordBot.playback.PlaybackSourceReference;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferences;
@@ -1548,34 +1549,149 @@ public class PlayerManager {
         PlaybackResolution resolution = playbackResolver.resolve(
                 safePlan.candidate().trackIdentity(),
                 PlaybackClientCapabilities.discord());
-        PlaybackSourceReference source = resolution.primary().orElse(null);
-        if (source == null) {
+        if (!resolution.resolved()) {
+            if (resolution.waitingForProviderRecovery()) {
+                state.cancelRefill();
+                long delayMillis = Math.max(250L, resolution.retryAfter().toMillis());
+                log.warn("All Discord playback providers are cooling down: guild={}, retryInMs={}",
+                        guild.getId(), delayMillis);
+                idleScheduler.schedule(() -> triggerRadioRefill(guild, manager), delayMillis, TimeUnit.MILLISECONDS);
+                return;
+            }
             radioFailure(guild, manager, state, "PlaybackResolver не нашёл источник для Discord");
             return;
         }
+        tryRadioTransportCandidate(
+                guild,
+                manager,
+                state,
+                activityVersion,
+                seed,
+                safePlan,
+                resolution,
+                0,
+                List.of());
+    }
+
+    private void tryRadioTransportCandidate(
+            Guild guild,
+            GuildMusicManager manager,
+            RadioState state,
+            long activityVersion,
+            StoredTrack seed,
+            RecommendationPlan plan,
+            PlaybackResolution resolution,
+            int index,
+            List<String> previousFailures) {
+        long guildId = guild.getIdLong();
+        if (radioStates.get(guildId) != state
+                || !manager.isActive()
+                || manager.getActivityVersion() != activityVersion
+                || !manager.isIdle()) {
+            state.cancelRefill();
+            return;
+        }
+        if (index < 0 || index >= resolution.candidates().size()) {
+            String details = previousFailures == null || previousFailures.isEmpty()
+                    ? "Все playback providers исчерпаны"
+                    : String.join(" | ", previousFailures);
+            radioFailure(guild, manager, state, details);
+            return;
+        }
+
+        PlaybackSourceReference source = resolution.candidates().get(index);
         String query = source.identifier();
-        audioPlayerManager.loadItemOrdered("radio:" + guild.getIdLong(), query, new AudioLoadResultHandler() {
-            @Override
-            public void trackLoaded(AudioTrack track) {
-                finishRadioSearch(guild, manager, state, activityVersion, seed, safePlan, List.of(track));
-            }
+        audioPlayerManager.loadItemOrdered(
+                "radio:" + guildId + ":" + source.provider().name(),
+                query,
+                new AudioLoadResultHandler() {
+                    @Override
+                    public void trackLoaded(AudioTrack track) {
+                        playbackResolver.recordSuccess(source);
+                        finishRadioSearch(guild, manager, state, activityVersion, seed, plan, List.of(track));
+                    }
 
-            @Override
-            public void playlistLoaded(AudioPlaylist playlist) {
-                finishRadioSearch(guild, manager, state, activityVersion, seed, safePlan, searchCandidates(playlist, 10));
-            }
+                    @Override
+                    public void playlistLoaded(AudioPlaylist playlist) {
+                        playbackResolver.recordSuccess(source);
+                        finishRadioSearch(
+                                guild,
+                                manager,
+                                state,
+                                activityVersion,
+                                seed,
+                                plan,
+                                searchCandidates(playlist, 10));
+                    }
 
-            @Override
-            public void noMatches() {
-                radioFailure(guild, manager, state,
-                        "Playback source " + source.provider().label() + " не вернул кандидатов для recommendation");
-            }
+                    @Override
+                    public void noMatches() {
+                        playbackResolver.recordMiss(source);
+                        fallbackFromRadioSource(
+                                guild,
+                                manager,
+                                state,
+                                activityVersion,
+                                seed,
+                                plan,
+                                resolution,
+                                index,
+                                previousFailures,
+                                "Playback source " + source.provider().label() + " не вернул кандидатов");
+                    }
 
-            @Override
-            public void loadFailed(FriendlyException exception) {
-                radioFailure(guild, manager, state, SourceFailureFormatter.describe(query, exception));
-            }
-        });
+                    @Override
+                    public void loadFailed(FriendlyException exception) {
+                        String reason = SourceFailureFormatter.describe(query, exception);
+                        playbackResolver.recordFailure(source, reason);
+                        fallbackFromRadioSource(
+                                guild,
+                                manager,
+                                state,
+                                activityVersion,
+                                seed,
+                                plan,
+                                resolution,
+                                index,
+                                previousFailures,
+                                reason);
+                    }
+                });
+    }
+
+    private void fallbackFromRadioSource(
+            Guild guild,
+            GuildMusicManager manager,
+            RadioState state,
+            long activityVersion,
+            StoredTrack seed,
+            RecommendationPlan plan,
+            PlaybackResolution resolution,
+            int failedIndex,
+            List<String> previousFailures,
+            String reason) {
+        List<String> failures = new ArrayList<>(previousFailures == null ? List.of() : previousFailures);
+        PlaybackSourceReference failed = resolution.candidates().get(failedIndex);
+        failures.add(failed.provider().label() + ": " + reason);
+        int nextIndex = failedIndex + 1;
+        if (nextIndex >= resolution.candidates().size()) {
+            radioFailure(guild, manager, state, String.join(" | ", failures));
+            return;
+        }
+        PlaybackSourceReference next = resolution.candidates().get(nextIndex);
+        playbackResolver.recordFallback(failed, next, reason);
+        log.warn("Smart radio playback provider fallback: guild={}, from={}, to={}, reason={}",
+                guild.getId(), failed.provider(), next.provider(), reason);
+        tryRadioTransportCandidate(
+                guild,
+                manager,
+                state,
+                activityVersion,
+                seed,
+                plan,
+                resolution,
+                nextIndex,
+                failures);
     }
 
     private void finishRadioSearch(
@@ -1956,6 +2072,10 @@ public class PlayerManager {
         if (future != null) {
             future.cancel(false);
         }
+    }
+
+    public List<PlaybackProviderHealthSnapshot> playbackProviderHealthSnapshots() {
+        return playbackResolver.healthSnapshots();
     }
 
     public VoiceDiagnosticSnapshot voiceDiagnosticsSnapshot(Guild guild) {

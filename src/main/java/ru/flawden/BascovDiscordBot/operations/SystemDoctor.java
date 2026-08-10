@@ -6,6 +6,8 @@ import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.dave.DaveRuntimeInfo;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.YoutubeSourceRuntimeInfo;
+import ru.flawden.BascovDiscordBot.playback.PlaybackProviderHealthSnapshot;
+import ru.flawden.BascovDiscordBot.playback.PlaybackProviderStatus;
 import ru.flawden.BascovDiscordBot.session.SessionRecoverySnapshot;
 
 import java.time.Clock;
@@ -81,7 +83,8 @@ public class SystemDoctor {
                 playerManager.sessionRecoverySnapshot(),
                 persistenceReadiness.probe(),
                 persistenceBackupService.snapshot(),
-                operationalMetrics.snapshot());
+                operationalMetrics.snapshot(),
+                playerManager.playbackProviderHealthSnapshots());
     }
 
     static Report evaluate(
@@ -93,12 +96,34 @@ public class SystemDoctor {
             PersistenceReadiness.Snapshot storage,
             PersistenceBackupService.Snapshot backups,
             OperationalMetrics.Snapshot commands) {
+        return evaluate(
+                now,
+                runtime,
+                dave,
+                voice,
+                recovery,
+                storage,
+                backups,
+                commands,
+                List.of());
+    }
+
+    static Report evaluate(
+            Instant now,
+            RuntimeHealthMonitor.Snapshot runtime,
+            DaveRuntimeInfo.Snapshot dave,
+            VoiceDiagnosticSnapshot voice,
+            SessionRecoverySnapshot recovery,
+            PersistenceReadiness.Snapshot storage,
+            PersistenceBackupService.Snapshot backups,
+            OperationalMetrics.Snapshot commands,
+            List<PlaybackProviderHealthSnapshot> providerHealth) {
         Objects.requireNonNull(now, "now");
         List<Check> checks = List.of(
                 gatewayCheck(now, runtime),
                 daveCheck(dave),
                 voiceCheck(voice),
-                sourceCheck(now, voice),
+                sourceCheck(now, voice, providerHealth),
                 storageCheck(storage),
                 backupCheck(backups),
                 recoveryCheck(now, recovery),
@@ -176,20 +201,55 @@ public class SystemDoctor {
                 "Действий не требуется.");
     }
 
-    private static Check sourceCheck(Instant now, VoiceDiagnosticSnapshot voice) {
-        boolean recentSourceFailure = recentEvent(voice.lastSourceError(), now, RECENT_FAILURE_WINDOW);
-        if (recentSourceFailure) {
+    private static Check sourceCheck(
+            Instant now,
+            VoiceDiagnosticSnapshot voice,
+            List<PlaybackProviderHealthSnapshot> providerHealth) {
+        List<PlaybackProviderHealthSnapshot> safeHealth = providerHealth == null ? List.of() : providerHealth;
+        PlaybackProviderHealthSnapshot coolingDown = safeHealth.stream()
+                .filter(snapshot -> snapshot.status() == PlaybackProviderStatus.COOLDOWN)
+                .findFirst()
+                .orElse(null);
+        if (coolingDown != null) {
             return check("source", Severity.WARN,
-                    "Недавно была ошибка media source",
-                    safe(voice.lastSourceError()),
-                    "Повтори запрос; если ошибка воспроизводится, проверь source diagnostics и fallback events.");
+                    "Playback provider временно в cooldown",
+                    providerHealthDetails(safeHealth),
+                    "Resolver автоматически использует следующий доступный provider; повторный probe произойдёт после cooldown.");
+        }
+        PlaybackProviderHealthSnapshot degraded = safeHealth.stream()
+                .filter(snapshot -> snapshot.status() == PlaybackProviderStatus.DEGRADED
+                        || snapshot.status() == PlaybackProviderStatus.PROBE)
+                .findFirst()
+                .orElse(null);
+        boolean recentSourceFailure = recentEvent(voice.lastSourceError(), now, RECENT_FAILURE_WINDOW);
+        if (recentSourceFailure || degraded != null) {
+            return check("source", Severity.WARN,
+                    "Media source недавно деградировал",
+                    providerHealthDetails(safeHealth) + ", lastVoiceSource=" + safe(voice.lastSourceError()),
+                    "Fallback остаётся автоматическим; проверь /doctor source повторно после успешного provider probe.");
         }
         return check("source", Severity.OK,
-                "Media source без свежих ошибок",
+                "Playback providers в норме",
                 YoutubeSourceRuntimeInfo.statusLabel()
+                        + ", providers=" + providerHealthDetails(safeHealth)
                         + ", exceptions=" + voice.trackExceptions()
-                        + ", fallbacks=" + voice.fallbackAttempts(),
-                "Live network probe намеренно не выполняется; состояние основано на runtime-событиях.");
+                        + ", voiceFallbacks=" + voice.fallbackAttempts(),
+                "Live network probe намеренно не выполняется; health основан на runtime load/fallback событиях.");
+    }
+
+    private static String providerHealthDetails(List<PlaybackProviderHealthSnapshot> providerHealth) {
+        if (providerHealth == null || providerHealth.isEmpty()) {
+            return "n/a";
+        }
+        return providerHealth.stream()
+                .map(snapshot -> snapshot.provider().label()
+                        + "=" + snapshot.status()
+                        + "(ok/fail/miss/fallback="
+                        + snapshot.successes() + "/"
+                        + snapshot.failures() + "/"
+                        + snapshot.misses() + "/"
+                        + snapshot.fallbacks() + ")")
+                .collect(java.util.stream.Collectors.joining(", "));
     }
 
     private static Check storageCheck(PersistenceReadiness.Snapshot storage) {

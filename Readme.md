@@ -1,13 +1,13 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.26.0**.
+Текущая версия релизной ветки: **v1.27.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
 ## Возможности
 
 - slash-команды воспроизведения и полноценного управления очередью;
-- Smart Discovery Engine: `/radio start|status|why|feedback|model|session|stop` поддерживает `familiar/similar/discovery`; Last.fm генерирует похожих кандидатов при наличии `LASTFM_API_KEY`, а discovery жёстко фильтрует уже знакомые треки и сохраняет обычный `ytsearch:` playback pipeline;
+- Smart Discovery Engine: `/radio start|status|why|feedback|model|session|stop` поддерживает `familiar/similar/discovery`; Last.fm генерирует похожих кандидатов при наличии `LASTFM_API_KEY`, а discovery жёстко фильтрует уже знакомые треки и передаёт выбранный `TrackIdentity` в client-aware playback resolver;
 - Recommendation Model / Embeddings Foundation: Personal Ranking Model дополнен локальным `feature-hash-v1` 64D embedding-provider, taste-vector и cosine similarity; `/radio model` показывает vector confidence/coverage, а `/radio why` объясняет отдельный vector-вклад. Интерфейс embedding-provider отделён от playback и готов к будущему semantic provider без изменения `ytsearch:` тракта;
 - Collaborative Signals: optional ListenBrainz artist graph добавляет независимый collaborative-вклад к Last.fm + personal/vector ranker; без `LISTENBRAINZ_TOKEN` или при сбое upstream система fail-open продолжает старый recommendation pipeline;
 - Adaptive Session Intelligence: текущее `personal` radio строит ephemeral short-term taste из feedback после последнего `/radio start`; `/radio session` показывает session momentum/confidence и strongest artist/tag affinity, а restart/new start намеренно сбрасывает краткосрочный слой без изменения durable feedback;
@@ -15,6 +15,7 @@
 - Daily Mixes & Station Continuity: `/mix list|themes|start|resume|status|stop` включает «Микс дня» и «Открытия дня» со стабильным daily seed-набором, а bounded process-local continuity до 36 часов сохраняет station/date/seed cursor/anti-repeat memory для явного `/mix resume`; restart/deploy не автозапускает музыку и новых persistence-файлов нет;
 - Mix Generation & Diversity Control: curated mix теперь разводит исполнителей и насыщенные tags на уровне seed/ranker/final transport, `/mix themes` строит положительные темы из feedback V2, а `station:theme` создаёт динамический тематический поток без нового persistence; hard novelty остаётся выше diversity/theme scoring;
 - Personalized Home / Music Hub: `/home` собирает client-neutral `HomeSnapshot` с continuation, daily/for-you mix cards, positive themes, library counters, recent preview и taste maturity; Discord только рендерит snapshot, а domain/service не зависит от JDA и уже готов стать read-model будущего Product API/Android;
+- Playback Source Abstraction & Provider Resilience: system-selected recommendation сначала превращается в provider-neutral `TrackIdentity`, затем `PlaybackResolver` строит client-aware YouTube/SoundCloud candidates; runtime health registry считает technical failures/misses/fallbacks, после 3 подряд технических ошибок открывает 90-секундный cooldown, автоматически переводит Smart Radio/Mix на следующий provider и после cooldown делает probe. Прямые `/play`/URL остаются explicit-source path без автоматической подмены; health process-local и не создаёт новый persistence;
 - `/search` с пятью результатами YouTube, одноразовыми кнопками выбора и пятиминутной owner-bound сессией; autocomplete последних запросов работает в `/play` и `/search`;
 - личное persistent избранное до 100 треков на пользователя и сервер через `/favorites list|add|play|play-all|remove|search|clear`; favorites участвуют в локальном autocomplete и используют существующий ordered batch playback;
 - постоянная история до 50 треков на сервер плюс personal history до 200 заказанных и реально дошедших до истории треков на пользователя; `/history scope:server|mine`, `/replay scope:server|mine`, `/discover profile|for-me` и серверные плейлисты с owner/admin-управлением, autocomplete, lifecycle-операциями, поиском, capture queue и ordered batch playback;
@@ -32,7 +33,7 @@
 - JDA 6.5.0 с настоящей JNI libDAVE `ce725965e`, положительной protocol version и подтверждением playback только после реального запроса аудиофрейма Discord media transport;
 - bounded voice recovery: отключённый JDA auto-reconnect, до трёх контролируемых повторных подключений с backoff и сохранением checkpoint при исчерпании попыток;
 - Playback Sessions & Recovery 2.0: atomic checkpoint V2 сохраняет voice channel, текущий трек/позицию, очередь, pause, volume, repeat и bounded previous-history; `/session status` показывает guild-scoped recovery state, а `/session recover` даёт manager/admin безопасно повторить pending recovery;
-- YouTube как основной провайдер текстового поиска через отдельный modern `youtube-source 1.18.2`; встроенный legacy extractor LavaPlayer отключён, а SoundCloud остаётся только для прямых ссылок и совместимости;
+- YouTube как основной провайдер текстового поиска через отдельный modern `youtube-source 1.18.2`; встроенный legacy extractor LavaPlayer отключён, а SoundCloud поддерживает прямые ссылки и выступает secondary search fallback для system-selected recommendation transport;
 - переключаемый diagnostic network mode `bridge|host` для A/B-проверки Docker UDP/NAT;
 - ограничения CPU, памяти, PID и ротация Docker-логов;
 - раздельные политики playback и music requests, manager-role для администрирования, voice/stage restriction, аудит последних изменений и переносимые settings profiles;
@@ -82,6 +83,8 @@ docker compose logs -f bot
 | `DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN` | `30s` | пауза после неудачного подключения/transport failure |
 | `DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE` | `5s` | допустимый краткий разрыв во время воспроизведения |
 | `DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE` | `false` | `false` только наблюдает; `true` закрывает transport после подтверждённого timeout |
+| `DISCORD_BOT_PLAYBACK_PROVIDER_FAILURE_THRESHOLD` | `3` | consecutive technical provider failures до открытия runtime circuit breaker |
+| `DISCORD_BOT_PLAYBACK_PROVIDER_COOLDOWN` | `90s` | cooldown provider перед half-open/probe возвратом в resolver |
 | `BOT_NETWORK_MODE` | `bridge` | `bridge` production default или `host` для диагностического A/B-теста |
 | `DISCORD_BOT_VOICE_LOG_LEVEL` | `DEBUG` | узкий log level внутренних JDA audio-классов |
 | `DISCORD_BOT_MUSIC_DEFAULT_VOLUME` | `100` | громкость новой guild-сессии |
@@ -130,9 +133,9 @@ Native libDAVE runtime, platform profiles и startup fail-fast описаны в
 Релиз с Android описан в [`docs/TERMUX-RELEASE.md`](docs/TERMUX-RELEASE.md).
 
 
-## Playback Source Abstraction & Resolver (v1.26.0)
+## Playback Source Abstraction & Provider Resilience (v1.26.0–v1.27.0)
 
-`v1.26.0` вводит client-aware `PlaybackResolver` поверх provider-neutral `TrackIdentity`. Recommendation/mix слой по-прежнему выбирает логический трек, а transport identifiers (`ytsearch:`, `scsearch:`) создаются только внутри `PlaybackSourceProvider`. Для Discord policy сохраняет YouTube primary и SoundCloud secondary, но автоматический retry/health-scoring между providers намеренно отложен в следующий resilience-релиз.
+`v1.26.0` ввёл client-aware `PlaybackResolver` поверх provider-neutral `TrackIdentity`: recommendation/mix слой выбирает логический трек, а transport identifiers (`ytsearch:`, `scsearch:`) создаются только внутри `PlaybackSourceProvider`. `v1.27.0` добавляет поверх этой границы process-local provider health, controlled sequential fallback и bounded circuit breaker: после трёх подряд technical load failures provider уходит в cooldown на 90 секунд, новые resolutions выбирают следующий доступный источник, а после cooldown primary возвращается через probe. `noMatches` вызывает fallback, но не портит provider health, потому что отсутствие конкретного трека не равно отказу площадки.
 
 Новый `PlaybackClientCapabilities` позволяет одному и тому же `TrackIdentity` разрешаться по-разному для Discord, Android и Web без изменения recommendation engine. Smart Radio/Mix больше не конструирует YouTube search напрямую: он вызывает resolver и загружает его primary source. Ручные `/play` и прямые URL остаются на существующем explicit-input path.
 

@@ -305,6 +305,8 @@ jobs:
           BOT_MUSIC_VOICE_FAILURE_COOLDOWN: ${{ vars.DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN }}
           BOT_MUSIC_VOICE_DISCONNECT_GRACE: ${{ vars.DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE }}
           BOT_MUSIC_VOICE_WATCHDOG_ENFORCE: ${{ vars.DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE }}
+          BOT_PLAYBACK_PROVIDER_FAILURE_THRESHOLD: ${{ vars.DISCORD_BOT_PLAYBACK_PROVIDER_FAILURE_THRESHOLD }}
+          BOT_PLAYBACK_PROVIDER_COOLDOWN: ${{ vars.DISCORD_BOT_PLAYBACK_PROVIDER_COOLDOWN }}
           BOT_MUSIC_SESSION_CHECKPOINT_INTERVAL: ${{ vars.DISCORD_BOT_MUSIC_SESSION_CHECKPOINT_INTERVAL }}
           BOT_MUSIC_SESSION_MAX_AGE: ${{ vars.DISCORD_BOT_MUSIC_SESSION_MAX_AGE }}
           BOT_MUSIC_SESSION_RESTORE_ON_STARTUP: ${{ vars.DISCORD_BOT_MUSIC_SESSION_RESTORE_ON_STARTUP }}
@@ -341,6 +343,8 @@ jobs:
           voice_failure_cooldown="${BOT_MUSIC_VOICE_FAILURE_COOLDOWN:-30s}"
           voice_disconnect_grace="${BOT_MUSIC_VOICE_DISCONNECT_GRACE:-5s}"
           voice_watchdog_enforce="${BOT_MUSIC_VOICE_WATCHDOG_ENFORCE:-false}"
+          playback_provider_failure_threshold="${BOT_PLAYBACK_PROVIDER_FAILURE_THRESHOLD:-3}"
+          playback_provider_cooldown="${BOT_PLAYBACK_PROVIDER_COOLDOWN:-90s}"
           session_checkpoint_interval="${BOT_MUSIC_SESSION_CHECKPOINT_INTERVAL:-5s}"
           session_max_age="${BOT_MUSIC_SESSION_MAX_AGE:-6h}"
           session_restore_on_startup="${BOT_MUSIC_SESSION_RESTORE_ON_STARTUP:-true}"
@@ -383,6 +387,8 @@ jobs:
             printf 'DISCORD_BOT_MUSIC_VOICE_FAILURE_COOLDOWN_B64=%s\n' "$(encode "${voice_failure_cooldown}")"
             printf 'DISCORD_BOT_MUSIC_VOICE_DISCONNECT_GRACE_B64=%s\n' "$(encode "${voice_disconnect_grace}")"
             printf 'DISCORD_BOT_MUSIC_VOICE_WATCHDOG_ENFORCE_B64=%s\n' "$(encode "${voice_watchdog_enforce}")"
+            printf 'DISCORD_BOT_PLAYBACK_PROVIDER_FAILURE_THRESHOLD_B64=%s\n' "$(encode "${playback_provider_failure_threshold}")"
+            printf 'DISCORD_BOT_PLAYBACK_PROVIDER_COOLDOWN_B64=%s\n' "$(encode "${playback_provider_cooldown}")"
             printf 'DISCORD_BOT_MUSIC_SESSION_CHECKPOINT_INTERVAL_B64=%s\n' "$(encode "${session_checkpoint_interval}")"
             printf 'DISCORD_BOT_MUSIC_SESSION_MAX_AGE_B64=%s\n' "$(encode "${session_max_age}")"
             printf 'DISCORD_BOT_MUSIC_SESSION_RESTORE_ON_STARTUP_B64=%s\n' "$(encode "${session_restore_on_startup}")"

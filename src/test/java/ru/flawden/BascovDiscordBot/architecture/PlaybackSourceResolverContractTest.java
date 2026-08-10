@@ -64,14 +64,17 @@ class PlaybackSourceResolverContractTest {
     }
 
     @Test
-    void v126DoesNotMixProviderHealthOrNewPersistenceIntoResolverFoundation() throws Exception {
+    void v127ExtendsResolverWithDedicatedRuntimeHealthWithoutNewPersistence() throws Exception {
         String resolver = read("playback/PlaybackResolver.java");
+        String registry = read("playback/PlaybackProviderHealthRegistry.java");
         String readme = Files.readString(Path.of("Readme.md"));
 
-        assertFalse(resolver.contains("circuitBreaker"));
-        assertFalse(resolver.contains("failureRate"));
-        assertFalse(Files.exists(MAIN.resolve("playback/ProviderHealthRegistry.java")));
+        assertTrue(resolver.contains("PlaybackProviderHealthRegistry"));
+        assertTrue(registry.toLowerCase().contains("process-local provider health"));
+        assertFalse(registry.contains("Repository"));
+        assertFalse(registry.contains("Path.of"));
         assertTrue(readme.contains("Playback Source Abstraction"));
+        assertTrue(readme.contains("Provider Resilience"));
     }
 
     private static String read(String relative) throws Exception {
