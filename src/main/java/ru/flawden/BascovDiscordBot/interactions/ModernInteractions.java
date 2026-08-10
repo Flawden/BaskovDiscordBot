@@ -757,7 +757,7 @@ public class ModernInteractions extends ListenerAdapter {
 
         TrackRequester requester = new TrackRequester(
                 event.getUser().getIdLong(),
-                member.getName());
+                member.getEffectiveName());
         event.deferEdit().queue(hook -> playerManager
                 .ensureVoiceConnection(guild, targetChannel)
                 .whenComplete((connection, failure) -> {
@@ -1221,7 +1221,7 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
-        TrackRequester owner = new TrackRequester(userId, member.getName());
+        TrackRequester owner = new TrackRequester(userId, member.getEffectiveName());
         event.deferReply().queue(hook -> playerManager
                 .ensureVoiceConnection(guild, targetChannel)
                 .whenComplete((connection, failure) -> {
@@ -1439,7 +1439,7 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
-        TrackRequester owner = new TrackRequester(userId, member.getName());
+        TrackRequester owner = new TrackRequester(userId, member.getEffectiveName());
         event.deferReply().queue(hook -> playerManager
                 .ensureVoiceConnection(guild, targetChannel)
                 .whenComplete((connection, failure) -> {
@@ -2580,7 +2580,7 @@ public class ModernInteractions extends ListenerAdapter {
                 .toList();
         TrackRequester requester = new TrackRequester(
                 event.getUser().getIdLong(),
-                member.getName());
+                member.getEffectiveName());
         event.deferReply().queue(hook -> playerManager
                 .ensureVoiceConnection(guild, targetChannel)
                 .whenComplete((connection, failure) -> {
@@ -2688,7 +2688,7 @@ public class ModernInteractions extends ListenerAdapter {
 
         searchHistory.remember(event.getUser().getIdLong(), rawQuery);
         TrackRequester requester =
-                new TrackRequester(event.getUser().getIdLong(), member.getName());
+                new TrackRequester(event.getUser().getIdLong(), member.getEffectiveName());
         event.deferReply().queue(hook -> playerManager
                 .ensureVoiceConnection(guild, targetChannel)
                 .whenComplete((connection, failure) -> {
