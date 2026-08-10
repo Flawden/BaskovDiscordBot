@@ -183,6 +183,16 @@ public class SmartDiscoveryEngine {
                     .append(" via ")
                     .append(scored.collaborativeSource());
         }
+        if (Math.abs(scored.banditContribution()) >= 0.005d) {
+            reason.append(" • bandit ")
+                    .append(scored.banditArm().label())
+                    .append(" ")
+                    .append(signedPercent(scored.banditContribution()))
+                    .append(" • reward ")
+                    .append(signedPercent(scored.banditMeanReward()))
+                    .append(" / n=")
+                    .append(scored.banditSamples());
+        }
         if (scored.explorationBonus() > 0.0d) {
             reason.append(" • exploration +")
                     .append(Math.round(scored.explorationBonus() * 100.0d))

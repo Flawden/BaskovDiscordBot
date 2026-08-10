@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.Mockito.when;
@@ -93,6 +94,27 @@ class RecommendationFeedbackServiceTest {
 
         assertDoesNotThrow(() -> service.recordPlayback(42L, new PlaybackFeedbackEvent(
                 PlaybackFeedbackEvent.Type.SKIPPED, request, 5_000L, 180_000L)));
+    }
+
+    @Test
+    void banditProfileIsReconstructedFromExistingFeedbackWithoutNewStorage() {
+        RecommendationFeedbackEntry entry = FileRecommendationFeedbackRepository.pending(
+                42L, 77L, "Seed", "Seed", "Artist", "Track",
+                RecommendationIdentity.of("Artist", "Track"),
+                RadioStrategy.DISCOVERY, "Last.fm", 0.45d)
+                .withOutcome(RecommendationOutcome.FAVORITED, System.currentTimeMillis(), 1.0d);
+        CapturingRepository repository = new CapturingRepository() {
+            @Override
+            public List<RecommendationFeedbackEntry> history(long guildId, long userId, int limit) {
+                return List.of(entry);
+            }
+        };
+        RecommendationFeedbackService service = new RecommendationFeedbackService(repository);
+
+        ContextualBanditProfile profile = service.banditProfile(42L, 77L);
+
+        assertEquals(1, profile.totalSamples(RadioStrategy.DISCOVERY));
+        assertTrue(profile.stats(RadioStrategy.DISCOVERY, ExplorationArm.BOLD).meanReward() > 0.0d);
     }
 
     private static TrackRequest radioRequest(String artist, String title, long duration) {

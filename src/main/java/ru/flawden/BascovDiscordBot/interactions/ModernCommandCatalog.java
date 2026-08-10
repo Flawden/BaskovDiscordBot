@@ -65,6 +65,7 @@ public final class ModernCommandCatalog {
                                 new SubcommandData("feedback", "Показывает историю и implicit feedback рекомендаций"),
                                 new SubcommandData("model", "Показывает долгосрочный персональный ranking-профиль"),
                                 new SubcommandData("session", "Показывает краткосрочный вкус текущей radio-сессии"),
+                                new SubcommandData("bandit", "Показывает обучаемую exploration-политику radio"),
                                 new SubcommandData("stop", "Выключает smart radio; текущий трек не останавливается")),
                 Commands.slash("play", "Ищет и добавляет песню")
                         .addOptions(new OptionData(

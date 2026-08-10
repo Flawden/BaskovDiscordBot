@@ -113,9 +113,16 @@ public final class RecommendationRanker {
             case DISCOVERY -> 0.16d;
         };
         double collaborativeContribution = collaborativeAffinity * collaborativeWeight;
+        ContextualBanditModel.BanditDecision bandit = ContextualBanditModel.decide(
+                candidate,
+                strategy,
+                context.banditProfile(),
+                context.sessionTaste());
+        double banditContribution = bandit.contribution();
         double finalScore = Math.max(-1.0d, Math.min(1.40d,
                 baseScore + personalContribution + sessionContribution + vectorContribution
-                        + collaborativeContribution + taste.explorationBonus() + sessionExplorationBonus));
+                        + collaborativeContribution + banditContribution
+                        + taste.explorationBonus() + sessionExplorationBonus));
 
         return new ScoredCandidate(
                 candidate,
@@ -141,6 +148,12 @@ public final class RecommendationRanker {
                 collaborativeAffinity,
                 collaborativeContribution,
                 context.collaborativeSignals().source(),
+                bandit.arm(),
+                bandit.samples(),
+                bandit.meanReward(),
+                bandit.uncertainty(),
+                bandit.confidence(),
+                banditContribution,
                 embeddingProvider.name(),
                 embeddingProvider.dimensions());
     }
@@ -179,6 +192,12 @@ public final class RecommendationRanker {
                 0.0d,
                 0.0d,
                 "none",
+                ExplorationArm.BALANCED,
+                0,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d,
                 embeddingProvider == null ? "none" : embeddingProvider.name(),
                 embeddingProvider == null ? 0 : embeddingProvider.dimensions());
     }
@@ -207,6 +226,12 @@ public final class RecommendationRanker {
             double collaborativeAffinity,
             double collaborativeContribution,
             String collaborativeSource,
+            ExplorationArm banditArm,
+            int banditSamples,
+            double banditMeanReward,
+            double banditUncertainty,
+            double banditConfidence,
+            double banditContribution,
             String embeddingProvider,
             int embeddingDimensions) {
     }

@@ -6,6 +6,17 @@
 
 ## [Unreleased]
 
+## [1.20.0] — 2026-08-10
+
+### Contextual Bandit & Exploration Learning
+
+- Добавлен `ContextualBanditModel` с тремя similarity-risk arms: `safe` (≥82%), `balanced` (62–82%) и `bold` (<62%). Модель восстанавливается из уже существующего recommendation feedback (`strategy + similarity + outcome + signalScore`) и не требует нового storage или миграции формата.
+- Для каждой radio strategy (`familiar|similar|discovery`) отдельно накапливаются samples и normalized reward; bounded UCB-style policy объединяет learned reward, uncertainty bonus, strategy prior и текущий session momentum. Contribution ограничен диапазоном ±12%, поэтому online exploration не может подменить основную hybrid recommendation model.
+- Плохой momentum текущей session временно повышает давление на более смелые arms, а устойчиво положительная session немного смещает policy к безопасным arms. Long-term arm statistics при этом остаются независимыми от ephemeral session layer.
+- `RecommendationRanker` применяет hard novelty/recent-track rejection до bandit scoring. Ни positive reward, ни uncertainty bonus не могут вернуть известный трек в `discovery`. Server-radio не использует персональный bandit profile владельца.
+- Добавлена `/radio bandit`: показывает preferred arm, samples, mean reward и confidence отдельно для `similar` и `discovery`, а также текущий session momentum. `/radio why` показывает material `bandit <arm> ±N% • reward ±M% / n=K`.
+- Добавлены unit/architecture regressions на cold start, strategy isolation, positive/negative arm learning, session-aware exploration, bounded contribution и запрет bandit layer обходить novelty или создавать отдельный persistence format.
+
 ## [1.19.0] — 2026-08-09
 
 ### Adaptive Session Intelligence

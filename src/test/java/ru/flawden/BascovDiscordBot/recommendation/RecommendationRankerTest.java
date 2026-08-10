@@ -243,4 +243,59 @@ class RecommendationRankerTest {
         assertEquals(fresh.identity(), selected.candidate().identity());
     }
 
+    @Test
+    void learnedBanditCanBreakNearTieTowardSuccessfulArm() {
+        RecommendationCandidate safe = new RecommendationCandidate(
+                "Safe Artist", "Track A", 0.825d, "Last.fm", "safe");
+        RecommendationCandidate balanced = new RecommendationCandidate(
+                "Balanced Artist", "Track B", 0.815d, "Last.fm", "balanced");
+        java.util.List<RecommendationFeedbackEntry> history = new java.util.ArrayList<>();
+        for (int index = 0; index < 8; index++) {
+            history.add(FileRecommendationFeedbackRepository.pending(42L, 77L, "Seed", "Seed",
+                    "Balanced", "Good", RecommendationIdentity.of("Balanced", "Good"),
+                    RadioStrategy.SIMILAR, "Last.fm", 0.72d)
+                    .withOutcome(RecommendationOutcome.FAVORITED, System.currentTimeMillis(), 1.0d));
+            history.add(FileRecommendationFeedbackRepository.pending(42L, 77L, "Seed", "Seed",
+                    "Safe", "Bad", RecommendationIdentity.of("Safe", "Bad"),
+                    RadioStrategy.SIMILAR, "Last.fm", 0.90d)
+                    .withOutcome(RecommendationOutcome.QUICK_SKIPPED, System.currentTimeMillis(), 0.05d));
+        }
+        RecommendationContext context = new RecommendationContext(
+                Set.of(), Set.of(), Set.of(), PersonalTasteProfile.empty(),
+                CollaborativeArtistSignals.empty(), SessionTasteProfile.empty(0L),
+                ContextualBanditModel.build(history));
+
+        RecommendationRanker.ScoredCandidate selected = RecommendationRanker.best(
+                        List.of(safe, balanced), RadioStrategy.SIMILAR, context)
+                .orElseThrow();
+
+        assertEquals(balanced.identity(), selected.candidate().identity());
+        assertTrue(selected.banditContribution() > 0.0d);
+    }
+
+    @Test
+    void banditCannotResurrectKnownTrackInDiscovery() {
+        RecommendationCandidate known = new RecommendationCandidate(
+                "Known Artist", "Known", 0.45d, "Last.fm", "known");
+        RecommendationCandidate fresh = new RecommendationCandidate(
+                "Fresh Artist", "Fresh", 0.35d, "Last.fm", "fresh");
+        java.util.List<RecommendationFeedbackEntry> history = new java.util.ArrayList<>();
+        for (int index = 0; index < 12; index++) {
+            history.add(FileRecommendationFeedbackRepository.pending(42L, 77L, "Seed", "Seed",
+                    "Bold", "Good", RecommendationIdentity.of("Bold", "Good"),
+                    RadioStrategy.DISCOVERY, "Last.fm", 0.45d)
+                    .withOutcome(RecommendationOutcome.FAVORITED, System.currentTimeMillis(), 1.0d));
+        }
+        RecommendationContext context = new RecommendationContext(
+                Set.of(known.identity()), Set.of(), Set.of(), PersonalTasteProfile.empty(),
+                CollaborativeArtistSignals.empty(), SessionTasteProfile.empty(0L),
+                ContextualBanditModel.build(history));
+
+        assertEquals(fresh.identity(), RecommendationRanker.best(
+                        List.of(known, fresh), RadioStrategy.DISCOVERY, context)
+                .orElseThrow()
+                .candidate()
+                .identity());
+    }
+
 }

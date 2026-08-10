@@ -11,6 +11,7 @@
 - Recommendation Model / Embeddings Foundation: Personal Ranking Model дополнен локальным `feature-hash-v1` 64D embedding-provider, taste-vector и cosine similarity; `/radio model` показывает vector confidence/coverage, а `/radio why` объясняет отдельный vector-вклад. Интерфейс embedding-provider отделён от playback и готов к будущему semantic provider без изменения `ytsearch:` тракта;
 - Collaborative Signals: optional ListenBrainz artist graph добавляет независимый collaborative-вклад к Last.fm + personal/vector ranker; без `LISTENBRAINZ_TOKEN` или при сбое upstream система fail-open продолжает старый recommendation pipeline;
 - Adaptive Session Intelligence: текущее `personal` radio строит ephemeral short-term taste из feedback после последнего `/radio start`; `/radio session` показывает session momentum/confidence и strongest artist/tag affinity, а restart/new start намеренно сбрасывает краткосрочный слой без изменения durable feedback;
+- Contextual Bandit & Exploration Learning: `/radio bandit` показывает online-policy `safe|balanced|bold`; модель учит reward каждого similarity-risk arm отдельно по стратегии из уже существующего feedback, учитывает session momentum и даёт только bounded вклад ±12%, не обходя hard novelty;
 - `/search` с пятью результатами YouTube, одноразовыми кнопками выбора и пятиминутной owner-bound сессией; autocomplete последних запросов работает в `/play` и `/search`;
 - личное persistent избранное до 100 треков на пользователя и сервер через `/favorites list|add|play|play-all|remove|search|clear`; favorites участвуют в локальном autocomplete и используют существующий ordered batch playback;
 - постоянная история до 50 треков на сервер плюс personal history до 200 заказанных и реально дошедших до истории треков на пользователя; `/history scope:server|mine`, `/replay scope:server|mine`, `/discover profile|for-me` и серверные плейлисты с owner/admin-управлением, autocomplete, lifecycle-операциями, поиском, capture queue и ordered batch playback;
@@ -102,6 +103,7 @@ Live-потоки отключены. Подробные правила voice-д
 Voice recovery и восстановление сессий после restart/redeploy описаны в [`docs/VOICE-RECOVERY-SESSION-RESTORATION.md`](docs/VOICE-RECOVERY-SESSION-RESTORATION.md).
 GitHub-hosted delivery и резервный self-hosted режим описаны в [`docs/SELF-HOSTED-DELIVERY.md`](docs/SELF-HOSTED-DELIVERY.md).
 Современный Discord-интерфейс описан в [`docs/MODERN-COMMANDS.md`](docs/MODERN-COMMANDS.md).
+Contextual online exploration policy описана в [`docs/CONTEXTUAL-BANDIT-EXPLORATION.md`](docs/CONTEXTUAL-BANDIT-EXPLORATION.md).
 Интерактивная помощь, status refresh и destructive confirmations описаны в [`docs/DISCORD-EXPERIENCE.md`](docs/DISCORD-EXPERIENCE.md).
 Интерактивный поиск и безопасный выбор трека описаны в [`docs/SEARCH-TRACK-SELECTION.md`](docs/SEARCH-TRACK-SELECTION.md).
 Постоянные плейлисты, история и replay описаны в [`docs/PLAYLISTS-HISTORY-REPLAY.md`](docs/PLAYLISTS-HISTORY-REPLAY.md), а личное избранное — в [`docs/FAVORITES-PERSONAL-LIBRARY.md`](docs/FAVORITES-PERSONAL-LIBRARY.md).

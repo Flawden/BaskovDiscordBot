@@ -1484,13 +1484,17 @@ public class PlayerManager {
                         state.owner().userId(),
                         state.startedAtEpochMillis())
                 : ru.flawden.BascovDiscordBot.recommendation.SessionTasteProfile.empty(0L);
+        var banditProfile = state.mode() == RadioMode.PERSONAL && state.owner().userId() > 0L
+                ? recommendationFeedback.banditProfile(guildId, state.owner().userId())
+                : ru.flawden.BascovDiscordBot.recommendation.ContextualBanditProfile.empty();
         return new RecommendationContext(
                 known,
                 new LinkedHashSet<>(state.recentTrackIdentities()),
                 new LinkedHashSet<>(state.recentArtists()),
                 tasteProfile,
                 ru.flawden.BascovDiscordBot.recommendation.CollaborativeArtistSignals.empty(),
-                sessionTaste);
+                sessionTaste,
+                banditProfile);
     }
 
     private static String boundedRadioQuery(String query) {

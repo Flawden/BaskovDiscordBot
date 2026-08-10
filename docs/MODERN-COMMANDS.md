@@ -141,10 +141,11 @@ Doctor намеренно не делает внешние HTTP/Maven/YouTube pr
 /radio feedback
 /radio model
 /radio session
+/radio bandit
 /radio stop
 ```
 
-`familiar` остаётся локальным; `similar` и `discovery` используют Last.fm candidate generation, если настроен `LASTFM_API_KEY`. При наличии `LISTENBRAINZ_TOKEN` ranking дополнительно получает collaborative artist signal из ListenBrainz; он fail-open и не заменяет Last.fm candidate generation. `discovery` исключает already-known tracks по normalized artist/title identity до personal/vector/collaborative scoring. `/radio why` объясняет последнюю рекомендацию. `personal` radio дополнительно использует ephemeral session taste, который строится только из feedback после текущего `/radio start`. Playback после candidate generation по-прежнему идёт через обычный `ytsearch:`.
+`familiar` остаётся локальным; `similar` и `discovery` используют Last.fm candidate generation, если настроен `LASTFM_API_KEY`. При наличии `LISTENBRAINZ_TOKEN` ranking дополнительно получает collaborative artist signal из ListenBrainz; он fail-open и не заменяет Last.fm candidate generation. `discovery` исключает already-known tracks по normalized artist/title identity до personal/vector/collaborative/bandit scoring. `/radio why` объясняет последнюю рекомендацию. `personal` radio дополнительно использует ephemeral session taste, который строится только из feedback после текущего `/radio start`. Playback после candidate generation по-прежнему идёт через обычный `ytsearch:`.
 
 Radio продолжает только действительно пустую очередь и добавляет по одному кандидату. `personal` строит seed из favorites/personal history владельца, `server` — из guild history. Режим ephemeral и после restart/deploy остаётся выключенным.
 
@@ -163,3 +164,7 @@ Read-only долгосрочный personal ranking snapshot: evidence/confidenc
 ### `/radio session`
 
 Read-only краткосрочный snapshot только текущего `personal` radio: session start, evidence/confidence, momentum и strongest session artist/tag affinity. Сбрасывается при новом `/radio start` и restart/deploy; в persistence не записывается.
+
+### `/radio bandit`
+
+Read-only snapshot online exploration policy. Показывает `safe|balanced|bold` arms, samples, mean reward, confidence и preferred arm отдельно для `similar`/`discovery`. Policy строится из существующего recommendation feedback и не имеет отдельного persistence-файла.

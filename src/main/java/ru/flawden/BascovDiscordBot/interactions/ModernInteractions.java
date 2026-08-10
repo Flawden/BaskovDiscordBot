@@ -47,6 +47,9 @@ import ru.flawden.BascovDiscordBot.recommendation.PersonalTasteVector;
 import ru.flawden.BascovDiscordBot.recommendation.PersonalTasteVectorModel;
 import ru.flawden.BascovDiscordBot.recommendation.FeatureHashRecommendationEmbeddingProvider;
 import ru.flawden.BascovDiscordBot.recommendation.SessionTasteProfile;
+import ru.flawden.BascovDiscordBot.recommendation.ContextualBanditModel;
+import ru.flawden.BascovDiscordBot.recommendation.ContextualBanditProfile;
+import ru.flawden.BascovDiscordBot.recommendation.ExplorationArm;
 import ru.flawden.BascovDiscordBot.library.FavoriteOperationResult;
 import ru.flawden.BascovDiscordBot.library.FavoriteSearchHit;
 import ru.flawden.BascovDiscordBot.library.PersonalListeningInsights;
@@ -922,6 +925,15 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
+        if ("bandit".equals(subcommand)) {
+            event.replyEmbeds(recommendationBanditEmbed(
+                            guild.getIdLong(),
+                            event.getUser().getIdLong()))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
         if ("stop".equals(subcommand)) {
             RadioSnapshot snapshot = playerManager.radioSnapshot(guild.getIdLong());
             boolean owner = snapshot.enabled() && snapshot.ownerUserId() == event.getUser().getIdLong();
@@ -1016,6 +1028,7 @@ public class ModernInteractions extends ListenerAdapter {
                                             + "при наличии `LISTENBRAINZ_TOKEN` дополнительно учитывается collaborative artist graph. "
                                             + "Любой внешний сигнал fail-open, а playback остаётся через обычный ytsearch pipeline. "
                                             + "Краткосрочный session-profile стартует с нуля при каждом `/radio start`; "
+                                            + "online bandit учится выбирать безопасный/сбалансированный/смелый уровень exploration; "
                                             + "после трёх подряд неудачных refill radio отключится само."))
                             .queue();
                 }));
@@ -1137,6 +1150,48 @@ public class ModernInteractions extends ListenerAdapter {
         return embed
                 .setFooter("Ephemeral: reset при /radio start и restart/deploy • долгосрочный профиль остаётся в /radio model")
                 .build();
+    }
+
+    private MessageEmbed recommendationBanditEmbed(long guildId, long userId) {
+        ContextualBanditProfile profile = recommendationFeedback.banditProfile(guildId, userId);
+        RadioSnapshot snapshot = playerManager.radioSnapshot(guildId);
+        long startedAt = playerManager.radioSessionStartedAtEpochMillis(guildId);
+        SessionTasteProfile session = snapshot.enabled() && snapshot.ownerUserId() == userId
+                ? recommendationFeedback.sessionTasteProfile(guildId, userId, startedAt)
+                : SessionTasteProfile.empty(0L);
+        EmbedBuilder embed = new EmbedBuilder()
+                .setTitle("🎰 Contextual exploration policy")
+                .setColor(profile.totalSamples() == 0 ? Color.GRAY : Color.CYAN)
+                .setDescription(profile.totalSamples() == 0
+                        ? "Пока нет завершённых recommendation outcomes. Политика использует безопасные priors и uncertainty bonus; после feedback начнёт учиться на твоих результатах."
+                        : "Bandit учится на уже сохранённых recommendation outcomes. Никакого отдельного storage: arms восстанавливаются из strategy + similarity + feedback score.")
+                .addField("similar", banditStrategySummary(profile, RadioStrategy.SIMILAR, session), false)
+                .addField("discovery", banditStrategySummary(profile, RadioStrategy.DISCOVERY, session), false)
+                .addField("Session context", "momentum `"
+                        + String.format(Locale.ROOT, "%+.0f%%", session.momentum() * 100.0d)
+                        + "` • confidence `" + Math.round(session.confidence() * 100.0d) + "%`", false)
+                .setFooter("safe ≥82% similarity • balanced 62–82% • bold <62% • UCB-style bounded contribution ±12%");
+        return embed.build();
+    }
+
+    private static String banditStrategySummary(
+            ContextualBanditProfile profile,
+            RadioStrategy strategy,
+            SessionTasteProfile session) {
+        ExplorationArm preferred = ContextualBanditModel.preferredArm(profile, strategy, session);
+        StringBuilder body = new StringBuilder("preferred: `")
+                .append(preferred.label())
+                .append("` • confidence `")
+                .append(Math.round(profile.confidence(strategy) * 100.0d))
+                .append("%`\n");
+        for (ExplorationArm arm : ExplorationArm.values()) {
+            ContextualBanditProfile.ArmStats stats = profile.stats(strategy, arm);
+            body.append("`").append(arm.label()).append("` n=`")
+                    .append(stats.samples()).append("` reward=`")
+                    .append(String.format(Locale.ROOT, "%+.0f%%", stats.meanReward() * 100.0d))
+                    .append("`  ");
+        }
+        return body.toString().trim();
     }
 
     private static String signedScore(double value) {
@@ -3857,7 +3912,7 @@ public class ModernInteractions extends ListenerAdapter {
                     .addField("Перенос", "`/settings export` `/settings import`", false)
                     .addField("Сброс", "`/settings reset` открывает интерактивное подтверждение; `confirm:true` больше вводить не нужно.", false)
                     .addField("Диагностика", "`/doctor summary|gateway|voice|storage|session|source|failures` — actionable diagnosis; `/status` — raw snapshot; `/session status|recover` — checkpoint/recovery.", false)
-                    .addField("Smart radio", "`/radio start|status|why|feedback|model|stop` — discovery + persistent implicit feedback + personal ranking model.", false);
+                    .addField("Smart radio", "`/radio start|status|why|feedback|model|session|bandit|stop` — discovery + feedback + personal/session ranking + online exploration policy.", false);
         }
         return embed.build();
     }

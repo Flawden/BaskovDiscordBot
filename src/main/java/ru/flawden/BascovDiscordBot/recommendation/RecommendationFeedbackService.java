@@ -82,6 +82,13 @@ public class RecommendationFeedbackService {
                 startedAtEpochMillis);
     }
 
+    public ContextualBanditProfile banditProfile(long guildId, long userId) {
+        return ContextualBanditModel.build(repository.history(
+                guildId,
+                userId,
+                RecommendationFeedbackRepository.MAX_ENTRIES_PER_USER));
+    }
+
     public void recordPlayback(long guildId, PlaybackFeedbackEvent event) {
         if (guildId <= 0L || event == null || !isRadioTrack(event.request())) {
             return;
