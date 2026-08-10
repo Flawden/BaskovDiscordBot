@@ -67,12 +67,19 @@ class FileRecommendationFeedbackRepositoryTest {
         repository.load();
 
         String identity = RecommendationIdentity.of("Artist", "Track");
-        repository.recordRecommendation(FileRecommendationFeedbackRepository.pending(
+        long sameMillisecond = System.currentTimeMillis();
+        RecommendationFeedbackEntry first = FileRecommendationFeedbackRepository.pending(
                 42L, 1L, "Seed", "One", "Artist", "Track", identity,
-                RadioStrategy.SIMILAR, "last.fm", 0.5d));
-        repository.recordRecommendation(FileRecommendationFeedbackRepository.pending(
+                RadioStrategy.SIMILAR, "last.fm", 0.5d)
+                .withRecommendedAtEpochMillis(sameMillisecond);
+        RecommendationFeedbackEntry second = FileRecommendationFeedbackRepository.pending(
                 42L, 2L, "Seed", "Two", "Artist", "Track", identity,
-                RadioStrategy.DISCOVERY, "last.fm", 0.9d));
+                RadioStrategy.DISCOVERY, "last.fm", 0.9d)
+                .withRecommendedAtEpochMillis(sameMillisecond);
+        repository.recordRecommendation(first);
+        RecommendationFeedbackEntry recordedSecond = repository.recordRecommendation(second);
+
+        assertTrue(recordedSecond.recommendedAtEpochMillis() > first.recommendedAtEpochMillis());
 
         RecommendationFeedbackEntry updated = repository.recordLatestOutcome(
                 42L,

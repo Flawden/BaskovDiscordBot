@@ -58,6 +58,32 @@ public record RecommendationFeedbackEntry(
         lastCompletionRatio = clamp(lastCompletionRatio, 0.0d, 1.0d);
     }
 
+    RecommendationFeedbackEntry withRecommendedAtEpochMillis(long epochMillis) {
+        long adjustedOutcomeAt = lastOutcomeAtEpochMillis == 0L
+                ? 0L
+                : Math.max(epochMillis, lastOutcomeAtEpochMillis);
+        return new RecommendationFeedbackEntry(
+                id,
+                guildId,
+                userId,
+                seedArtist,
+                seedTitle,
+                trackArtist,
+                trackTitle,
+                trackIdentity,
+                tags,
+                strategy,
+                provider,
+                similarity,
+                epochMillis,
+                lastOutcome,
+                adjustedOutcomeAt,
+                positiveSignals,
+                negativeSignals,
+                signalScore,
+                lastCompletionRatio);
+    }
+
     public RecommendationFeedbackEntry withOutcome(
             RecommendationOutcome outcome,
             long occurredAtEpochMillis,

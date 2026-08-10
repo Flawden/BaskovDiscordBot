@@ -94,7 +94,7 @@ public class FileRecommendationFeedbackRepository implements RecommendationFeedb
             Map<Long, List<RecommendationFeedbackEntry>> guild = entries.computeIfAbsent(
                     entry.guildId(), ignored -> new LinkedHashMap<>());
             ArrayList<RecommendationFeedbackEntry> user = new ArrayList<>(guild.getOrDefault(entry.userId(), List.of()));
-            RecommendationFeedbackEntry normalized = entry;
+            RecommendationFeedbackEntry normalized = normalizeRecommendedAt(guild, entry);
             user.add(0, normalized);
             while (user.size() > MAX_ENTRIES_PER_USER) {
                 user.remove(user.size() - 1);
@@ -176,6 +176,23 @@ public class FileRecommendationFeedbackRepository implements RecommendationFeedb
                     .getOrDefault(userId, List.of());
             return List.copyOf(history.subList(0, Math.min(safeLimit, history.size())));
         }
+    }
+
+    private static RecommendationFeedbackEntry normalizeRecommendedAt(
+            Map<Long, List<RecommendationFeedbackEntry>> guild,
+            RecommendationFeedbackEntry entry) {
+        long latest = guild.values().stream()
+                .flatMap(List::stream)
+                .mapToLong(RecommendationFeedbackEntry::recommendedAtEpochMillis)
+                .max()
+                .orElse(Long.MIN_VALUE);
+        if (latest < entry.recommendedAtEpochMillis()) {
+            return entry;
+        }
+        if (latest == Long.MAX_VALUE) {
+            throw new IllegalStateException("Recommendation timestamp space exhausted");
+        }
+        return entry.withRecommendedAtEpochMillis(latest + 1L);
     }
 
     private Optional<RecommendationFeedbackEntry> updateOutcome(
