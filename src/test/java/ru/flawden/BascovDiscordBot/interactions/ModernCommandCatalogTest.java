@@ -54,7 +54,7 @@ class ModernCommandCatalogTest {
     @Test
     void mixCommandExposesCuratedProductStations() {
         SlashCommandData mix = command("mix");
-        assertEquals(Set.of("list", "start", "status", "stop"),
+        assertEquals(Set.of("list", "start", "resume", "status", "stop"),
                 mix.getSubcommands().stream()
                         .map(subcommand -> subcommand.getName())
                         .collect(Collectors.toSet()));
@@ -66,7 +66,7 @@ class ModernCommandCatalogTest {
                 .findFirst()
                 .orElseThrow();
 
-        assertEquals(4, station.getChoices().size());
+        assertEquals(6, station.getChoices().size());
     }
 
     @Test

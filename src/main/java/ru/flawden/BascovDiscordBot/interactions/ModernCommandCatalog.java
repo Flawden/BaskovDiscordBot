@@ -77,10 +77,13 @@ public final class ModernCommandCatalog {
                                                 "Какой микс включить",
                                                 true)
                                                 .addChoice("Мой микс", "my-mix")
+                                                .addChoice("Микс дня", "daily-mix")
                                                 .addChoice("Открытия", "discoveries")
+                                                .addChoice("Открытия дня", "daily-discoveries")
                                                 .addChoice("Знакомое", "familiar")
                                                 .addChoice("Настроение сейчас", "mood")),
-                                new SubcommandData("status", "Показывает активную станцию и underlying radio"),
+                                new SubcommandData("resume", "Продолжает последнюю персональную станцию с её seed-прогрессом"),
+                                new SubcommandData("status", "Показывает активную станцию и continuity"),
                                 new SubcommandData("stop", "Выключает персональную станцию; текущий трек продолжает играть")),
                 Commands.slash("play", "Ищет и добавляет песню")
                         .addOptions(new OptionData(

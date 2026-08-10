@@ -150,9 +150,12 @@ Doctor намеренно не делает внешние HTTP/Maven/YouTube pr
 ```text
 /mix list
 /mix start station:my-mix
+/mix start station:daily-mix
 /mix start station:discoveries
+/mix start station:daily-discoveries
 /mix start station:familiar
 /mix start station:mood
+/mix resume
 /mix status
 /mix stop
 ```

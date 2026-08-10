@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.21.0**.
+Текущая версия релизной ветки: **v1.22.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -12,7 +12,7 @@
 - Collaborative Signals: optional ListenBrainz artist graph добавляет независимый collaborative-вклад к Last.fm + personal/vector ranker; без `LISTENBRAINZ_TOKEN` или при сбое upstream система fail-open продолжает старый recommendation pipeline;
 - Adaptive Session Intelligence: текущее `personal` radio строит ephemeral short-term taste из feedback после последнего `/radio start`; `/radio session` показывает session momentum/confidence и strongest artist/tag affinity, а restart/new start намеренно сбрасывает краткосрочный слой без изменения durable feedback;
 - Contextual Bandit & Exploration Learning: `/radio bandit` показывает online-policy `safe|balanced|bold`; модель учит reward каждого similarity-risk arm отдельно по стратегии из уже существующего feedback, учитывает session momentum и даёт только bounded вклад ±12%, не обходя hard novelty;
-- Mixes & Personalized Stations: `/mix list|start|status|stop` превращает recommendation stack в готовые пользовательские станции — «Мой микс», «Открытия», «Знакомое» и «Настроение сейчас»; presets делегируют в тот же radio/playback pipeline и не добавляют нового persistence;
+- Daily Mixes & Station Continuity: `/mix list|start|resume|status|stop` добавляет «Микс дня» и «Открытия дня» со стабильным daily seed-набором, а bounded process-local continuity до 36 часов сохраняет station/date/seed cursor/anti-repeat memory для явного `/mix resume`; restart/deploy не автозапускает музыку и новых persistence-файлов нет;
 - `/search` с пятью результатами YouTube, одноразовыми кнопками выбора и пятиминутной owner-bound сессией; autocomplete последних запросов работает в `/play` и `/search`;
 - личное persistent избранное до 100 треков на пользователя и сервер через `/favorites list|add|play|play-all|remove|search|clear`; favorites участвуют в локальном autocomplete и используют существующий ordered batch playback;
 - постоянная история до 50 треков на сервер плюс personal history до 200 заказанных и реально дошедших до истории треков на пользователя; `/history scope:server|mine`, `/replay scope:server|mine`, `/discover profile|for-me` и серверные плейлисты с owner/admin-управлением, autocomplete, lifecycle-операциями, поиском, capture queue и ordered batch playback;
@@ -105,7 +105,7 @@ Voice recovery и восстановление сессий после restart/r
 GitHub-hosted delivery и резервный self-hosted режим описаны в [`docs/SELF-HOSTED-DELIVERY.md`](docs/SELF-HOSTED-DELIVERY.md).
 Современный Discord-интерфейс описан в [`docs/MODERN-COMMANDS.md`](docs/MODERN-COMMANDS.md).
 Contextual online exploration policy описана в [`docs/CONTEXTUAL-BANDIT-EXPLORATION.md`](docs/CONTEXTUAL-BANDIT-EXPLORATION.md).
-Готовые персональные станции и их mapping описаны в [`docs/PERSONALIZED-MIXES-STATIONS.md`](docs/PERSONALIZED-MIXES-STATIONS.md).
+Готовые персональные станции и их mapping описаны в [`docs/PERSONALIZED-MIXES-STATIONS.md`](docs/PERSONALIZED-MIXES-STATIONS.md), а daily-выпуски и `/mix resume` — в [`docs/DAILY-MIXES-CONTINUITY.md`](docs/DAILY-MIXES-CONTINUITY.md).
 Интерактивная помощь, status refresh и destructive confirmations описаны в [`docs/DISCORD-EXPERIENCE.md`](docs/DISCORD-EXPERIENCE.md).
 Интерактивный поиск и безопасный выбор трека описаны в [`docs/SEARCH-TRACK-SELECTION.md`](docs/SEARCH-TRACK-SELECTION.md).
 Постоянные плейлисты, история и replay описаны в [`docs/PLAYLISTS-HISTORY-REPLAY.md`](docs/PLAYLISTS-HISTORY-REPLAY.md), а личное избранное — в [`docs/FAVORITES-PERSONAL-LIBRARY.md`](docs/FAVORITES-PERSONAL-LIBRARY.md).
@@ -125,19 +125,22 @@ DAVE voice migration и переход JDA 5 → 6 описаны в [`docs/DAVE
 Native libDAVE runtime, platform profiles и startup fail-fast описаны в [`docs/NATIVE-DAVE.md`](docs/NATIVE-DAVE.md).
 Релиз с Android описан в [`docs/TERMUX-RELEASE.md`](docs/TERMUX-RELEASE.md).
 
-## Personalized Mixes & Stations (v1.21.0)
+## Daily Mixes & Station Continuity (v1.22.0)
 
 ```text
 /mix list
 /mix start station:my-mix
+/mix start station:daily-mix
 /mix start station:discoveries
+/mix start station:daily-discoveries
 /mix start station:familiar
 /mix start station:mood
+/mix resume
 /mix status
 /mix stop
 ```
 
-`/mix` — product-level preset layer поверх `/radio`: он не создаёт новый player/queue/voice path, а выбирает bounded station profile и запускает тот же `PlayerManager` lifecycle. `Мой микс` использует personal `similar`, `Открытия` — hard-novelty `discovery`, `Знакомое` — local `familiar`, а `Настроение сейчас` стартует от максимум 12 самых свежих personal-history seed и затем быстро адаптируется через ephemeral session intelligence. Restart/deploy выключает active station, но durable feedback/model остаются.
+`/mix` остаётся product-level preset layer поверх `/radio` и не создаёт отдельный player/queue/voice path. `Микс дня` и `Открытия дня` получают детерминированный bounded seed-набор из personal library на дату runtime; discovery-вариант сохраняет hard novelty. `/mix resume` до 36 часов восстанавливает process-local station continuity вместе с daily release, seed cursor и recent anti-repeat memory. Restart/deploy очищает continuity и оставляет mix OFF; durable feedback/model остаются без новой migration.
 
 ## CI/CD
 

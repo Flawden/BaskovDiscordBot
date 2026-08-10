@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [1.22.0] — 2026-08-10
+
+### Daily Mixes & Station Continuity
+
+- Добавлены две ежедневные станции: `Микс дня` (`daily-mix`, `personal/similar`) и `Открытия дня` (`daily-discoveries`, `personal/discovery`). Они используют существующий hybrid recommendation stack, а не отдельный playback/recommendation engine.
+- Добавлен `DailyMixSeedPlanner`: для `guild + user + station + LocalDate` он детерминированно переставляет bounded personal seed pool и выбирает максимум 8 seed-треков. Один и тот же daily-выпуск стабилен внутри даты runtime, следующий календарный день естественно меняет seed order.
+- `Открытия дня` по-прежнему проходит через `RadioStrategy.DISCOVERY`, поэтому hard novelty/recent-track rejection выполняются до personal/session/vector/collaborative/bandit scoring и не могут быть отменены daily seed policy.
+- Добавлена `/mix resume`: последняя curated station пользователя сохраняется в bounded in-memory continuity до 36 часов. Continuity переносит station, daily seed date, seed cursor, generated count и recent track/artist anti-repeat memory, поэтому resume продолжает тот же daily-выпуск даже после смены календарной даты.
+- `/mix status` показывает active daily release и доступную предыдущую station; `/mix stop` сохраняет resumable state, а запуск ручного `/radio` может оставить предыдущую curated station доступной для явного возврата.
+- Continuity намеренно process-local: restart/deploy очищает её и не запускает музыку автоматически. Новых persistence-файлов, форматов, secrets или env vars нет; durable recommendation feedback остаётся `BASKOV_RECOMMENDATION_FEEDBACK_V2`.
+- Добавлены unit/architecture regressions на детерминизм/ротацию daily seed, bounded planner, стабильные public slugs, `/mix resume`, 36-hour TTL, сохранение daily release/anti-repeat memory и запрет daily/continuity layer владеть playback transport.
+
 ## [1.21.0] — 2026-08-10
 
 ### Mixes & Personalized Stations

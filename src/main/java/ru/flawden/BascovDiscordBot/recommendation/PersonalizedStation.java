@@ -10,13 +10,22 @@ import java.util.List;
  * selects a radio strategy and a bounded seed policy.</p>
  */
 public enum PersonalizedStation {
-    CUSTOM("custom", "Ручное радио", "Ручная конфигурация /radio", RadioStrategy.SIMILAR, false, false),
+    CUSTOM("custom", "Ручное радио", "Ручная конфигурация /radio", RadioStrategy.SIMILAR, false, false, false),
     MY_MIX(
             "my-mix",
             "Мой микс",
             "Сбалансированное продолжение личного вкуса: favorites + history + все обученные ranking-сигналы.",
             RadioStrategy.SIMILAR,
             false,
+            false,
+            true),
+    DAILY_MIX(
+            "daily-mix",
+            "Микс дня",
+            "Стабильный на текущий день персональный seed-набор; завтра состав автоматически повернётся.",
+            RadioStrategy.SIMILAR,
+            false,
+            true,
             true),
     DISCOVERIES(
             "discoveries",
@@ -24,12 +33,22 @@ public enum PersonalizedStation {
             "Новые треки с hard novelty: знакомые и недавние записи не возвращаются через ranking.",
             RadioStrategy.DISCOVERY,
             false,
+            false,
+            true),
+    DAILY_DISCOVERIES(
+            "daily-discoveries",
+            "Открытия дня",
+            "Дневной discovery-поток с детерминированными seed и тем же hard novelty.",
+            RadioStrategy.DISCOVERY,
+            false,
+            true,
             true),
     FAMILIAR(
             "familiar",
             "Знакомое",
             "Надёжное продолжение favorites/history без внешнего discovery-прыжка.",
             RadioStrategy.FAMILIAR,
+            false,
             false,
             true),
     MOOD(
@@ -38,6 +57,7 @@ public enum PersonalizedStation {
             "Стартует от самой свежей personal history и быстро адаптируется через session intelligence.",
             RadioStrategy.SIMILAR,
             true,
+            false,
             true);
 
     private final String slug;
@@ -45,6 +65,7 @@ public enum PersonalizedStation {
     private final String description;
     private final RadioStrategy strategy;
     private final boolean recentSeedsOnly;
+    private final boolean dailySeeded;
     private final boolean curated;
 
     PersonalizedStation(
@@ -53,12 +74,14 @@ public enum PersonalizedStation {
             String description,
             RadioStrategy strategy,
             boolean recentSeedsOnly,
+            boolean dailySeeded,
             boolean curated) {
         this.slug = slug;
         this.label = label;
         this.description = description;
         this.strategy = strategy;
         this.recentSeedsOnly = recentSeedsOnly;
+        this.dailySeeded = dailySeeded;
         this.curated = curated;
     }
 
@@ -80,6 +103,10 @@ public enum PersonalizedStation {
 
     public boolean recentSeedsOnly() {
         return recentSeedsOnly;
+    }
+
+    public boolean dailySeeded() {
+        return dailySeeded;
     }
 
     public boolean curated() {

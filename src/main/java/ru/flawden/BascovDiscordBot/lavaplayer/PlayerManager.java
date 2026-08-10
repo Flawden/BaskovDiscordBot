@@ -29,6 +29,8 @@ import ru.flawden.BascovDiscordBot.library.PersonalListeningInsights;
 import ru.flawden.BascovDiscordBot.library.StoredTrack;
 import ru.flawden.BascovDiscordBot.recommendation.RadioStrategy;
 import ru.flawden.BascovDiscordBot.recommendation.PersonalizedStation;
+import ru.flawden.BascovDiscordBot.recommendation.DailyMixSeedPlanner;
+import ru.flawden.BascovDiscordBot.recommendation.StationContinuationSnapshot;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationContext;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationIdentity;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationPlan;
@@ -42,6 +44,8 @@ import ru.flawden.BascovDiscordBot.session.StoredSessionTrack;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -93,7 +97,10 @@ public class PlayerManager {
     private final SmartDiscoveryEngine discoveryEngine;
     private final RecommendationFeedbackService recommendationFeedback;
     private final MusicSessionRepository sessionRepository;
+    private static final Duration STATION_CONTINUITY_TTL = Duration.ofHours(36);
+
     private final Map<Long, RadioState> radioStates = new ConcurrentHashMap<>();
+    private final Map<StationOwnerKey, StationContinuation> stationContinuations = new ConcurrentHashMap<>();
     private final AtomicBoolean closing = new AtomicBoolean();
     private final AtomicLong recoveryAttempts = new AtomicLong();
     private final AtomicLong recoverySuccesses = new AtomicLong();
@@ -203,12 +210,22 @@ public class PlayerManager {
     }
 
     public boolean hasRadioSeeds(long guildId, RadioMode mode, long userId) {
-        return !radioSeeds(guildId, mode, userId, PersonalizedStation.CUSTOM).isEmpty();
+        return !radioSeeds(
+                guildId,
+                mode,
+                userId,
+                PersonalizedStation.CUSTOM,
+                LocalDate.now(ZoneId.systemDefault())).isEmpty();
     }
 
     public boolean hasStationSeeds(long guildId, PersonalizedStation station, long userId) {
         PersonalizedStation selected = station == null ? PersonalizedStation.MY_MIX : station;
-        return !radioSeeds(guildId, RadioMode.PERSONAL, userId, selected).isEmpty();
+        return !radioSeeds(
+                guildId,
+                RadioMode.PERSONAL,
+                userId,
+                selected,
+                LocalDate.now(ZoneId.systemDefault())).isEmpty();
     }
 
     public RadioStartResult startRadio(Guild guild, RadioMode mode, TrackRequester owner) {
@@ -225,7 +242,9 @@ public class PlayerManager {
                 mode,
                 strategy,
                 owner,
-                PersonalizedStation.CUSTOM);
+                PersonalizedStation.CUSTOM,
+                LocalDate.now(ZoneId.systemDefault()),
+                null);
     }
 
     public RadioStartResult startStation(
@@ -241,7 +260,32 @@ public class PlayerManager {
                 RadioMode.PERSONAL,
                 selected.strategy(),
                 owner,
-                selected);
+                selected,
+                LocalDate.now(ZoneId.systemDefault()),
+                null);
+    }
+
+    /** Explicitly resumes the last curated station for this guild/user within the bounded in-memory window. */
+    public RadioStartResult resumeStation(Guild guild, TrackRequester owner) {
+        Objects.requireNonNull(guild, "guild");
+        TrackRequester requester = owner == null ? TrackRequester.unknown() : owner;
+        StationOwnerKey key = new StationOwnerKey(guild.getIdLong(), requester.userId());
+        StationContinuation continuation = resumableContinuation(key).orElse(null);
+        if (continuation == null) {
+            return new RadioStartResult(RadioStartResult.Status.NO_SEEDS, RadioSnapshot.disabled());
+        }
+        RadioStartResult result = startRadioInternal(
+                guild,
+                RadioMode.PERSONAL,
+                continuation.station().strategy(),
+                requester,
+                continuation.station(),
+                continuation.seedDate(),
+                continuation);
+        if (result.status() != RadioStartResult.Status.NO_SEEDS) {
+            stationContinuations.remove(key, continuation);
+        }
+        return result;
     }
 
     public PersonalizedStation activeStation(long guildId) {
@@ -249,30 +293,51 @@ public class PlayerManager {
         return state == null ? PersonalizedStation.CUSTOM : state.station();
     }
 
+    public Optional<LocalDate> activeStationSeedDate(long guildId) {
+        RadioState state = radioStates.get(guildId);
+        if (state == null || !state.station().dailySeeded()) {
+            return Optional.empty();
+        }
+        return Optional.of(state.seedDate());
+    }
+
+    public Optional<StationContinuationSnapshot> stationContinuation(long guildId, long userId) {
+        return resumableContinuation(new StationOwnerKey(guildId, userId))
+                .map(StationContinuation::snapshot);
+    }
+
     private RadioStartResult startRadioInternal(
             Guild guild,
             RadioMode mode,
             RadioStrategy strategy,
             TrackRequester owner,
-            PersonalizedStation station) {
+            PersonalizedStation station,
+            LocalDate seedDate,
+            StationContinuation continuation) {
         Objects.requireNonNull(guild, "guild");
         Objects.requireNonNull(mode, "mode");
         RadioStrategy recommendationStrategy = strategy == null ? RadioStrategy.FAMILIAR : strategy;
         PersonalizedStation selectedStation = station == null ? PersonalizedStation.CUSTOM : station;
         TrackRequester requester = owner == null ? TrackRequester.unknown() : owner;
+        LocalDate selectedSeedDate = seedDate == null
+                ? LocalDate.now(ZoneId.systemDefault())
+                : seedDate;
         List<StoredTrack> seeds = radioSeeds(
                 guild.getIdLong(),
                 mode,
                 requester.userId(),
-                selectedStation);
+                selectedStation,
+                selectedSeedDate);
         if (seeds.isEmpty()) {
             return new RadioStartResult(RadioStartResult.Status.NO_SEEDS, RadioSnapshot.disabled());
         }
 
         long guildId = guild.getIdLong();
-        RadioState previous = radioStates.put(
-                guildId,
-                new RadioState(mode, recommendationStrategy, requester, selectedStation));
+        RadioState nextState = continuation == null
+                ? new RadioState(mode, recommendationStrategy, requester, selectedStation, selectedSeedDate)
+                : new RadioState(mode, recommendationStrategy, requester, selectedStation, selectedSeedDate, continuation);
+        RadioState previous = radioStates.put(guildId, nextState);
+        rememberStationContinuation(guildId, previous);
         GuildMusicManager manager = getMusicManager(guild);
         manager.markActivity();
         RadioStartResult.Status status = previous == null
@@ -286,11 +351,36 @@ public class PlayerManager {
 
     public RadioSnapshot stopRadio(long guildId) {
         RadioState removed = radioStates.remove(guildId);
+        rememberStationContinuation(guildId, removed);
         GuildMusicManager manager = musicManagers.get(guildId);
         if (manager != null && manager.isIdle()) {
             scheduleIdleDisconnect(manager.getGuild());
         }
         return removed == null ? RadioSnapshot.disabled() : removed.snapshot(false);
+    }
+
+    private void rememberStationContinuation(long guildId, RadioState state) {
+        if (state == null || !state.station().curated() || state.owner().userId() <= 0L) {
+            return;
+        }
+        stationContinuations.put(
+                new StationOwnerKey(guildId, state.owner().userId()),
+                state.toContinuation(Instant.now()));
+    }
+
+    private Optional<StationContinuation> resumableContinuation(StationOwnerKey key) {
+        if (key == null || key.userId() <= 0L) {
+            return Optional.empty();
+        }
+        StationContinuation continuation = stationContinuations.get(key);
+        if (continuation == null) {
+            return Optional.empty();
+        }
+        if (continuation.savedAt().plus(STATION_CONTINUITY_TTL).isBefore(Instant.now())) {
+            stationContinuations.remove(key, continuation);
+            return Optional.empty();
+        }
+        return Optional.of(continuation);
     }
 
     public boolean collaborativeSignalsAvailable() {
@@ -1303,7 +1393,8 @@ public class PlayerManager {
     private void releaseSession(Guild guild, boolean removeCheckpoint) {
         long guildId = guild.getIdLong();
         GuildMusicManager manager = musicManagers.remove(guildId);
-        radioStates.remove(guildId);
+        RadioState removedRadio = radioStates.remove(guildId);
+        rememberStationContinuation(guildId, removedRadio);
         cancelIdleDisconnect(guildId);
         voiceFrameDemandMissingSince.remove(guildId);
         voiceWatchdogNotBefore.remove(guildId);
@@ -1379,7 +1470,12 @@ public class PlayerManager {
             return;
         }
         long activityVersion = manager.getActivityVersion();
-        StoredTrack seed = state.beginRefill(radioSeeds(guildId, state.mode(), state.owner().userId(), state.station()));
+        StoredTrack seed = state.beginRefill(radioSeeds(
+                guildId,
+                state.mode(),
+                state.owner().userId(),
+                state.station(),
+                state.seedDate()));
         if (seed == null) {
             radioFailure(guild, manager, state, "Нет локальных seed-треков");
             return;
@@ -1588,7 +1684,8 @@ public class PlayerManager {
             long guildId,
             RadioMode mode,
             long userId,
-            PersonalizedStation station) {
+            PersonalizedStation station,
+            LocalDate seedDate) {
         if (mode == RadioMode.PERSONAL) {
             if (userId <= 0L) {
                 return List.of();
@@ -1596,16 +1693,27 @@ public class PlayerManager {
             List<StoredTrack> favorites = musicLibraryRepository.favorites(guildId, userId);
             List<StoredTrack> personalHistory = musicLibraryRepository.personalHistory(guildId, userId);
             PersonalizedStation selected = station == null ? PersonalizedStation.CUSTOM : station;
+            List<StoredTrack> baseSeeds;
             if (selected.recentSeedsOnly()) {
                 List<StoredTrack> recent = personalHistory.stream().limit(12).toList();
                 if (!recent.isEmpty()) {
-                    return PersonalListeningInsights.discoverySeeds(List.of(), recent, 12);
+                    baseSeeds = PersonalListeningInsights.discoverySeeds(List.of(), recent, 12);
+                } else {
+                    baseSeeds = PersonalListeningInsights.discoverySeeds(favorites, personalHistory, 20);
                 }
+            } else {
+                baseSeeds = PersonalListeningInsights.discoverySeeds(favorites, personalHistory, 20);
             }
-            return PersonalListeningInsights.discoverySeeds(
-                    favorites,
-                    personalHistory,
-                    20);
+            if (selected.dailySeeded()) {
+                return DailyMixSeedPlanner.plan(
+                        baseSeeds,
+                        guildId,
+                        userId,
+                        selected,
+                        seedDate == null ? LocalDate.now(ZoneId.systemDefault()) : seedDate,
+                        DailyMixSeedPlanner.DEFAULT_LIMIT);
+            }
+            return baseSeeds;
         }
         return PersonalListeningInsights.discoverySeeds(
                 List.of(),
@@ -1851,6 +1959,7 @@ public class PlayerManager {
         voiceWatchdogNotBefore.clear();
         voiceWatchdogReported.clear();
         radioStates.clear();
+        stationContinuations.clear();
         idleScheduler.shutdownNow();
         playbackReadinessScheduler.shutdownNow();
         sessionLifecycleScheduler.shutdownNow();
@@ -1864,6 +1973,34 @@ public class PlayerManager {
             String reason) {
     }
 
+    private record StationOwnerKey(long guildId, long userId) {
+    }
+
+    private record StationContinuation(
+            PersonalizedStation station,
+            LocalDate seedDate,
+            long startedAtEpochMillis,
+            int seedCursor,
+            List<String> recentTrackKeys,
+            List<String> recentTrackIdentities,
+            List<String> recentArtists,
+            long generatedTracks,
+            String provider,
+            String lastSeed,
+            String lastTrack,
+            String lastReason,
+            Instant savedAt) {
+
+        private StationContinuationSnapshot snapshot() {
+            return new StationContinuationSnapshot(
+                    station,
+                    seedDate,
+                    generatedTracks,
+                    lastTrack,
+                    savedAt);
+        }
+    }
+
     private static final class RadioState {
         private static final int RECENT_LIMIT = 10;
         private static final int ARTIST_COOLDOWN_LIMIT = 3;
@@ -1872,7 +2009,8 @@ public class PlayerManager {
         private final RadioStrategy strategy;
         private final TrackRequester owner;
         private final PersonalizedStation station;
-        private final long startedAtEpochMillis = System.currentTimeMillis();
+        private final LocalDate seedDate;
+        private final long startedAtEpochMillis;
         private final ArrayDeque<String> recentTrackKeys = new ArrayDeque<>();
         private final ArrayDeque<String> recentTrackIdentities = new ArrayDeque<>();
         private final ArrayDeque<String> recentArtists = new ArrayDeque<>();
@@ -1889,11 +2027,37 @@ public class PlayerManager {
                 RadioMode mode,
                 RadioStrategy strategy,
                 TrackRequester owner,
-                PersonalizedStation station) {
+                PersonalizedStation station,
+                LocalDate seedDate) {
+            this(mode, strategy, owner, station, seedDate, null);
+        }
+
+        private RadioState(
+                RadioMode mode,
+                RadioStrategy strategy,
+                TrackRequester owner,
+                PersonalizedStation station,
+                LocalDate seedDate,
+                StationContinuation continuation) {
             this.mode = mode;
             this.strategy = strategy == null ? RadioStrategy.FAMILIAR : strategy;
             this.owner = owner;
             this.station = station == null ? PersonalizedStation.CUSTOM : station;
+            this.seedDate = seedDate == null ? LocalDate.now(ZoneId.systemDefault()) : seedDate;
+            this.startedAtEpochMillis = continuation == null
+                    ? System.currentTimeMillis()
+                    : continuation.startedAtEpochMillis();
+            if (continuation != null) {
+                this.seedCursor = continuation.seedCursor();
+                this.generatedTracks = continuation.generatedTracks();
+                this.provider = continuation.provider();
+                this.lastSeed = continuation.lastSeed();
+                this.lastTrack = continuation.lastTrack();
+                this.lastReason = continuation.lastReason();
+                this.recentTrackKeys.addAll(continuation.recentTrackKeys());
+                this.recentTrackIdentities.addAll(continuation.recentTrackIdentities());
+                this.recentArtists.addAll(continuation.recentArtists());
+            }
         }
 
         synchronized RadioMode mode() {
@@ -1910,6 +2074,10 @@ public class PlayerManager {
 
         synchronized PersonalizedStation station() {
             return station;
+        }
+
+        synchronized LocalDate seedDate() {
+            return seedDate;
         }
 
         synchronized long startedAtEpochMillis() {
@@ -1969,6 +2137,23 @@ public class PlayerManager {
 
         synchronized List<String> recentArtists() {
             return List.copyOf(recentArtists);
+        }
+
+        synchronized StationContinuation toContinuation(Instant savedAt) {
+            return new StationContinuation(
+                    station,
+                    seedDate,
+                    startedAtEpochMillis,
+                    seedCursor,
+                    List.copyOf(recentTrackKeys),
+                    List.copyOf(recentTrackIdentities),
+                    List.copyOf(recentArtists),
+                    generatedTracks,
+                    provider,
+                    lastSeed,
+                    lastTrack,
+                    lastReason,
+                    savedAt);
         }
 
         synchronized RadioSnapshot snapshot(boolean enabled) {

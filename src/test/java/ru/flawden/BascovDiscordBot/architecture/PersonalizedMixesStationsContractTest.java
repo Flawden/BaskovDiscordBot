@@ -38,11 +38,15 @@ class PersonalizedMixesStationsContractTest {
     void curatedStationsCannotBypassPlaybackTransport() throws Exception {
         String station = Files.readString(Path.of(
                 "src/main/java/ru/flawden/BascovDiscordBot/recommendation/PersonalizedStation.java"));
+        String planner = Files.readString(Path.of(
+                "src/main/java/ru/flawden/BascovDiscordBot/recommendation/DailyMixSeedPlanner.java"));
         String player = Files.readString(Path.of(
                 "src/main/java/ru/flawden/BascovDiscordBot/lavaplayer/PlayerManager.java"));
 
         assertFalse(station.contains("AudioTrack"));
         assertFalse(station.contains("loadItem"));
+        assertFalse(planner.contains("AudioTrack"));
+        assertFalse(planner.contains("loadItem"));
         assertTrue(player.contains("audioPlayerManager.loadItemOrdered"));
         assertTrue(player.contains("MediaQueryResolver.YOUTUBE_SEARCH_PREFIX"));
     }
@@ -55,6 +59,7 @@ class PersonalizedMixesStationsContractTest {
                 "src/main/java/ru/flawden/BascovDiscordBot/recommendation/RecommendationRanker.java"));
 
         assertTrue(station.contains("\"discoveries\""));
+        assertTrue(station.contains("\"daily-discoveries\""));
         assertTrue(station.contains("RadioStrategy.DISCOVERY"));
         assertTrue(ranker.contains("strategy.hardNovelty() && known"));
     }
@@ -66,6 +71,47 @@ class PersonalizedMixesStationsContractTest {
 
         assertTrue(player.contains("PersonalizedStation.CUSTOM"));
         assertTrue(player.contains("public PersonalizedStation activeStation(long guildId)"));
-        assertTrue(player.contains("new RadioState(mode, recommendationStrategy, requester, selectedStation)"));
+        assertTrue(player.contains("selectedStation"));
+    }
+
+    @Test
+    void dailyMixesAreDerivedWithoutAStorageMigration() throws Exception {
+        String player = Files.readString(Path.of(
+                "src/main/java/ru/flawden/BascovDiscordBot/lavaplayer/PlayerManager.java"));
+        String planner = Files.readString(Path.of(
+                "src/main/java/ru/flawden/BascovDiscordBot/recommendation/DailyMixSeedPlanner.java"));
+
+        assertTrue(player.contains("selected.dailySeeded()"));
+        assertTrue(player.contains("DailyMixSeedPlanner.plan("));
+        assertTrue(planner.contains("guildId + \":\" + userId + \":\" + selected.slug() + \":\" + selectedDate"));
+        assertFalse(player.contains("daily-mixes.tsv"));
+        assertFalse(player.contains("station-continuity.tsv"));
+    }
+
+    @Test
+    void continuityIsExplicitBoundedAndProcessLocal() throws Exception {
+        String player = Files.readString(Path.of(
+                "src/main/java/ru/flawden/BascovDiscordBot/lavaplayer/PlayerManager.java"));
+        String interactions = Files.readString(Path.of(
+                "src/main/java/ru/flawden/BascovDiscordBot/interactions/ModernInteractions.java"));
+
+        assertTrue(player.contains("STATION_CONTINUITY_TTL = Duration.ofHours(36)"));
+        assertTrue(player.contains("stationContinuations = new ConcurrentHashMap<>()"));
+        assertTrue(player.contains("public RadioStartResult resumeStation("));
+        assertTrue(player.contains("stationContinuations.clear()"));
+        assertTrue(interactions.contains("/mix resume"));
+        assertFalse(player.contains("StationContinuationRepository"));
+    }
+
+    @Test
+    void resumePreservesDailyReleaseAndAntiRepeatMemory() throws Exception {
+        String player = Files.readString(Path.of(
+                "src/main/java/ru/flawden/BascovDiscordBot/lavaplayer/PlayerManager.java"));
+
+        assertTrue(player.contains("continuation.seedDate()"));
+        assertTrue(player.contains("this.seedCursor = continuation.seedCursor()"));
+        assertTrue(player.contains("this.recentTrackKeys.addAll(continuation.recentTrackKeys())"));
+        assertTrue(player.contains("this.recentTrackIdentities.addAll(continuation.recentTrackIdentities())"));
+        assertTrue(player.contains("this.recentArtists.addAll(continuation.recentArtists())"));
     }
 }
