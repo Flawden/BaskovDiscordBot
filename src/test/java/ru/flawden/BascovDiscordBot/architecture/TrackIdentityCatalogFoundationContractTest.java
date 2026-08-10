@@ -74,14 +74,14 @@ class TrackIdentityCatalogFoundationContractTest {
     }
 
     @Test
-    void v125DoesNotPrematurelyIntroducePlaybackResolverOrNewPersistence() throws Exception {
+    void v125CatalogContractRemainsProviderNeutralAfterPlaybackResolverArrives() throws Exception {
         String readme = Files.readString(Path.of("Readme.md"));
         String tree = Files.readString(Path.of("docs/TRACK-IDENTITY-CATALOG.md"));
 
         assertTrue(readme.contains("Track Identity & Catalog Foundation"));
         assertTrue(tree.contains("PlaybackResolver"));
-        assertTrue(tree.contains("v1.26"));
-        assertFalse(Files.exists(Path.of("src/main/java/ru/flawden/BascovDiscordBot/playback/PlaybackResolver.java")));
+        assertTrue(Files.exists(Path.of("src/main/java/ru/flawden/BascovDiscordBot/playback/PlaybackResolver.java")));
+        assertFalse(read("catalog/TrackIdentity.java").contains("MediaProvider"));
     }
 
     private static String read(String relative) throws Exception {

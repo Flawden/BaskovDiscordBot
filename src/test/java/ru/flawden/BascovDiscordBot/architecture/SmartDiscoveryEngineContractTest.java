@@ -14,14 +14,15 @@ class SmartDiscoveryEngineContractTest {
     private static final Path MAIN = Path.of("src/main/java/ru/flawden/BascovDiscordBot");
 
     @Test
-    void externalProviderReturnsMetadataOnlyAndPlaybackStillUsesYtsearch() throws IOException {
+    void externalProviderReturnsMetadataOnlyAndPlaybackUsesResolver() throws IOException {
         String candidate = read("recommendation/RecommendationCandidate.java");
         String player = read("lavaplayer/PlayerManager.java");
 
         assertTrue(candidate.contains("String artist"));
         assertTrue(candidate.contains("String title"));
         assertFalse(candidate.contains("AudioTrack"));
-        assertTrue(player.contains("MediaQueryResolver.YOUTUBE_SEARCH_PREFIX"));
+        assertTrue(player.contains("playbackResolver.resolve"));
+        assertTrue(player.contains("PlaybackClientCapabilities.discord()"));
         assertTrue(player.contains("discoveryEngine.recommend"));
     }
 

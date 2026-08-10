@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.25.0**.
+Текущая версия релизной ветки: **v1.26.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -109,7 +109,7 @@ GitHub-hosted delivery и резервный self-hosted режим описан
 Contextual online exploration policy описана в [`docs/CONTEXTUAL-BANDIT-EXPLORATION.md`](docs/CONTEXTUAL-BANDIT-EXPLORATION.md).
 Готовые персональные станции и их mapping описаны в [`docs/PERSONALIZED-MIXES-STATIONS.md`](docs/PERSONALIZED-MIXES-STATIONS.md), а daily-выпуски и `/mix resume` — в [`docs/DAILY-MIXES-CONTINUITY.md`](docs/DAILY-MIXES-CONTINUITY.md). Diversity/thematic generation описаны в [`docs/MIX-GENERATION-DIVERSITY.md`](docs/MIX-GENERATION-DIVERSITY.md).
 Персональный Home read-model и граница будущих клиентов описаны в [`docs/PERSONALIZED-HOME-MUSIC-HUB.md`](docs/PERSONALIZED-HOME-MUSIC-HUB.md).
-Track identity и provider-neutral catalog foundation описаны в [`docs/TRACK-IDENTITY-CATALOG.md`](docs/TRACK-IDENTITY-CATALOG.md).
+Track identity и provider-neutral catalog foundation описаны в [`docs/TRACK-IDENTITY-CATALOG.md`](docs/TRACK-IDENTITY-CATALOG.md), а client-aware playback resolver — в [`docs/PLAYBACK-SOURCE-RESOLVER.md`](docs/PLAYBACK-SOURCE-RESOLVER.md).
 Интерактивная помощь, status refresh и destructive confirmations описаны в [`docs/DISCORD-EXPERIENCE.md`](docs/DISCORD-EXPERIENCE.md).
 Интерактивный поиск и безопасный выбор трека описаны в [`docs/SEARCH-TRACK-SELECTION.md`](docs/SEARCH-TRACK-SELECTION.md).
 Постоянные плейлисты, история и replay описаны в [`docs/PLAYLISTS-HISTORY-REPLAY.md`](docs/PLAYLISTS-HISTORY-REPLAY.md), а личное избранное — в [`docs/FAVORITES-PERSONAL-LIBRARY.md`](docs/FAVORITES-PERSONAL-LIBRARY.md).
@@ -130,11 +130,19 @@ Native libDAVE runtime, platform profiles и startup fail-fast описаны в
 Релиз с Android описан в [`docs/TERMUX-RELEASE.md`](docs/TERMUX-RELEASE.md).
 
 
+## Playback Source Abstraction & Resolver (v1.26.0)
+
+`v1.26.0` вводит client-aware `PlaybackResolver` поверх provider-neutral `TrackIdentity`. Recommendation/mix слой по-прежнему выбирает логический трек, а transport identifiers (`ytsearch:`, `scsearch:`) создаются только внутри `PlaybackSourceProvider`. Для Discord policy сохраняет YouTube primary и SoundCloud secondary, но автоматический retry/health-scoring между providers намеренно отложен в следующий resilience-релиз.
+
+Новый `PlaybackClientCapabilities` позволяет одному и тому же `TrackIdentity` разрешаться по-разному для Discord, Android и Web без изменения recommendation engine. Smart Radio/Mix больше не конструирует YouTube search напрямую: он вызывает resolver и загружает его primary source. Ручные `/play` и прямые URL остаются на существующем explicit-input path.
+
+Persistence не меняется: нового provider registry/storage нет, а legacy `StoredTrack.playbackIdentifier/sourceIdentifier/provider` сохраняются для совместимости.
+
 ## Track Identity & Catalog Foundation (v1.25.0)
 
 `v1.25.0` вводит client/provider-neutral `TrackIdentity`: логическая песня определяется display + normalized artist/title и стабильным `stableKey`, а не URL, YouTube video id или SoundCloud locator. Старый `RecommendationIdentity` сохранён как совместимый facade и делегирует в новую identity-модель, поэтому novelty/feedback keys не требуют миграции.
 
-`TrackCatalogEntry` объединяет `TrackIdentity`, descriptive tags и authoritative catalog IDs (`MusicBrainz recording`, `ISRC`). `RecommendationCandidate` может нести такой catalog metadata ещё до playback, а Last.fm `mbid` теперь сохраняется именно как MusicBrainz recording id. Provider-specific playback locators намеренно остаются вне catalog слоя: их абстракция и `PlaybackResolver` запланированы на `v1.26`.
+`TrackCatalogEntry` объединяет `TrackIdentity`, descriptive tags и authoritative catalog IDs (`MusicBrainz recording`, `ISRC`). `RecommendationCandidate` может нести такой catalog metadata ещё до playback, а Last.fm `mbid` теперь сохраняется именно как MusicBrainz recording id. Provider-specific playback locators намеренно остаются вне catalog слоя: их abstraction и `PlaybackResolver` вынесены в отдельный `v1.26`.
 
 Persistence v1.25 не меняется: существующие `playbackIdentifier/sourceIdentifier` остаются transport detail старых library/session records до отдельной безопасной migration.
 

@@ -50,11 +50,11 @@ provider
 
 Это сознательная compatibility стадия. `music-library.tsv` и `music-sessions.tsv` не мигрируют в v1.25.
 
-## Что будет дальше
+## Следующий слой
 
-`v1.26` — `Playback Source Abstraction & Resolver`.
+`v1.26` реализует `Playback Source Abstraction & Resolver` поверх этой identity-модели. Актуальные детали находятся в `docs/PLAYBACK-SOURCE-RESOLVER.md`.
 
-Там ожидаемая граница будет выглядеть так:
+Граница теперь выглядит так:
 
 ```text
 TrackIdentity
@@ -66,4 +66,4 @@ PlaybackCandidate[]
 client/provider-specific transport
 ```
 
-`PlaybackResolver` не вводится раньше времени в v1.25: сначала система должна иметь стабильное provider-neutral понятие самого трека.
+Исторически v1.25 намеренно не вводил `PlaybackResolver`: сначала система получила стабильное provider-neutral понятие самого трека, а resolver появился отдельным следующим релизом.

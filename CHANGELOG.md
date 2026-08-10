@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [1.26.0] — 2026-08-10
+
+### Playback Source Abstraction & Resolver
+
+- Добавлен client-aware `PlaybackResolver`, который принимает provider-neutral `TrackIdentity` + `PlaybackClientCapabilities` и выдаёт упорядоченный список `PlaybackSourceReference`. Recommendation engine больше не обязан знать syntax конкретного playback provider.
+- Добавлены `PlaybackSourceProvider`, `YoutubePlaybackSourceProvider` и `SoundCloudPlaybackSourceProvider`. Provider-specific search identifiers (`ytsearch:`/`scsearch:`) теперь создаются только после выбора логического трека.
+- Для Discord сохранена совместимая policy: YouTube search имеет priority 100 и остаётся primary, SoundCloud search имеет priority 200 как второй допустимый transport candidate. Автоматический failover/health scoring намеренно не входит в v1.26.
+- Smart Radio/Mix transport path переведён с прямой конкатенации `MediaQueryResolver.YOUTUBE_SEARCH_PREFIX` на `playbackResolver.resolve(..., PlaybackClientCapabilities.discord())`; queue/voice/novelty/diversity semantics не меняются.
+- Ручные `/play`, `/search` и прямые YouTube/SoundCloud URL остаются на explicit-input `MediaQueryResolver`: resolver применяется там, где Baskov сам выбрал абстрактный `TrackIdentity`, а не переопределяет явный пользовательский источник.
+- Persistence не меняется: новых storage-файлов/форматов нет; legacy transport fields `StoredTrack.playbackIdentifier/sourceIdentifier/provider` остаются совместимыми до отдельной миграции.
+- Добавлены unit/architecture regressions на client capabilities, provider ordering, provider-neutral identity, Discord YouTube-primary compatibility, отсутствие transport syntax в recommendation/catalog и запрет смешивать provider health/circuit-breaker в resolver foundation.
+
 ## [1.25.0] — 2026-08-10
 
 ### Track Identity & Catalog Foundation

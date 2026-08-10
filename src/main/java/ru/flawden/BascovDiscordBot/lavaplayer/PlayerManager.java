@@ -21,6 +21,10 @@ import ru.flawden.BascovDiscordBot.config.MusicSessionProperties;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnosticSnapshot;
 import ru.flawden.BascovDiscordBot.operations.VoiceDiagnostics;
+import ru.flawden.BascovDiscordBot.playback.PlaybackClientCapabilities;
+import ru.flawden.BascovDiscordBot.playback.PlaybackResolution;
+import ru.flawden.BascovDiscordBot.playback.PlaybackResolver;
+import ru.flawden.BascovDiscordBot.playback.PlaybackSourceReference;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferences;
 import ru.flawden.BascovDiscordBot.settings.GuildPreferencesRepository;
 import ru.flawden.BascovDiscordBot.library.PlaybackHistoryRecorder;
@@ -98,6 +102,7 @@ public class PlayerManager {
     private final MusicLibraryRepository musicLibraryRepository;
     private final SmartDiscoveryEngine discoveryEngine;
     private final RecommendationFeedbackService recommendationFeedback;
+    private final PlaybackResolver playbackResolver;
     private final MusicSessionRepository sessionRepository;
     private static final Duration STATION_CONTINUITY_TTL = Duration.ofHours(36);
 
@@ -122,6 +127,7 @@ public class PlayerManager {
             MusicLibraryRepository musicLibraryRepository,
             SmartDiscoveryEngine discoveryEngine,
             RecommendationFeedbackService recommendationFeedback,
+            PlaybackResolver playbackResolver,
             MusicSessionProperties sessionProperties,
             MusicSessionRepository sessionRepository) {
         this.properties = properties;
@@ -133,6 +139,7 @@ public class PlayerManager {
         this.musicLibraryRepository = Objects.requireNonNull(musicLibraryRepository, "musicLibraryRepository");
         this.discoveryEngine = Objects.requireNonNull(discoveryEngine, "discoveryEngine");
         this.recommendationFeedback = Objects.requireNonNull(recommendationFeedback, "recommendationFeedback");
+        this.playbackResolver = Objects.requireNonNull(playbackResolver, "playbackResolver");
         this.sessionRepository = sessionRepository;
         this.audioPlayerManager = new DefaultAudioPlayerManager();
 
@@ -1538,8 +1545,15 @@ public class PlayerManager {
         RecommendationPlan safePlan = plan == null
                 ? RecommendationPlan.fallback(seed, "Recommendation plan отсутствует; локальный fallback")
                 : plan;
-        String queryText = boundedRadioQuery(safePlan.candidate().query());
-        String query = MediaQueryResolver.YOUTUBE_SEARCH_PREFIX + queryText;
+        PlaybackResolution resolution = playbackResolver.resolve(
+                safePlan.candidate().trackIdentity(),
+                PlaybackClientCapabilities.discord());
+        PlaybackSourceReference source = resolution.primary().orElse(null);
+        if (source == null) {
+            radioFailure(guild, manager, state, "PlaybackResolver не нашёл источник для Discord");
+            return;
+        }
+        String query = source.identifier();
         audioPlayerManager.loadItemOrdered("radio:" + guild.getIdLong(), query, new AudioLoadResultHandler() {
             @Override
             public void trackLoaded(AudioTrack track) {
@@ -1553,7 +1567,8 @@ public class PlayerManager {
 
             @Override
             public void noMatches() {
-                radioFailure(guild, manager, state, "ytsearch не вернул кандидатов для recommendation");
+                radioFailure(guild, manager, state,
+                        "Playback source " + source.provider().label() + " не вернул кандидатов для recommendation");
             }
 
             @Override
@@ -1675,11 +1690,6 @@ public class PlayerManager {
                         state.themeFocus(),
                         state.recentMixArtists(),
                         state.recentTagSets()));
-    }
-
-    private static String boundedRadioQuery(String query) {
-        String safe = query == null ? "" : query.trim().replaceAll("\\s+", " ");
-        return safe.length() <= 100 ? safe : safe.substring(0, 100).trim();
     }
 
     private static String trackIdentity(AudioTrack track) {
