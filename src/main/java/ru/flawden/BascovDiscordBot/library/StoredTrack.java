@@ -2,6 +2,8 @@ package ru.flawden.BascovDiscordBot.library;
 
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;
+import ru.flawden.BascovDiscordBot.catalog.TrackCatalogEntry;
+import ru.flawden.BascovDiscordBot.catalog.TrackIdentity;
 import ru.flawden.BascovDiscordBot.commands.music.MediaProvider;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
@@ -53,6 +55,14 @@ public record StoredTrack(
         if (capturedAtEpochMillis <= 0L) {
             throw new IllegalArgumentException("capturedAtEpochMillis must be positive");
         }
+    }
+
+    public TrackIdentity trackIdentity() {
+        return TrackIdentity.of(author, title);
+    }
+
+    public TrackCatalogEntry catalogEntry() {
+        return TrackCatalogEntry.of(trackIdentity());
     }
 
     public static Optional<StoredTrack> from(TrackRequest request) {

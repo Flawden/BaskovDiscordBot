@@ -19,7 +19,7 @@ class LastFmRecommendationProviderTest {
         try {
             String json = """
                     {"similartracks":{"track":[
-                      {"name":"Fresh Song","match":"0.873","artist":{"name":"Fresh Artist"}},
+                      {"name":"Fresh Song","match":"0.873","mbid":"550E8400-E29B-41D4-A716-446655440000","artist":{"name":"Fresh Artist"}},
                       {"name":"Second Song","match":"0.600","artist":{"name":"Second Artist"}}
                     ]}}
                     """;
@@ -29,6 +29,9 @@ class LastFmRecommendationProviderTest {
             assertEquals("Fresh Artist", candidates.get(0).artist());
             assertEquals("Fresh Song", candidates.get(0).title());
             assertEquals(0.873d, candidates.get(0).similarity(), 0.0001d);
+            assertEquals(1, candidates.get(0).externalIds().size());
+            assertTrue(candidates.get(0).externalIds().stream()
+                    .anyMatch(id -> id.value().equals("550e8400-e29b-41d4-a716-446655440000")));
         } finally {
             provider.close();
         }

@@ -1,6 +1,7 @@
 package ru.flawden.BascovDiscordBot.recommendation;
 
 import org.junit.jupiter.api.Test;
+import ru.flawden.BascovDiscordBot.catalog.TrackExternalId;
 import ru.flawden.BascovDiscordBot.commands.music.MediaProvider;
 import ru.flawden.BascovDiscordBot.config.DiscoveryProperties;
 import ru.flawden.BascovDiscordBot.library.StoredTrack;
@@ -85,6 +86,29 @@ class SmartDiscoveryEngineTest {
                     List.of(candidate));
             assertTrue(plan.candidate().reason().contains("collaborative"));
             assertTrue(plan.candidate().reason().contains("ListenBrainz"));
+        } finally {
+            provider.close();
+        }
+    }
+
+    @Test
+    void selectionPreservesCatalogExternalIdsAcrossReasonRebuild() {
+        DiscoveryProperties properties = new DiscoveryProperties();
+        LastFmRecommendationProvider provider = new LastFmRecommendationProvider(properties);
+        try {
+            SmartDiscoveryEngine engine = new SmartDiscoveryEngine(provider, properties);
+            RecommendationCandidate candidate = new RecommendationCandidate(
+                    "Fresh", "Song", 0.82, "Last.fm", "provider reason")
+                    .withExternalId(TrackExternalId.musicBrainzRecording(
+                            "550e8400-e29b-41d4-a716-446655440000"));
+
+            RecommendationPlan plan = engine.select(
+                    track("Seed", "Artist"),
+                    RadioStrategy.DISCOVERY,
+                    RecommendationContext.empty(),
+                    List.of(candidate));
+
+            assertEquals(candidate.externalIds(), plan.candidate().externalIds());
         } finally {
             provider.close();
         }

@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.24.0**.
+Текущая версия релизной ветки: **v1.25.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -109,6 +109,7 @@ GitHub-hosted delivery и резервный self-hosted режим описан
 Contextual online exploration policy описана в [`docs/CONTEXTUAL-BANDIT-EXPLORATION.md`](docs/CONTEXTUAL-BANDIT-EXPLORATION.md).
 Готовые персональные станции и их mapping описаны в [`docs/PERSONALIZED-MIXES-STATIONS.md`](docs/PERSONALIZED-MIXES-STATIONS.md), а daily-выпуски и `/mix resume` — в [`docs/DAILY-MIXES-CONTINUITY.md`](docs/DAILY-MIXES-CONTINUITY.md). Diversity/thematic generation описаны в [`docs/MIX-GENERATION-DIVERSITY.md`](docs/MIX-GENERATION-DIVERSITY.md).
 Персональный Home read-model и граница будущих клиентов описаны в [`docs/PERSONALIZED-HOME-MUSIC-HUB.md`](docs/PERSONALIZED-HOME-MUSIC-HUB.md).
+Track identity и provider-neutral catalog foundation описаны в [`docs/TRACK-IDENTITY-CATALOG.md`](docs/TRACK-IDENTITY-CATALOG.md).
 Интерактивная помощь, status refresh и destructive confirmations описаны в [`docs/DISCORD-EXPERIENCE.md`](docs/DISCORD-EXPERIENCE.md).
 Интерактивный поиск и безопасный выбор трека описаны в [`docs/SEARCH-TRACK-SELECTION.md`](docs/SEARCH-TRACK-SELECTION.md).
 Постоянные плейлисты, история и replay описаны в [`docs/PLAYLISTS-HISTORY-REPLAY.md`](docs/PLAYLISTS-HISTORY-REPLAY.md), а личное избранное — в [`docs/FAVORITES-PERSONAL-LIBRARY.md`](docs/FAVORITES-PERSONAL-LIBRARY.md).
@@ -128,6 +129,14 @@ DAVE voice migration и переход JDA 5 → 6 описаны в [`docs/DAVE
 Native libDAVE runtime, platform profiles и startup fail-fast описаны в [`docs/NATIVE-DAVE.md`](docs/NATIVE-DAVE.md).
 Релиз с Android описан в [`docs/TERMUX-RELEASE.md`](docs/TERMUX-RELEASE.md).
 
+
+## Track Identity & Catalog Foundation (v1.25.0)
+
+`v1.25.0` вводит client/provider-neutral `TrackIdentity`: логическая песня определяется display + normalized artist/title и стабильным `stableKey`, а не URL, YouTube video id или SoundCloud locator. Старый `RecommendationIdentity` сохранён как совместимый facade и делегирует в новую identity-модель, поэтому novelty/feedback keys не требуют миграции.
+
+`TrackCatalogEntry` объединяет `TrackIdentity`, descriptive tags и authoritative catalog IDs (`MusicBrainz recording`, `ISRC`). `RecommendationCandidate` может нести такой catalog metadata ещё до playback, а Last.fm `mbid` теперь сохраняется именно как MusicBrainz recording id. Provider-specific playback locators намеренно остаются вне catalog слоя: их абстракция и `PlaybackResolver` запланированы на `v1.26`.
+
+Persistence v1.25 не меняется: существующие `playbackIdentifier/sourceIdentifier` остаются transport detail старых library/session records до отдельной безопасной migration.
 
 ## Personalized Home / Music Hub (v1.24.0)
 

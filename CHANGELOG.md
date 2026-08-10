@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [1.25.0] — 2026-08-10
+
+### Track Identity & Catalog Foundation
+
+- Добавлен provider/client-neutral `TrackIdentity`: display artist/title хранятся отдельно от нормализованных значений, а `stableKey` повторяет прежнюю semantics novelty/feedback (`normalizedArtist::normalizedTitle`) и не содержит URL, provider или playback id.
+- `RecommendationIdentity` оставлен как deprecated совместимый facade и делегирует в `TrackIdentity`; существующие feedback/novelty keys остаются совместимыми без миграции `recommendation-feedback.tsv`.
+- Добавлены `TrackExternalId` (`MUSICBRAINZ_RECORDING`, `ISRC`) и `TrackCatalogEntry` для объединения логической identity, descriptive tags и authoritative catalog metadata. YouTube/SoundCloud намеренно не являются catalog namespace.
+- `StoredTrack` и `RecommendationCandidate` теперь экспортируют `trackIdentity()`/`catalogEntry()`. В persisted library/session records поля `playbackIdentifier` и `sourceIdentifier` пока остаются неизменённым transport detail; нового storage format нет.
+- Last.fm similar-track parser сохраняет `mbid` как `MusicBrainz recording` external id и переносит его через tag enrichment; recommendation candidate по-прежнему не содержит playback locator и получает playback только после существующего transport search.
+- Recommendation feedback write-path переведён на canonical `TrackIdentity.stableKey()` без изменения записываемого ключа. User-Agent внешних recommendation/collaborative запросов обновлён до `v1.25.0 track-catalog`.
+- Добавлены unit/architecture regressions на provider-independent identity, legacy-key compatibility, catalog-id normalization/merge, Last.fm MBID propagation, отсутствие YouTube/SoundCloud в catalog namespace и запрет преждевременно вводить `PlaybackResolver`/новый persistence в v1.25.
+
 ## [1.24.0] — 2026-08-10
 
 ### Personalized Home / Music Hub

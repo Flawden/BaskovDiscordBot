@@ -6,6 +6,7 @@ import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import ru.flawden.BascovDiscordBot.catalog.TrackExternalId;
 import ru.flawden.BascovDiscordBot.config.DiscoveryProperties;
 import ru.flawden.BascovDiscordBot.library.StoredTrack;
 
@@ -108,7 +109,7 @@ public class LastFmRecommendationProvider implements RecommendationProvider {
         HttpRequest request = HttpRequest.newBuilder(uri)
                 .timeout(properties.getRequestTimeout())
                 .header("Accept", "application/json")
-                .header("User-Agent", "BaskovDiscordBot/1.24.0 personalized-home")
+                .header("User-Agent", "BaskovDiscordBot/1.25.0 track-catalog")
                 .GET()
                 .build();
         try {
@@ -174,13 +175,18 @@ public class LastFmRecommendationProvider implements RecommendationProvider {
             double similarity = parseMatch(node.path("match").asText("0"));
             String reason = "Last.fm similarity " + Math.round(similarity * 100.0d) + "% к seed `"
                     + artistSafe(artist) + " — " + titleSafe(title) + "`";
-            candidates.add(new RecommendationCandidate(
+            RecommendationCandidate candidate = new RecommendationCandidate(
                     artist,
                     title,
                     similarity,
                     name(),
                     reason,
-                    cachedTags(artist, title)));
+                    cachedTags(artist, title));
+            String recordingMbid = node.path("mbid").asText("").trim();
+            if (!recordingMbid.isBlank()) {
+                candidate = candidate.withExternalId(TrackExternalId.musicBrainzRecording(recordingMbid));
+            }
+            candidates.add(candidate);
         }
         return List.copyOf(candidates);
     }
@@ -240,7 +246,7 @@ public class LastFmRecommendationProvider implements RecommendationProvider {
             HttpRequest request = HttpRequest.newBuilder(uri)
                     .timeout(properties.getRequestTimeout())
                     .header("Accept", "application/json")
-                    .header("User-Agent", "BaskovDiscordBot/1.24.0 personalized-home")
+                    .header("User-Agent", "BaskovDiscordBot/1.25.0 track-catalog")
                     .GET()
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());

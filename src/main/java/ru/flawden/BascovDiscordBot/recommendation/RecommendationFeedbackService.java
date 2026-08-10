@@ -3,6 +3,7 @@ package ru.flawden.BascovDiscordBot.recommendation;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import ru.flawden.BascovDiscordBot.catalog.TrackIdentity;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlaybackFeedbackEvent;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 import ru.flawden.BascovDiscordBot.library.StoredTrack;
@@ -39,7 +40,7 @@ public class RecommendationFeedbackService {
         if (guildId <= 0L || userId <= 0L || seed == null || selected == null || selected.getInfo() == null) {
             return;
         }
-        String trackIdentity = RecommendationIdentity.of(selected.getInfo().author, selected.getInfo().title);
+        String trackIdentity = TrackIdentity.of(selected.getInfo().author, selected.getInfo().title).stableKey();
         safely("record-recommendation", () -> repository.recordRecommendation(
                 FileRecommendationFeedbackRepository.pending(
                         guildId,
@@ -166,7 +167,7 @@ public class RecommendationFeedbackService {
         safely("user-signal:" + outcome.name(), () -> repository.recordUserOutcome(
                 guildId,
                 userId,
-                RecommendationIdentity.of(track),
+                track.trackIdentity().stableKey(),
                 outcome,
                 1.0d));
     }
@@ -203,9 +204,9 @@ public class RecommendationFeedbackService {
         if (request == null || request.track() == null || request.track().getInfo() == null) {
             return "unknown";
         }
-        return RecommendationIdentity.of(
+        return TrackIdentity.of(
                 request.track().getInfo().author,
-                request.track().getInfo().title);
+                request.track().getInfo().title).stableKey();
     }
 
     public record FeedbackSummary(

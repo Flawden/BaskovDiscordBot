@@ -122,7 +122,8 @@ public class SmartDiscoveryEngine {
                             candidate.similarity(),
                             candidate.source(),
                             reason,
-                            candidate.tags()), true, false);
+                            candidate.tags(),
+                            candidate.externalIds()), true, false);
                 })
                 .orElseGet(() -> RecommendationPlan.fallback(
                         seed,

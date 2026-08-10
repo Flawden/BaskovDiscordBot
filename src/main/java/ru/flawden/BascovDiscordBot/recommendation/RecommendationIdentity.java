@@ -1,40 +1,29 @@
 package ru.flawden.BascovDiscordBot.recommendation;
 
+import ru.flawden.BascovDiscordBot.catalog.TrackIdentity;
 import ru.flawden.BascovDiscordBot.library.StoredTrack;
 
-import java.text.Normalizer;
-import java.util.Locale;
-
 /**
- * Provider-independent identity для novelty filtering.
+ * Backward-compatible facade for the pre-catalog recommendation identity API.
+ *
+ * <p>New code should use {@link TrackIdentity}. Keeping this facade preserves
+ * persisted feedback/novelty keys and avoids a format migration in v1.25.</p>
  */
+@Deprecated(forRemoval = false)
 public final class RecommendationIdentity {
 
     private RecommendationIdentity() {
     }
 
     public static String of(StoredTrack track) {
-        return track == null ? "unknown" : of(track.author(), track.title());
+        return track == null ? "unknown" : track.trackIdentity().stableKey();
     }
 
     public static String of(String artist, String title) {
-        return normalize(artist) + "::" + normalize(title);
+        return TrackIdentity.of(artist, title).stableKey();
     }
 
     public static String normalizeArtist(String artist) {
-        return normalize(artist);
-    }
-
-    private static String normalize(String value) {
-        if (value == null || value.isBlank()) {
-            return "unknown";
-        }
-        String ascii = Normalizer.normalize(value, Normalizer.Form.NFKD)
-                .replaceAll("\\p{M}+", "")
-                .toLowerCase(Locale.ROOT)
-                .replaceAll("[^\\p{L}\\p{N}]+", " ")
-                .trim()
-                .replaceAll("\\s+", " ");
-        return ascii.isBlank() ? "unknown" : ascii;
+        return TrackIdentity.normalizeArtist(artist);
     }
 }

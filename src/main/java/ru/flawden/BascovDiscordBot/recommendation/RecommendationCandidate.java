@@ -1,11 +1,15 @@
 package ru.flawden.BascovDiscordBot.recommendation;
 
+import ru.flawden.BascovDiscordBot.catalog.TrackCatalogEntry;
+import ru.flawden.BascovDiscordBot.catalog.TrackExternalId;
+import ru.flawden.BascovDiscordBot.catalog.TrackIdentity;
+
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Set;
 
 /**
- * Provider-neutral кандидат. Playback identifier появляется только после ytsearch.
+ * Provider-neutral candidate. Playback identifier appears only after transport resolution/search.
  */
 public record RecommendationCandidate(
         String artist,
@@ -13,10 +17,21 @@ public record RecommendationCandidate(
         double similarity,
         String source,
         String reason,
-        Set<String> tags) {
+        Set<String> tags,
+        Set<TrackExternalId> externalIds) {
 
     public RecommendationCandidate(String artist, String title, double similarity, String source, String reason) {
-        this(artist, title, similarity, source, reason, Set.of());
+        this(artist, title, similarity, source, reason, Set.of(), Set.of());
+    }
+
+    public RecommendationCandidate(
+            String artist,
+            String title,
+            double similarity,
+            String source,
+            String reason,
+            Set<String> tags) {
+        this(artist, title, similarity, source, reason, tags, Set.of());
     }
 
     public RecommendationCandidate {
@@ -26,18 +41,36 @@ public record RecommendationCandidate(
         source = sanitize(source, "local");
         reason = sanitize(reason, "Локальное продолжение");
         tags = normalizeTags(tags);
+        externalIds = externalIds == null ? Set.of() : Set.copyOf(externalIds);
     }
 
     public String query() {
         return "Неизвестно".equalsIgnoreCase(artist) ? title : artist + " " + title;
     }
 
+    public TrackIdentity trackIdentity() {
+        return TrackIdentity.of(artist, title);
+    }
+
     public String identity() {
-        return RecommendationIdentity.of(artist, title);
+        return trackIdentity().stableKey();
+    }
+
+    public TrackCatalogEntry catalogEntry() {
+        return new TrackCatalogEntry(trackIdentity(), externalIds, tags);
     }
 
     public RecommendationCandidate withTags(Set<String> newTags) {
-        return new RecommendationCandidate(artist, title, similarity, source, reason, newTags);
+        return new RecommendationCandidate(artist, title, similarity, source, reason, newTags, externalIds);
+    }
+
+    public RecommendationCandidate withExternalId(TrackExternalId externalId) {
+        if (externalId == null || externalIds.contains(externalId)) {
+            return this;
+        }
+        LinkedHashSet<TrackExternalId> merged = new LinkedHashSet<>(externalIds);
+        merged.add(externalId);
+        return new RecommendationCandidate(artist, title, similarity, source, reason, tags, merged);
     }
 
     private static Set<String> normalizeTags(Set<String> input) {
