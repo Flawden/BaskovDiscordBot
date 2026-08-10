@@ -222,7 +222,13 @@ public class SystemDoctor {
                 .findFirst()
                 .orElse(null);
         boolean recentSourceFailure = recentEvent(voice.lastSourceError(), now, RECENT_FAILURE_WINDOW);
-        if (recentSourceFailure || degraded != null) {
+        if (recentSourceFailure) {
+            return check("source", Severity.WARN,
+                    "Media source недавно деградировал",
+                    providerHealthDetails(safeHealth) + ", lastVoiceSource=" + safe(voice.lastSourceError()),
+                    "Повтори запрос; fallback остаётся автоматическим. Если WARN сохраняется, проверь /doctor source после provider probe.");
+        }
+        if (degraded != null) {
             return check("source", Severity.WARN,
                     "Media source недавно деградировал",
                     providerHealthDetails(safeHealth) + ", lastVoiceSource=" + safe(voice.lastSourceError()),
