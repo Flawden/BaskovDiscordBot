@@ -39,7 +39,7 @@ public class LastFmRecommendationProvider implements RecommendationProvider {
     private final ObjectMapper objectMapper;
     private final ExecutorService executor;
     private static final long TAG_CACHE_TTL_MILLIS = 24L * 60L * 60L * 1000L;
-    private static final int TAG_ENRICH_LIMIT = 3;
+    private static final int TAG_ENRICH_LIMIT = 5;
     private static final int TAG_LIMIT = 5;
 
     private final HttpClient httpClient;
@@ -108,7 +108,7 @@ public class LastFmRecommendationProvider implements RecommendationProvider {
         HttpRequest request = HttpRequest.newBuilder(uri)
                 .timeout(properties.getRequestTimeout())
                 .header("Accept", "application/json")
-                .header("User-Agent", "BaskovDiscordBot/1.19.0 adaptive-session")
+                .header("User-Agent", "BaskovDiscordBot/1.23.0 mix-diversity")
                 .GET()
                 .build();
         try {
@@ -240,7 +240,7 @@ public class LastFmRecommendationProvider implements RecommendationProvider {
             HttpRequest request = HttpRequest.newBuilder(uri)
                     .timeout(properties.getRequestTimeout())
                     .header("Accept", "application/json")
-                    .header("User-Agent", "BaskovDiscordBot/1.19.0 adaptive-session")
+                    .header("User-Agent", "BaskovDiscordBot/1.23.0 mix-diversity")
                     .GET()
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());

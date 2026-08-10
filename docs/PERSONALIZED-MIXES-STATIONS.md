@@ -6,10 +6,12 @@
 
 ```text
 /mix list
+/mix themes
 /mix start station:my-mix
 /mix start station:discoveries
 /mix start station:familiar
 /mix start station:mood
+/mix start station:theme theme:<tag>
 /mix status
 /mix stop
 ```
@@ -22,12 +24,13 @@
 | Открытия | personal | discovery | favorites + personal history; hard novelty |
 | Знакомое | personal | familiar | favorites + personal history |
 | Настроение сейчас | personal | similar | до 12 самых свежих personal-history seed |
+| Тематический микс | personal | similar | favorites + history + bounded tag focus |
 
 `Настроение сейчас` не хранит отдельный mood-profile. После старта уже существующий `AdaptiveSessionModel` строит ephemeral taste только по feedback текущего запуска. Если свежей personal history нет, station использует обычный bounded personal seed pool.
 
 ## Architecture boundary
 
-`PersonalizedStation` содержит только metadata preset: slug, label, description, `RadioStrategy` и bounded seed hint. Он не знает о `AudioTrack`, LavaPlayer, JDA voice, queue или HTTP providers.
+`PersonalizedStation` содержит только metadata preset: slug, label, description, `RadioStrategy` и bounded seed/diversity hints. Он не знает о `AudioTrack`, LavaPlayer, JDA voice, queue или HTTP providers.
 
 `PlayerManager.startStation(...)` делегирует в тот же `startRadioInternal(...)`, что и manual `/radio start`. Поэтому сохраняются:
 
@@ -58,3 +61,6 @@ recommendation-feedback.tsv (V2)
 ```
 
 Active mix выключается после restart/redeploy вместе с остальным ephemeral radio-state. Long-term feedback, personal ranking, 64D taste-vector и contextual bandit затем восстанавливаются из прежних durable данных.
+
+
+С v1.23.0 curated stations (кроме `familiar`) используют [`MIX-GENERATION-DIVERSITY.md`](MIX-GENERATION-DIVERSITY.md): artist spacing, tag saturation penalties и dynamic theme focus остаются ниже hard novelty и не создают новый playback path.

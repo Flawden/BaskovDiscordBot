@@ -70,18 +70,27 @@ public final class ModernCommandCatalog {
                 Commands.slash("mix", "Готовые персональные станции поверх обучаемого radio")
                         .addSubcommands(
                                 new SubcommandData("list", "Показывает доступные персональные станции"),
+                                new SubcommandData("themes", "Показывает твои положительные музыкальные темы"),
                                 new SubcommandData("start", "Запускает готовую персональную станцию")
-                                        .addOptions(new OptionData(
-                                                OptionType.STRING,
-                                                "station",
-                                                "Какой микс включить",
-                                                true)
-                                                .addChoice("Мой микс", "my-mix")
-                                                .addChoice("Микс дня", "daily-mix")
-                                                .addChoice("Открытия", "discoveries")
-                                                .addChoice("Открытия дня", "daily-discoveries")
-                                                .addChoice("Знакомое", "familiar")
-                                                .addChoice("Настроение сейчас", "mood")),
+                                        .addOptions(
+                                                new OptionData(
+                                                        OptionType.STRING,
+                                                        "station",
+                                                        "Какой микс включить",
+                                                        true)
+                                                        .addChoice("Мой микс", "my-mix")
+                                                        .addChoice("Микс дня", "daily-mix")
+                                                        .addChoice("Открытия", "discoveries")
+                                                        .addChoice("Открытия дня", "daily-discoveries")
+                                                        .addChoice("Знакомое", "familiar")
+                                                        .addChoice("Настроение сейчас", "mood")
+                                                        .addChoice("Тематический микс", "theme"),
+                                                new OptionData(
+                                                        OptionType.STRING,
+                                                        "theme",
+                                                        "Тег для тематического микса; например pop punk",
+                                                        false)
+                                                        .setAutoComplete(true)),
                                 new SubcommandData("resume", "Продолжает последнюю персональную станцию с её seed-прогрессом"),
                                 new SubcommandData("status", "Показывает активную станцию и continuity"),
                                 new SubcommandData("stop", "Выключает персональную станцию; текущий трек продолжает играть")),

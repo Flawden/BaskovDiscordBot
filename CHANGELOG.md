@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [1.23.0] — 2026-08-10
+
+### Mix Generation & Diversity Control
+
+- Добавлен bounded `MixDiversityProfile` + `MixDiversityPolicy` для curated `/mix`-станций. Ранжирование теперь учитывает ordered artist window и recent tag sets, а не только прежний set-based artist cooldown.
+- Для diversity-controlled station запрещён непосредственный повтор того же исполнителя; дополнительные bounded penalties применяются при частом появлении артиста и насыщении последних mix-треков одним тегом. Финальный `ytsearch:` transport boundary повторно проверяет immediate artist repeat, чтобы provider metadata и фактически выбранный YouTube result не расходились по safety-политике.
+- Добавлен `MixSeedDiversityPlanner`: personal seed pool стабильно раскладывается round-robin по исполнителям перед refill, не удаляя треки. `Знакомое` намеренно остаётся без жёсткого diversity-control, чтобы маленькая favorite/history библиотека одного артиста продолжала воспроизводиться.
+- Добавлена динамическая станция `Тематический микс` (`station:theme`) и `/mix themes`. Положительные темы строятся из уже существующего `PersonalTasteProfile.tagAffinity`; параметр `theme` можно передать вручную или выбрать через autocomplete. При отсутствии явного `theme` используется strongest positive tag пользователя.
+- Theme focus — только bounded ranking signal: совпадающий tag получает бонус, известный track в `discovery` всё равно hard-reject-ится раньше theme/diversity scoring. Last.fm tag enrichment расширен с top-3 до top-5 candidates, чтобы thematic rerank имел больше metadata без неограниченного fan-out.
+- Continuity теперь переносит theme focus, ordered recent mix artists и recent tag windows, поэтому `/mix resume` продолжает не только seed cursor, но и diversity-context. Всё состояние остаётся process-local; новых persistence-файлов, secrets, env vars или feedback migration нет.
+- `/radio why` показывает material `mix diversity ±N%` и `theme <tag> M% match`, а `/mix status` показывает активную тему. Добавлены unit/architecture regressions на artist spacing, tag saturation, theme near-tie rerank, hard-novelty precedence, dynamic themes и запрет diversity layer владеть playback transport.
+
 ## [1.22.0] — 2026-08-10
 
 ### Daily Mixes & Station Continuity

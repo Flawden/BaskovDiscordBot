@@ -54,7 +54,7 @@ class PersonalRankingModelContractTest {
         String provider = read("recommendation/LastFmRecommendationProvider.java");
         String player = read("lavaplayer/PlayerManager.java");
 
-        assertTrue(provider.contains("TAG_ENRICH_LIMIT = 3"));
+        assertTrue(provider.contains("TAG_ENRICH_LIMIT = 5"));
         assertTrue(provider.contains("track.gettoptags"));
         assertTrue(provider.contains("metadataExecutor"));
         assertTrue(player.contains("MediaQueryResolver.YOUTUBE_SEARCH_PREFIX"));

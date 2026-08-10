@@ -7,10 +7,12 @@ import java.util.List;
  * Product-level presets over the lower-level smart-radio controls.
  *
  * <p>The station never bypasses playback, queue, voice or novelty policy. It only
- * selects a radio strategy and a bounded seed policy.</p>
+ * selects a radio strategy plus bounded seed/diversity policies.</p>
  */
 public enum PersonalizedStation {
-    CUSTOM("custom", "Ручное радио", "Ручная конфигурация /radio", RadioStrategy.SIMILAR, false, false, false),
+    CUSTOM(
+            "custom", "Ручное радио", "Ручная конфигурация /radio",
+            RadioStrategy.SIMILAR, false, false, false, false, false),
     MY_MIX(
             "my-mix",
             "Мой микс",
@@ -18,7 +20,9 @@ public enum PersonalizedStation {
             RadioStrategy.SIMILAR,
             false,
             false,
-            true),
+            true,
+            true,
+            false),
     DAILY_MIX(
             "daily-mix",
             "Микс дня",
@@ -26,7 +30,9 @@ public enum PersonalizedStation {
             RadioStrategy.SIMILAR,
             false,
             true,
-            true),
+            true,
+            true,
+            false),
     DISCOVERIES(
             "discoveries",
             "Открытия",
@@ -34,7 +40,9 @@ public enum PersonalizedStation {
             RadioStrategy.DISCOVERY,
             false,
             false,
-            true),
+            true,
+            true,
+            false),
     DAILY_DISCOVERIES(
             "daily-discoveries",
             "Открытия дня",
@@ -42,7 +50,9 @@ public enum PersonalizedStation {
             RadioStrategy.DISCOVERY,
             false,
             true,
-            true),
+            true,
+            true,
+            false),
     FAMILIAR(
             "familiar",
             "Знакомое",
@@ -50,7 +60,9 @@ public enum PersonalizedStation {
             RadioStrategy.FAMILIAR,
             false,
             false,
-            true),
+            true,
+            false,
+            false),
     MOOD(
             "mood",
             "Настроение сейчас",
@@ -58,6 +70,18 @@ public enum PersonalizedStation {
             RadioStrategy.SIMILAR,
             true,
             false,
+            true,
+            true,
+            false),
+    THEME(
+            "theme",
+            "Тематический микс",
+            "Фокусируется на выбранном положительном теге вкуса, сохраняя artist/tag diversity и все safety-фильтры.",
+            RadioStrategy.SIMILAR,
+            false,
+            false,
+            true,
+            true,
             true);
 
     private final String slug;
@@ -67,6 +91,8 @@ public enum PersonalizedStation {
     private final boolean recentSeedsOnly;
     private final boolean dailySeeded;
     private final boolean curated;
+    private final boolean diversityControlled;
+    private final boolean themeRequired;
 
     PersonalizedStation(
             String slug,
@@ -75,7 +101,9 @@ public enum PersonalizedStation {
             RadioStrategy strategy,
             boolean recentSeedsOnly,
             boolean dailySeeded,
-            boolean curated) {
+            boolean curated,
+            boolean diversityControlled,
+            boolean themeRequired) {
         this.slug = slug;
         this.label = label;
         this.description = description;
@@ -83,6 +111,8 @@ public enum PersonalizedStation {
         this.recentSeedsOnly = recentSeedsOnly;
         this.dailySeeded = dailySeeded;
         this.curated = curated;
+        this.diversityControlled = diversityControlled;
+        this.themeRequired = themeRequired;
     }
 
     public String slug() {
@@ -111,6 +141,14 @@ public enum PersonalizedStation {
 
     public boolean curated() {
         return curated;
+    }
+
+    public boolean diversityControlled() {
+        return diversityControlled;
+    }
+
+    public boolean themeRequired() {
+        return themeRequired;
     }
 
     public static PersonalizedStation fromSlug(String value) {

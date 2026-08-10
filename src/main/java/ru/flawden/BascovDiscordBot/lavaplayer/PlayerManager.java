@@ -30,6 +30,8 @@ import ru.flawden.BascovDiscordBot.library.StoredTrack;
 import ru.flawden.BascovDiscordBot.recommendation.RadioStrategy;
 import ru.flawden.BascovDiscordBot.recommendation.PersonalizedStation;
 import ru.flawden.BascovDiscordBot.recommendation.DailyMixSeedPlanner;
+import ru.flawden.BascovDiscordBot.recommendation.MixDiversityProfile;
+import ru.flawden.BascovDiscordBot.recommendation.MixSeedDiversityPlanner;
 import ru.flawden.BascovDiscordBot.recommendation.StationContinuationSnapshot;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationContext;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationIdentity;
@@ -244,6 +246,7 @@ public class PlayerManager {
                 owner,
                 PersonalizedStation.CUSTOM,
                 LocalDate.now(ZoneId.systemDefault()),
+                "",
                 null);
     }
 
@@ -251,10 +254,21 @@ public class PlayerManager {
             Guild guild,
             PersonalizedStation station,
             TrackRequester owner) {
+        return startStation(guild, station, owner, "");
+    }
+
+    public RadioStartResult startStation(
+            Guild guild,
+            PersonalizedStation station,
+            TrackRequester owner,
+            String themeFocus) {
         PersonalizedStation selected = station == null ? PersonalizedStation.MY_MIX : station;
         if (!selected.curated()) {
             selected = PersonalizedStation.MY_MIX;
         }
+        String selectedTheme = selected.themeRequired()
+                ? MixDiversityProfile.normalizeTheme(themeFocus)
+                : "";
         return startRadioInternal(
                 guild,
                 RadioMode.PERSONAL,
@@ -262,6 +276,7 @@ public class PlayerManager {
                 owner,
                 selected,
                 LocalDate.now(ZoneId.systemDefault()),
+                selectedTheme,
                 null);
     }
 
@@ -281,6 +296,7 @@ public class PlayerManager {
                 requester,
                 continuation.station(),
                 continuation.seedDate(),
+                continuation.themeFocus(),
                 continuation);
         if (result.status() != RadioStartResult.Status.NO_SEEDS) {
             stationContinuations.remove(key, continuation);
@@ -301,6 +317,14 @@ public class PlayerManager {
         return Optional.of(state.seedDate());
     }
 
+    public Optional<String> activeStationTheme(long guildId) {
+        RadioState state = radioStates.get(guildId);
+        if (state == null || state.themeFocus().isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(state.themeFocus());
+    }
+
     public Optional<StationContinuationSnapshot> stationContinuation(long guildId, long userId) {
         return resumableContinuation(new StationOwnerKey(guildId, userId))
                 .map(StationContinuation::snapshot);
@@ -313,6 +337,7 @@ public class PlayerManager {
             TrackRequester owner,
             PersonalizedStation station,
             LocalDate seedDate,
+            String themeFocus,
             StationContinuation continuation) {
         Objects.requireNonNull(guild, "guild");
         Objects.requireNonNull(mode, "mode");
@@ -333,9 +358,13 @@ public class PlayerManager {
         }
 
         long guildId = guild.getIdLong();
+        String selectedTheme = selectedStation.themeRequired()
+                ? MixDiversityProfile.normalizeTheme(themeFocus)
+                : "";
         RadioState nextState = continuation == null
-                ? new RadioState(mode, recommendationStrategy, requester, selectedStation, selectedSeedDate)
-                : new RadioState(mode, recommendationStrategy, requester, selectedStation, selectedSeedDate, continuation);
+                ? new RadioState(mode, recommendationStrategy, requester, selectedStation, selectedSeedDate, selectedTheme)
+                : new RadioState(mode, recommendationStrategy, requester, selectedStation, selectedSeedDate,
+                        continuation.themeFocus(), continuation);
         RadioState previous = radioStates.put(guildId, nextState);
         rememberStationContinuation(guildId, previous);
         GuildMusicManager manager = getMusicManager(guild);
@@ -1564,6 +1593,7 @@ public class PlayerManager {
                 .filter(this::isPlayableCandidate)
                 .filter(track -> !excludedKeys.contains(trackKey(track).toLowerCase(Locale.ROOT)))
                 .filter(track -> !excludedIdentities.contains(trackIdentity(track)))
+                .filter(track -> !state.blocksArtistForMix(trackArtistIdentity(track)))
                 .filter(track -> state.strategy() != RadioStrategy.DISCOVERY
                         || !context.recentArtists().contains(trackArtistIdentity(track)))
                 .findFirst()
@@ -1590,6 +1620,7 @@ public class PlayerManager {
                 trackKey(selected),
                 trackIdentity(selected),
                 trackArtistIdentity(selected),
+                plan == null ? java.util.Set.of() : plan.candidate().tags(),
                 provider,
                 reason);
         recommendationFeedback.recordRecommendation(
@@ -1638,7 +1669,12 @@ public class PlayerManager {
                 tasteProfile,
                 ru.flawden.BascovDiscordBot.recommendation.CollaborativeArtistSignals.empty(),
                 sessionTaste,
-                banditProfile);
+                banditProfile,
+                new MixDiversityProfile(
+                        state.station().diversityControlled(),
+                        state.themeFocus(),
+                        state.recentMixArtists(),
+                        state.recentTagSets()));
     }
 
     private static String boundedRadioQuery(String query) {
@@ -1705,13 +1741,16 @@ public class PlayerManager {
                 baseSeeds = PersonalListeningInsights.discoverySeeds(favorites, personalHistory, 20);
             }
             if (selected.dailySeeded()) {
-                return DailyMixSeedPlanner.plan(
+                baseSeeds = DailyMixSeedPlanner.plan(
                         baseSeeds,
                         guildId,
                         userId,
                         selected,
                         seedDate == null ? LocalDate.now(ZoneId.systemDefault()) : seedDate,
                         DailyMixSeedPlanner.DEFAULT_LIMIT);
+            }
+            if (selected.diversityControlled()) {
+                baseSeeds = MixSeedDiversityPlanner.spreadArtists(baseSeeds);
             }
             return baseSeeds;
         }
@@ -1979,11 +2018,14 @@ public class PlayerManager {
     private record StationContinuation(
             PersonalizedStation station,
             LocalDate seedDate,
+            String themeFocus,
             long startedAtEpochMillis,
             int seedCursor,
             List<String> recentTrackKeys,
             List<String> recentTrackIdentities,
             List<String> recentArtists,
+            List<String> recentMixArtists,
+            List<Set<String>> recentTagSets,
             long generatedTracks,
             String provider,
             String lastSeed,
@@ -1995,6 +2037,7 @@ public class PlayerManager {
             return new StationContinuationSnapshot(
                     station,
                     seedDate,
+                    themeFocus,
                     generatedTracks,
                     lastTrack,
                     savedAt);
@@ -2004,16 +2047,21 @@ public class PlayerManager {
     private static final class RadioState {
         private static final int RECENT_LIMIT = 10;
         private static final int ARTIST_COOLDOWN_LIMIT = 3;
+        private static final int MIX_ARTIST_WINDOW = 6;
+        private static final int MIX_TAG_WINDOW = 6;
 
         private final RadioMode mode;
         private final RadioStrategy strategy;
         private final TrackRequester owner;
         private final PersonalizedStation station;
         private final LocalDate seedDate;
+        private final String themeFocus;
         private final long startedAtEpochMillis;
         private final ArrayDeque<String> recentTrackKeys = new ArrayDeque<>();
         private final ArrayDeque<String> recentTrackIdentities = new ArrayDeque<>();
         private final ArrayDeque<String> recentArtists = new ArrayDeque<>();
+        private final ArrayDeque<String> recentMixArtists = new ArrayDeque<>();
+        private final ArrayDeque<Set<String>> recentTagSets = new ArrayDeque<>();
         private long generatedTracks;
         private int consecutiveFailures;
         private boolean refillInProgress;
@@ -2028,8 +2076,9 @@ public class PlayerManager {
                 RadioStrategy strategy,
                 TrackRequester owner,
                 PersonalizedStation station,
-                LocalDate seedDate) {
-            this(mode, strategy, owner, station, seedDate, null);
+                LocalDate seedDate,
+                String themeFocus) {
+            this(mode, strategy, owner, station, seedDate, themeFocus, null);
         }
 
         private RadioState(
@@ -2038,12 +2087,16 @@ public class PlayerManager {
                 TrackRequester owner,
                 PersonalizedStation station,
                 LocalDate seedDate,
+                String themeFocus,
                 StationContinuation continuation) {
             this.mode = mode;
             this.strategy = strategy == null ? RadioStrategy.FAMILIAR : strategy;
             this.owner = owner;
             this.station = station == null ? PersonalizedStation.CUSTOM : station;
             this.seedDate = seedDate == null ? LocalDate.now(ZoneId.systemDefault()) : seedDate;
+            this.themeFocus = this.station.themeRequired()
+                    ? MixDiversityProfile.normalizeTheme(themeFocus)
+                    : "";
             this.startedAtEpochMillis = continuation == null
                     ? System.currentTimeMillis()
                     : continuation.startedAtEpochMillis();
@@ -2057,6 +2110,8 @@ public class PlayerManager {
                 this.recentTrackKeys.addAll(continuation.recentTrackKeys());
                 this.recentTrackIdentities.addAll(continuation.recentTrackIdentities());
                 this.recentArtists.addAll(continuation.recentArtists());
+                this.recentMixArtists.addAll(continuation.recentMixArtists());
+                this.recentTagSets.addAll(continuation.recentTagSets());
             }
         }
 
@@ -2078,6 +2133,10 @@ public class PlayerManager {
 
         synchronized LocalDate seedDate() {
             return seedDate;
+        }
+
+        synchronized String themeFocus() {
+            return themeFocus;
         }
 
         synchronized long startedAtEpochMillis() {
@@ -2108,6 +2167,7 @@ public class PlayerManager {
                 String trackKey,
                 String trackIdentity,
                 String artistIdentity,
+                Set<String> tags,
                 String sourceProvider,
                 String reason) {
             refillInProgress = false;
@@ -2120,6 +2180,8 @@ public class PlayerManager {
             remember(recentTrackKeys, trackKey, RECENT_LIMIT);
             remember(recentTrackIdentities, trackIdentity, RECENT_LIMIT);
             remember(recentArtists, artistIdentity, ARTIST_COOLDOWN_LIMIT);
+            rememberOrdered(recentMixArtists, artistIdentity, MIX_ARTIST_WINDOW);
+            rememberTags(recentTagSets, tags, MIX_TAG_WINDOW);
         }
 
         synchronized int failRefill() {
@@ -2139,15 +2201,36 @@ public class PlayerManager {
             return List.copyOf(recentArtists);
         }
 
+        synchronized List<String> recentMixArtists() {
+            return List.copyOf(recentMixArtists);
+        }
+
+        synchronized List<Set<String>> recentTagSets() {
+            return List.copyOf(recentTagSets);
+        }
+
+        synchronized boolean blocksArtistForMix(String artistIdentity) {
+            if (!station.diversityControlled() || recentMixArtists.isEmpty()) {
+                return false;
+            }
+            String safe = artistIdentity == null || artistIdentity.isBlank()
+                    ? "unknown"
+                    : artistIdentity.toLowerCase(Locale.ROOT);
+            return !"unknown".equals(safe) && recentMixArtists.peekFirst().equals(safe);
+        }
+
         synchronized StationContinuation toContinuation(Instant savedAt) {
             return new StationContinuation(
                     station,
                     seedDate,
+                    themeFocus,
                     startedAtEpochMillis,
                     seedCursor,
                     List.copyOf(recentTrackKeys),
                     List.copyOf(recentTrackIdentities),
                     List.copyOf(recentArtists),
+                    List.copyOf(recentMixArtists),
+                    List.copyOf(recentTagSets),
                     generatedTracks,
                     provider,
                     lastSeed,
@@ -2170,6 +2253,37 @@ public class PlayerManager {
                     lastSeed,
                     lastTrack,
                     lastReason);
+        }
+
+        private static void rememberOrdered(ArrayDeque<String> deque, String value, int limit) {
+            String safe = value == null || value.isBlank() ? "unknown" : value.toLowerCase(Locale.ROOT);
+            deque.addFirst(safe);
+            while (deque.size() > limit) {
+                deque.removeLast();
+            }
+        }
+
+        private static void rememberTags(ArrayDeque<Set<String>> deque, Set<String> tags, int limit) {
+            if (tags == null || tags.isEmpty()) {
+                return;
+            }
+            LinkedHashSet<String> safe = new LinkedHashSet<>();
+            for (String tag : tags) {
+                String normalized = MixDiversityProfile.normalizeTheme(tag);
+                if (!normalized.isBlank()) {
+                    safe.add(normalized);
+                }
+                if (safe.size() >= 8) {
+                    break;
+                }
+            }
+            if (safe.isEmpty()) {
+                return;
+            }
+            deque.addFirst(Set.copyOf(safe));
+            while (deque.size() > limit) {
+                deque.removeLast();
+            }
         }
 
         private static void remember(ArrayDeque<String> deque, String value, int limit) {

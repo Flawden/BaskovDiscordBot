@@ -21,9 +21,11 @@
 - generated count;
 - recent track keys/identities;
 - recent artist cooldown;
+- optional theme focus;
+- ordered recent mix artists + recent tag windows для diversity-control;
 - последняя recommendation metadata.
 
-Resume создаёт новый active `RadioState` из этого snapshot и продолжает прежний seed cursor и anti-repeat context. Для daily station сохраняется исходная дата выпуска: если `Микс дня` от 2026-08-10 остановили и продолжили уже 2026-08-11, `/mix resume` продолжит выпуск 2026-08-10. Новый явный `/mix start station:daily-mix` создаст уже выпуск новой даты.
+Resume создаёт новый active `RadioState` из этого snapshot и продолжает прежний seed cursor, theme focus и anti-repeat/diversity context. Для daily station сохраняется исходная дата выпуска: если `Микс дня` от 2026-08-10 остановили и продолжили уже 2026-08-11, `/mix resume` продолжит выпуск 2026-08-10. Новый явный `/mix start station:daily-mix` создаст уже выпуск новой даты.
 
 ## Safety boundary
 

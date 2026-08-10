@@ -4,7 +4,7 @@
 
 ```text
 Last.fm similar candidates
-  -> top-3 tag enrichment (bounded, cached)
+  -> top-5 tag enrichment (bounded, cached)
   -> novelty / recent-track / artist cooldown
   -> PersonalTasteProfile from recommendation-feedback.tsv
   -> hybrid score + 64D vector cosine

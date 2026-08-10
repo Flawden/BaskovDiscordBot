@@ -18,7 +18,7 @@ class PersonalizedMixesStationsContractTest {
                 "src/main/java/ru/flawden/BascovDiscordBot/lavaplayer/PlayerManager.java"));
 
         assertTrue(interactions.contains("case \"mix\" -> mix(event)"));
-        assertTrue(interactions.contains("playerManager.startStation(guild, station, owner)"));
+        assertTrue(interactions.contains("playerManager.startStation(guild, station, owner, selectedThemeFocus)"));
         assertTrue(player.contains("return startRadioInternal("));
         assertTrue(player.contains("RadioMode.PERSONAL"));
     }
@@ -113,5 +113,7 @@ class PersonalizedMixesStationsContractTest {
         assertTrue(player.contains("this.recentTrackKeys.addAll(continuation.recentTrackKeys())"));
         assertTrue(player.contains("this.recentTrackIdentities.addAll(continuation.recentTrackIdentities())"));
         assertTrue(player.contains("this.recentArtists.addAll(continuation.recentArtists())"));
+        assertTrue(player.contains("this.recentMixArtists.addAll(continuation.recentMixArtists())"));
+        assertTrue(player.contains("this.recentTagSets.addAll(continuation.recentTagSets())"));
     }
 }

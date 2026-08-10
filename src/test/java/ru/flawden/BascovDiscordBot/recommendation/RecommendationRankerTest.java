@@ -298,4 +298,76 @@ class RecommendationRankerTest {
                 .identity());
     }
 
+
+    @Test
+    void curatedMixRejectsImmediateArtistRepeatBeforeHybridScoring() {
+        RecommendationCandidate repeated = new RecommendationCandidate(
+                "Repeat Artist", "Track A", 0.99d, "Last.fm", "repeat", Set.of("rock"));
+        RecommendationCandidate fresh = new RecommendationCandidate(
+                "Fresh Artist", "Track B", 0.70d, "Last.fm", "fresh", Set.of("rock"));
+        MixDiversityProfile diversity = new MixDiversityProfile(
+                true,
+                "",
+                List.of("repeat artist", "other artist"),
+                List.of(Set.of("rock")));
+        RecommendationContext context = new RecommendationContext(
+                Set.of(), Set.of(), Set.of(), PersonalTasteProfile.empty(),
+                CollaborativeArtistSignals.empty(), SessionTasteProfile.empty(0L),
+                ContextualBanditProfile.empty(), diversity);
+
+        RecommendationRanker.ScoredCandidate selected = RecommendationRanker.best(
+                        List.of(repeated, fresh), RadioStrategy.SIMILAR, context)
+                .orElseThrow();
+
+        assertEquals(fresh.identity(), selected.candidate().identity());
+    }
+
+    @Test
+    void themeFocusCanBreakNearTieWithoutOverridingSafety() {
+        RecommendationCandidate raw = new RecommendationCandidate(
+                "Artist A", "Track A", 0.82d, "Last.fm", "raw", Set.of("alternative rock"));
+        RecommendationCandidate themed = new RecommendationCandidate(
+                "Artist B", "Track B", 0.79d, "Last.fm", "theme", Set.of("pop punk"));
+        MixDiversityProfile diversity = new MixDiversityProfile(
+                true,
+                "pop punk",
+                List.of("artist c"),
+                List.of(Set.of("alternative rock")));
+        RecommendationContext context = new RecommendationContext(
+                Set.of(), Set.of(), Set.of(), PersonalTasteProfile.empty(),
+                CollaborativeArtistSignals.empty(), SessionTasteProfile.empty(0L),
+                ContextualBanditProfile.empty(), diversity);
+
+        RecommendationRanker.ScoredCandidate selected = RecommendationRanker.best(
+                        List.of(raw, themed), RadioStrategy.SIMILAR, context)
+                .orElseThrow();
+
+        assertEquals(themed.identity(), selected.candidate().identity());
+        assertTrue(selected.themeAffinity() > 0.0d);
+        assertTrue(selected.mixDiversityContribution() > 0.0d);
+    }
+
+    @Test
+    void themeAndDiversityCannotResurrectKnownTrackInDiscovery() {
+        RecommendationCandidate knownThemed = new RecommendationCandidate(
+                "Loved Artist", "Known", 1.0d, "Last.fm", "known", Set.of("pop punk"));
+        RecommendationCandidate fresh = new RecommendationCandidate(
+                "Fresh Artist", "Fresh", 0.40d, "Last.fm", "fresh", Set.of("jazz"));
+        MixDiversityProfile diversity = new MixDiversityProfile(
+                true,
+                "pop punk",
+                List.of(),
+                List.of());
+        RecommendationContext context = new RecommendationContext(
+                Set.of(knownThemed.identity()), Set.of(), Set.of(), PersonalTasteProfile.empty(),
+                CollaborativeArtistSignals.empty(), SessionTasteProfile.empty(0L),
+                ContextualBanditProfile.empty(), diversity);
+
+        RecommendationRanker.ScoredCandidate selected = RecommendationRanker.best(
+                        List.of(knownThemed, fresh), RadioStrategy.DISCOVERY, context)
+                .orElseThrow();
+
+        assertEquals(fresh.identity(), selected.candidate().identity());
+    }
+
 }

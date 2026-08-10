@@ -6,7 +6,8 @@ import java.util.Optional;
 
 /**
  * Deterministic hybrid ranker: provider similarity + novelty/diversity +
- * durable personal taste + ephemeral session context + vectors + collaborative signals.
+ * durable personal taste + ephemeral session context + vectors + collaborative signals
+ * + bounded curated-mix diversity.
  */
 public final class RecommendationRanker {
 
@@ -56,7 +57,14 @@ public final class RecommendationRanker {
         boolean artistRecent = context.recentArtists().contains(artist);
 
         if (recent || (strategy.hardNovelty() && known)) {
-            return rejected(candidate, known, artistRecent, context, strategy, embeddingProvider, tasteVector);
+            return rejected(candidate, known, artistRecent, context, strategy, embeddingProvider, tasteVector,
+                    MixDiversityPolicy.Decision.neutral(), false);
+        }
+
+        MixDiversityPolicy.Decision mix = MixDiversityPolicy.evaluate(candidate, context.mixDiversity());
+        if (mix.rejected()) {
+            return rejected(candidate, known, artistRecent, context, strategy, embeddingProvider, tasteVector,
+                    mix, true);
         }
 
         double novelty = known ? 0.0d : 1.0d;
@@ -121,13 +129,14 @@ public final class RecommendationRanker {
         double banditContribution = bandit.contribution();
         double finalScore = Math.max(-1.0d, Math.min(1.40d,
                 baseScore + personalContribution + sessionContribution + vectorContribution
-                        + collaborativeContribution + banditContribution
+                        + collaborativeContribution + banditContribution + mix.contribution()
                         + taste.explorationBonus() + sessionExplorationBonus));
 
         return new ScoredCandidate(
                 candidate,
                 finalScore,
                 baseScore,
+                false,
                 false,
                 known,
                 artistRecent,
@@ -154,6 +163,11 @@ public final class RecommendationRanker {
                 bandit.uncertainty(),
                 bandit.confidence(),
                 banditContribution,
+                mix.contribution(),
+                mix.artistPenalty(),
+                mix.tagPenalty(),
+                mix.themeAffinity(),
+                mix.themeFocus(),
                 embeddingProvider.name(),
                 embeddingProvider.dimensions());
     }
@@ -165,7 +179,9 @@ public final class RecommendationRanker {
             RecommendationContext context,
             RadioStrategy strategy,
             RecommendationEmbeddingProvider embeddingProvider,
-            PersonalTasteVector tasteVector) {
+            PersonalTasteVector tasteVector,
+            MixDiversityPolicy.Decision mix,
+            boolean mixDiversityRejected) {
         PersonalRankingModel.TasteScore taste = PersonalRankingModel.score(candidate, context.personalTaste(), strategy);
         AdaptiveSessionModel.SessionScore session = AdaptiveSessionModel.score(candidate, context.sessionTaste());
         return new ScoredCandidate(
@@ -173,6 +189,7 @@ public final class RecommendationRanker {
                 -1.0d,
                 -1.0d,
                 true,
+                mixDiversityRejected,
                 known,
                 artistRecent,
                 taste.trackAffinity(),
@@ -198,6 +215,11 @@ public final class RecommendationRanker {
                 0.0d,
                 0.0d,
                 0.0d,
+                mix == null ? 0.0d : mix.contribution(),
+                mix == null ? 0.0d : mix.artistPenalty(),
+                mix == null ? 0.0d : mix.tagPenalty(),
+                mix == null ? 0.0d : mix.themeAffinity(),
+                mix == null ? "" : mix.themeFocus(),
                 embeddingProvider == null ? "none" : embeddingProvider.name(),
                 embeddingProvider == null ? 0 : embeddingProvider.dimensions());
     }
@@ -207,6 +229,7 @@ public final class RecommendationRanker {
             double score,
             double baseScore,
             boolean rejected,
+            boolean mixDiversityRejected,
             boolean known,
             boolean artistRecent,
             double trackAffinity,
@@ -232,6 +255,11 @@ public final class RecommendationRanker {
             double banditUncertainty,
             double banditConfidence,
             double banditContribution,
+            double mixDiversityContribution,
+            double artistDiversityPenalty,
+            double tagDiversityPenalty,
+            double themeAffinity,
+            String themeFocus,
             String embeddingProvider,
             int embeddingDimensions) {
     }

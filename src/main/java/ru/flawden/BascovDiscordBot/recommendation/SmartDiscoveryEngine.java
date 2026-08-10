@@ -193,6 +193,17 @@ public class SmartDiscoveryEngine {
                     .append(" / n=")
                     .append(scored.banditSamples());
         }
+        if (Math.abs(scored.mixDiversityContribution()) >= 0.005d) {
+            reason.append(" • mix diversity ")
+                    .append(signedPercent(scored.mixDiversityContribution()));
+        }
+        if (!scored.themeFocus().isBlank() && scored.themeAffinity() > 0.0d) {
+            reason.append(" • theme `")
+                    .append(scored.themeFocus())
+                    .append("` ")
+                    .append(Math.round(scored.themeAffinity() * 100.0d))
+                    .append("% match");
+        }
         if (scored.explorationBonus() > 0.0d) {
             reason.append(" • exploration +")
                     .append(Math.round(scored.explorationBonus() * 100.0d))

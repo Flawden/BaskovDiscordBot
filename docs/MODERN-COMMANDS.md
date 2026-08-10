@@ -149,12 +149,14 @@ Doctor намеренно не делает внешние HTTP/Maven/YouTube pr
 
 ```text
 /mix list
+/mix themes
 /mix start station:my-mix
 /mix start station:daily-mix
 /mix start station:discoveries
 /mix start station:daily-discoveries
 /mix start station:familiar
 /mix start station:mood
+/mix start station:theme theme:<tag>
 /mix resume
 /mix status
 /mix stop
@@ -167,7 +169,7 @@ Doctor намеренно не делает внешние HTTP/Maven/YouTube pr
 - `familiar` → `personal/familiar`, внешнее discovery не требуется;
 - `mood` → `personal/similar`, максимум 12 самых свежих personal-history seed + существующий ephemeral session-profile.
 
-Manual `/radio start` помечает активный режим как `CUSTOM`; `/mix status` поэтому не выдаёт ручное radio за curated station. Restart/deploy сбрасывает station вместе с остальным ephemeral radio-state; durable recommendation feedback/model не меняются.
+`station:theme` использует positive feedback tags как bounded focus, а curated mix разводит исполнителей/tags перед final transport. Manual `/radio start` помечает активный режим как `CUSTOM`; `/mix status` поэтому не выдаёт ручное radio за curated station. Restart/deploy сбрасывает station вместе с остальным ephemeral radio-state; durable recommendation feedback/model не меняются.
 
 
 `familiar` остаётся локальным; `similar` и `discovery` используют Last.fm candidate generation, если настроен `LASTFM_API_KEY`. При наличии `LISTENBRAINZ_TOKEN` ranking дополнительно получает collaborative artist signal из ListenBrainz; он fail-open и не заменяет Last.fm candidate generation. `discovery` исключает already-known tracks по normalized artist/title identity до personal/vector/collaborative/bandit scoring. `/radio why` объясняет последнюю рекомендацию. `personal` radio дополнительно использует ephemeral session taste, который строится только из feedback после текущего `/radio start`. Playback после candidate generation по-прежнему идёт через обычный `ytsearch:`.

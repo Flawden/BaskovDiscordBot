@@ -40,6 +40,7 @@ import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
 import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
 import ru.flawden.BascovDiscordBot.recommendation.RadioStrategy;
 import ru.flawden.BascovDiscordBot.recommendation.PersonalizedStation;
+import ru.flawden.BascovDiscordBot.recommendation.MixDiversityProfile;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationFeedbackEntry;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationFeedbackService;
 import ru.flawden.BascovDiscordBot.recommendation.PersonalRankingModel;
@@ -259,6 +260,22 @@ public class ModernInteractions extends ListenerAdapter {
                             playlists)
                     .stream()
                     .map(query -> new Command.Choice(query, query))
+                    .toList();
+            replyAutocomplete(event, choices);
+            return;
+        }
+
+        if ("mix".equals(event.getName())
+                && "theme".equals(focusedName)
+                && event.getGuild() != null) {
+            String normalized = MixDiversityProfile.normalizeTheme(focusedValue);
+            List<Command.Choice> choices = positiveMixThemes(
+                            event.getGuild().getIdLong(),
+                            event.getUser().getIdLong(),
+                            25)
+                    .stream()
+                    .filter(theme -> normalized.isBlank() || theme.contains(normalized))
+                    .map(theme -> new Command.Choice(theme, theme))
                     .toList();
             replyAutocomplete(event, choices);
             return;
@@ -893,6 +910,32 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
+        if ("themes".equals(subcommand)) {
+            List<String> themes = positiveMixThemes(guild.getIdLong(), userId, 10);
+            EmbedBuilder embed = new EmbedBuilder()
+                    .setTitle("🎨 Твои музыкальные темы")
+                    .setColor(Color.MAGENTA);
+            if (themes.isEmpty()) {
+                embed.setDescription("Положительных tag-signals пока мало. Дослушивай рекомендации, добавляй удачные в favorites — и темы появятся автоматически.");
+            } else {
+                StringBuilder body = new StringBuilder("Теги получены из твоего recommendation feedback V2. Их можно использовать как focus для тематической станции:\n\n");
+                for (int index = 0; index < themes.size(); index++) {
+                    String theme = themes.get(index);
+                    body.append(index + 1).append(". `").append(theme).append("`\n");
+                }
+                body.append("\nПример: `/mix start station:theme theme:")
+                        .append(themes.get(0))
+                        .append("`");
+                embed.setDescription(body.toString());
+            }
+            event.replyEmbeds(embed
+                            .setFooter("Тематический mix использует tag focus как bounded ranking signal; novelty/playback safety остаются выше него")
+                            .build())
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
         if ("status".equals(subcommand)) {
             RadioSnapshot snapshot = playerManager.radioSnapshot(guild.getIdLong());
             PersonalizedStation station = playerManager.activeStation(guild.getIdLong());
@@ -907,7 +950,10 @@ public class ModernInteractions extends ListenerAdapter {
                         .append("** через `/mix resume`.")
                         .append(saved.station().dailySeeded() && saved.seedDate() != null
                                 ? " Выпуск: `" + saved.seedDate() + "`."
-                                : ""));
+                                : "")
+                        .append(saved.themeFocus().isBlank()
+                                ? ""
+                                : " Тема: `" + saved.themeFocus() + "`."));
                 event.replyEmbeds(new EmbedBuilder()
                                 .setTitle("🎛️ Персональный микс")
                                 .setColor(Color.GRAY)
@@ -930,6 +976,8 @@ public class ModernInteractions extends ListenerAdapter {
                     .addField("Почему", sanitizeInline(snapshot.lastReason()), false);
             playerManager.activeStationSeedDate(guild.getIdLong())
                     .ifPresent(date -> embed.addField("Daily-выпуск", "`" + date + "`", true));
+            playerManager.activeStationTheme(guild.getIdLong())
+                    .ifPresent(theme -> embed.addField("Тема", "`" + theme + "`", true));
             continuation.ifPresent(saved -> embed.addField(
                     "Предыдущая станция",
                     "**" + saved.station().label() + "** • `/mix resume`",
@@ -998,6 +1046,21 @@ public class ModernInteractions extends ListenerAdapter {
         PersonalizedStation station = resume
                 ? continuation.orElseThrow().station()
                 : PersonalizedStation.fromSlug(event.getOption("station", "my-mix", OptionMapping::getAsString));
+        String themeFocus = resume
+                ? continuation.orElseThrow().themeFocus()
+                : MixDiversityProfile.normalizeTheme(event.getOption("theme", "", OptionMapping::getAsString));
+        if (!resume && station.themeRequired() && themeFocus.isBlank()) {
+            themeFocus = positiveMixThemes(guild.getIdLong(), userId, 1).stream().findFirst().orElse("");
+            if (themeFocus.isBlank()) {
+                event.replyEmbeds(MusicEmbeds.error(
+                                "🎨 Пока нет темы для тематического микса",
+                                "Передай `theme` вручную или накопи положительные tag-signals и посмотри `/mix themes`."))
+                        .setEphemeral(true)
+                        .queue();
+                return;
+            }
+        }
+        final String selectedThemeFocus = themeFocus;
         if (!resume && !playerManager.hasStationSeeds(guild.getIdLong(), station, userId)) {
             event.replyEmbeds(MusicEmbeds.error(
                             "🎛️ Пока не из чего строить " + station.label(),
@@ -1035,7 +1098,7 @@ public class ModernInteractions extends ListenerAdapter {
                     }
                     RadioStartResult result = resume
                             ? playerManager.resumeStation(guild, owner)
-                            : playerManager.startStation(guild, station, owner);
+                            : playerManager.startStation(guild, station, owner, selectedThemeFocus);
                     if (result.status() == RadioStartResult.Status.NO_SEEDS) {
                         hook.editOriginalEmbeds(MusicEmbeds.error(
                                         "🎛️ Станцию не удалось продолжить",
@@ -1049,7 +1112,10 @@ public class ModernInteractions extends ListenerAdapter {
                                     ? "🎛️ Станция переключена"
                                     : "🎛️ Станция включена";
                     String seedHint;
-                    if (station.dailySeeded()) {
+                    if (station.themeRequired()) {
+                        String activeTheme = playerManager.activeStationTheme(guild.getIdLong()).orElse(selectedThemeFocus);
+                        seedHint = "Theme focus: `" + activeTheme + "`; artist/tag diversity остаётся bounded и не обходит novelty.";
+                    } else if (station.dailySeeded()) {
                         String date = playerManager.activeStationSeedDate(guild.getIdLong())
                                 .map(Object::toString)
                                 .orElse("сегодня");
@@ -1071,6 +1137,27 @@ public class ModernInteractions extends ListenerAdapter {
                                             + "используются по тем же fail-open правилам, а playback остаётся через обычный ytsearch pipeline."))
                             .queue();
                 }));
+    }
+
+    private List<String> positiveMixThemes(long guildId, long userId, int limit) {
+        int bounded = Math.max(0, Math.min(limit, 25));
+        if (bounded == 0 || userId <= 0L) {
+            return List.of();
+        }
+        return recommendationFeedback.tasteProfile(guildId, userId)
+                .tagAffinity()
+                .entrySet()
+                .stream()
+                .filter(entry -> entry.getValue() != null && entry.getValue() > 0.0d)
+                .sorted((left, right) -> {
+                    int byScore = Double.compare(right.getValue(), left.getValue());
+                    return byScore != 0 ? byScore : left.getKey().compareTo(right.getKey());
+                })
+                .map(entry -> MixDiversityProfile.normalizeTheme(entry.getKey()))
+                .filter(theme -> !theme.isBlank())
+                .distinct()
+                .limit(bounded)
+                .toList();
     }
 
     private void radio(SlashCommandInteractionEvent event) {
@@ -4123,7 +4210,7 @@ public class ModernInteractions extends ListenerAdapter {
                     .addField("Перенос", "`/settings export` `/settings import`", false)
                     .addField("Сброс", "`/settings reset` открывает интерактивное подтверждение; `confirm:true` больше вводить не нужно.", false)
                     .addField("Диагностика", "`/doctor summary|gateway|voice|storage|session|source|failures` — actionable diagnosis; `/status` — raw snapshot; `/session status|recover` — checkpoint/recovery.", false)
-                    .addField("Smart radio", "`/radio start|status|why|feedback|model|session|bandit|stop` — ручной radio-контроль; `/mix list|start|resume|status|stop` — готовые и ежедневные персональные станции.", false);
+                    .addField("Smart radio", "`/radio start|status|why|feedback|model|session|bandit|stop` — ручной radio-контроль; `/mix list|themes|start|resume|status|stop` — готовые, ежедневные и тематические персональные станции.", false);
         }
         return embed.build();
     }

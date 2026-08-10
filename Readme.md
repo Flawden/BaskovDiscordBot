@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.22.0**.
+Текущая версия релизной ветки: **v1.23.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -12,7 +12,8 @@
 - Collaborative Signals: optional ListenBrainz artist graph добавляет независимый collaborative-вклад к Last.fm + personal/vector ranker; без `LISTENBRAINZ_TOKEN` или при сбое upstream система fail-open продолжает старый recommendation pipeline;
 - Adaptive Session Intelligence: текущее `personal` radio строит ephemeral short-term taste из feedback после последнего `/radio start`; `/radio session` показывает session momentum/confidence и strongest artist/tag affinity, а restart/new start намеренно сбрасывает краткосрочный слой без изменения durable feedback;
 - Contextual Bandit & Exploration Learning: `/radio bandit` показывает online-policy `safe|balanced|bold`; модель учит reward каждого similarity-risk arm отдельно по стратегии из уже существующего feedback, учитывает session momentum и даёт только bounded вклад ±12%, не обходя hard novelty;
-- Daily Mixes & Station Continuity: `/mix list|start|resume|status|stop` добавляет «Микс дня» и «Открытия дня» со стабильным daily seed-набором, а bounded process-local continuity до 36 часов сохраняет station/date/seed cursor/anti-repeat memory для явного `/mix resume`; restart/deploy не автозапускает музыку и новых persistence-файлов нет;
+- Daily Mixes & Station Continuity: `/mix list|themes|start|resume|status|stop` включает «Микс дня» и «Открытия дня» со стабильным daily seed-набором, а bounded process-local continuity до 36 часов сохраняет station/date/seed cursor/anti-repeat memory для явного `/mix resume`; restart/deploy не автозапускает музыку и новых persistence-файлов нет;
+- Mix Generation & Diversity Control: curated mix теперь разводит исполнителей и насыщенные tags на уровне seed/ranker/final transport, `/mix themes` строит положительные темы из feedback V2, а `station:theme` создаёт динамический тематический поток без нового persistence; hard novelty остаётся выше diversity/theme scoring;
 - `/search` с пятью результатами YouTube, одноразовыми кнопками выбора и пятиминутной owner-bound сессией; autocomplete последних запросов работает в `/play` и `/search`;
 - личное persistent избранное до 100 треков на пользователя и сервер через `/favorites list|add|play|play-all|remove|search|clear`; favorites участвуют в локальном autocomplete и используют существующий ordered batch playback;
 - постоянная история до 50 треков на сервер плюс personal history до 200 заказанных и реально дошедших до истории треков на пользователя; `/history scope:server|mine`, `/replay scope:server|mine`, `/discover profile|for-me` и серверные плейлисты с owner/admin-управлением, autocomplete, lifecycle-операциями, поиском, capture queue и ordered batch playback;
@@ -105,7 +106,7 @@ Voice recovery и восстановление сессий после restart/r
 GitHub-hosted delivery и резервный self-hosted режим описаны в [`docs/SELF-HOSTED-DELIVERY.md`](docs/SELF-HOSTED-DELIVERY.md).
 Современный Discord-интерфейс описан в [`docs/MODERN-COMMANDS.md`](docs/MODERN-COMMANDS.md).
 Contextual online exploration policy описана в [`docs/CONTEXTUAL-BANDIT-EXPLORATION.md`](docs/CONTEXTUAL-BANDIT-EXPLORATION.md).
-Готовые персональные станции и их mapping описаны в [`docs/PERSONALIZED-MIXES-STATIONS.md`](docs/PERSONALIZED-MIXES-STATIONS.md), а daily-выпуски и `/mix resume` — в [`docs/DAILY-MIXES-CONTINUITY.md`](docs/DAILY-MIXES-CONTINUITY.md).
+Готовые персональные станции и их mapping описаны в [`docs/PERSONALIZED-MIXES-STATIONS.md`](docs/PERSONALIZED-MIXES-STATIONS.md), а daily-выпуски и `/mix resume` — в [`docs/DAILY-MIXES-CONTINUITY.md`](docs/DAILY-MIXES-CONTINUITY.md). Diversity/thematic generation описаны в [`docs/MIX-GENERATION-DIVERSITY.md`](docs/MIX-GENERATION-DIVERSITY.md).
 Интерактивная помощь, status refresh и destructive confirmations описаны в [`docs/DISCORD-EXPERIENCE.md`](docs/DISCORD-EXPERIENCE.md).
 Интерактивный поиск и безопасный выбор трека описаны в [`docs/SEARCH-TRACK-SELECTION.md`](docs/SEARCH-TRACK-SELECTION.md).
 Постоянные плейлисты, история и replay описаны в [`docs/PLAYLISTS-HISTORY-REPLAY.md`](docs/PLAYLISTS-HISTORY-REPLAY.md), а личное избранное — в [`docs/FAVORITES-PERSONAL-LIBRARY.md`](docs/FAVORITES-PERSONAL-LIBRARY.md).
@@ -124,6 +125,17 @@ Root-cause voice diagnostics и bridge/host A/B-тест описаны в [`doc
 DAVE voice migration и переход JDA 5 → 6 описаны в [`docs/DAVE-VOICE-MIGRATION.md`](docs/DAVE-VOICE-MIGRATION.md).
 Native libDAVE runtime, platform profiles и startup fail-fast описаны в [`docs/NATIVE-DAVE.md`](docs/NATIVE-DAVE.md).
 Релиз с Android описан в [`docs/TERMUX-RELEASE.md`](docs/TERMUX-RELEASE.md).
+
+## Mix Generation & Diversity Control (v1.23.0)
+
+```text
+/mix themes
+/mix start station:theme theme:pop punk
+```
+
+Curated станции (`my-mix`, daily/discovery variants, `mood`, `theme`) используют bounded diversity-context: immediate повтор исполнителя блокируется, частые artist/tag получают штраф, а seed pool round-robin разводит исполнителей до повторного использования. `familiar` остаётся permissive для маленьких библиотек.
+
+`Тематический микс` использует положительные `tagAffinity` из recommendation feedback V2 как focus. Theme влияет только на near-tie ranking и не может обойти recent/hard novelty, queue policy или обычный `ytsearch:` playback transport. `/mix resume` сохраняет theme и diversity window только в памяти процесса; нового storage нет.
 
 ## Daily Mixes & Station Continuity (v1.22.0)
 

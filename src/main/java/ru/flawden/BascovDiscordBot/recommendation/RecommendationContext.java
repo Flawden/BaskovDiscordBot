@@ -4,8 +4,8 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
- * Bounded context for novelty/diversity + long-term personal, short-term session
- * and collaborative models. Does not contain Discord secrets or provider tokens.
+ * Bounded context for novelty/diversity + long-term personal, short-term session,
+ * collaborative and curated-mix models. Does not contain Discord secrets or provider tokens.
  */
 public record RecommendationContext(
         Set<String> knownTrackIdentities,
@@ -14,7 +14,8 @@ public record RecommendationContext(
         PersonalTasteProfile personalTaste,
         CollaborativeArtistSignals collaborativeSignals,
         SessionTasteProfile sessionTaste,
-        ContextualBanditProfile banditProfile) {
+        ContextualBanditProfile banditProfile,
+        MixDiversityProfile mixDiversity) {
 
     public RecommendationContext(
             Set<String> knownTrackIdentities,
@@ -22,7 +23,7 @@ public record RecommendationContext(
             Set<String> recentArtists) {
         this(knownTrackIdentities, recentTrackIdentities, recentArtists,
                 PersonalTasteProfile.empty(), CollaborativeArtistSignals.empty(), SessionTasteProfile.empty(0L),
-                ContextualBanditProfile.empty());
+                ContextualBanditProfile.empty(), MixDiversityProfile.disabled());
     }
 
     public RecommendationContext(
@@ -32,7 +33,7 @@ public record RecommendationContext(
             PersonalTasteProfile personalTaste) {
         this(knownTrackIdentities, recentTrackIdentities, recentArtists,
                 personalTaste, CollaborativeArtistSignals.empty(), SessionTasteProfile.empty(0L),
-                ContextualBanditProfile.empty());
+                ContextualBanditProfile.empty(), MixDiversityProfile.disabled());
     }
 
     public RecommendationContext(
@@ -43,7 +44,7 @@ public record RecommendationContext(
             CollaborativeArtistSignals collaborativeSignals) {
         this(knownTrackIdentities, recentTrackIdentities, recentArtists,
                 personalTaste, collaborativeSignals, SessionTasteProfile.empty(0L),
-                ContextualBanditProfile.empty());
+                ContextualBanditProfile.empty(), MixDiversityProfile.disabled());
     }
 
     public RecommendationContext(
@@ -54,7 +55,21 @@ public record RecommendationContext(
             CollaborativeArtistSignals collaborativeSignals,
             SessionTasteProfile sessionTaste) {
         this(knownTrackIdentities, recentTrackIdentities, recentArtists,
-                personalTaste, collaborativeSignals, sessionTaste, ContextualBanditProfile.empty());
+                personalTaste, collaborativeSignals, sessionTaste, ContextualBanditProfile.empty(),
+                MixDiversityProfile.disabled());
+    }
+
+    public RecommendationContext(
+            Set<String> knownTrackIdentities,
+            Set<String> recentTrackIdentities,
+            Set<String> recentArtists,
+            PersonalTasteProfile personalTaste,
+            CollaborativeArtistSignals collaborativeSignals,
+            SessionTasteProfile sessionTaste,
+            ContextualBanditProfile banditProfile) {
+        this(knownTrackIdentities, recentTrackIdentities, recentArtists,
+                personalTaste, collaborativeSignals, sessionTaste, banditProfile,
+                MixDiversityProfile.disabled());
     }
 
     public RecommendationContext {
@@ -67,6 +82,7 @@ public record RecommendationContext(
                 : collaborativeSignals;
         sessionTaste = sessionTaste == null ? SessionTasteProfile.empty(0L) : sessionTaste;
         banditProfile = banditProfile == null ? ContextualBanditProfile.empty() : banditProfile;
+        mixDiversity = mixDiversity == null ? MixDiversityProfile.disabled() : mixDiversity;
     }
 
     public RecommendationContext withCollaborativeSignals(CollaborativeArtistSignals signals) {
@@ -77,7 +93,8 @@ public record RecommendationContext(
                 personalTaste,
                 signals,
                 sessionTaste,
-                banditProfile);
+                banditProfile,
+                mixDiversity);
     }
 
     public RecommendationContext withSessionTaste(SessionTasteProfile profile) {
@@ -88,7 +105,8 @@ public record RecommendationContext(
                 personalTaste,
                 collaborativeSignals,
                 profile,
-                banditProfile);
+                banditProfile,
+                mixDiversity);
     }
 
     public RecommendationContext withBanditProfile(ContextualBanditProfile profile) {
@@ -99,6 +117,19 @@ public record RecommendationContext(
                 personalTaste,
                 collaborativeSignals,
                 sessionTaste,
+                profile,
+                mixDiversity);
+    }
+
+    public RecommendationContext withMixDiversity(MixDiversityProfile profile) {
+        return new RecommendationContext(
+                knownTrackIdentities,
+                recentTrackIdentities,
+                recentArtists,
+                personalTaste,
+                collaborativeSignals,
+                sessionTaste,
+                banditProfile,
                 profile);
     }
 
@@ -106,7 +137,7 @@ public record RecommendationContext(
         return new RecommendationContext(
                 Set.of(), Set.of(), Set.of(),
                 PersonalTasteProfile.empty(), CollaborativeArtistSignals.empty(), SessionTasteProfile.empty(0L),
-                ContextualBanditProfile.empty());
+                ContextualBanditProfile.empty(), MixDiversityProfile.disabled());
     }
 
     private static Set<String> immutable(Set<String> input) {
