@@ -28,6 +28,7 @@ import ru.flawden.BascovDiscordBot.library.MusicLibraryRepository;
 import ru.flawden.BascovDiscordBot.library.PersonalListeningInsights;
 import ru.flawden.BascovDiscordBot.library.StoredTrack;
 import ru.flawden.BascovDiscordBot.recommendation.RadioStrategy;
+import ru.flawden.BascovDiscordBot.recommendation.PersonalizedStation;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationContext;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationIdentity;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationPlan;
@@ -202,7 +203,12 @@ public class PlayerManager {
     }
 
     public boolean hasRadioSeeds(long guildId, RadioMode mode, long userId) {
-        return !radioSeeds(guildId, mode, userId).isEmpty();
+        return !radioSeeds(guildId, mode, userId, PersonalizedStation.CUSTOM).isEmpty();
+    }
+
+    public boolean hasStationSeeds(long guildId, PersonalizedStation station, long userId) {
+        PersonalizedStation selected = station == null ? PersonalizedStation.MY_MIX : station;
+        return !radioSeeds(guildId, RadioMode.PERSONAL, userId, selected).isEmpty();
     }
 
     public RadioStartResult startRadio(Guild guild, RadioMode mode, TrackRequester owner) {
@@ -214,17 +220,59 @@ public class PlayerManager {
             RadioMode mode,
             RadioStrategy strategy,
             TrackRequester owner) {
+        return startRadioInternal(
+                guild,
+                mode,
+                strategy,
+                owner,
+                PersonalizedStation.CUSTOM);
+    }
+
+    public RadioStartResult startStation(
+            Guild guild,
+            PersonalizedStation station,
+            TrackRequester owner) {
+        PersonalizedStation selected = station == null ? PersonalizedStation.MY_MIX : station;
+        if (!selected.curated()) {
+            selected = PersonalizedStation.MY_MIX;
+        }
+        return startRadioInternal(
+                guild,
+                RadioMode.PERSONAL,
+                selected.strategy(),
+                owner,
+                selected);
+    }
+
+    public PersonalizedStation activeStation(long guildId) {
+        RadioState state = radioStates.get(guildId);
+        return state == null ? PersonalizedStation.CUSTOM : state.station();
+    }
+
+    private RadioStartResult startRadioInternal(
+            Guild guild,
+            RadioMode mode,
+            RadioStrategy strategy,
+            TrackRequester owner,
+            PersonalizedStation station) {
         Objects.requireNonNull(guild, "guild");
         Objects.requireNonNull(mode, "mode");
         RadioStrategy recommendationStrategy = strategy == null ? RadioStrategy.FAMILIAR : strategy;
+        PersonalizedStation selectedStation = station == null ? PersonalizedStation.CUSTOM : station;
         TrackRequester requester = owner == null ? TrackRequester.unknown() : owner;
-        List<StoredTrack> seeds = radioSeeds(guild.getIdLong(), mode, requester.userId());
+        List<StoredTrack> seeds = radioSeeds(
+                guild.getIdLong(),
+                mode,
+                requester.userId(),
+                selectedStation);
         if (seeds.isEmpty()) {
             return new RadioStartResult(RadioStartResult.Status.NO_SEEDS, RadioSnapshot.disabled());
         }
 
         long guildId = guild.getIdLong();
-        RadioState previous = radioStates.put(guildId, new RadioState(mode, recommendationStrategy, requester));
+        RadioState previous = radioStates.put(
+                guildId,
+                new RadioState(mode, recommendationStrategy, requester, selectedStation));
         GuildMusicManager manager = getMusicManager(guild);
         manager.markActivity();
         RadioStartResult.Status status = previous == null
@@ -1331,7 +1379,7 @@ public class PlayerManager {
             return;
         }
         long activityVersion = manager.getActivityVersion();
-        StoredTrack seed = state.beginRefill(radioSeeds(guildId, state.mode(), state.owner().userId()));
+        StoredTrack seed = state.beginRefill(radioSeeds(guildId, state.mode(), state.owner().userId(), state.station()));
         if (seed == null) {
             radioFailure(guild, manager, state, "Нет локальных seed-треков");
             return;
@@ -1536,14 +1584,27 @@ public class PlayerManager {
         }
     }
 
-    private List<StoredTrack> radioSeeds(long guildId, RadioMode mode, long userId) {
+    private List<StoredTrack> radioSeeds(
+            long guildId,
+            RadioMode mode,
+            long userId,
+            PersonalizedStation station) {
         if (mode == RadioMode.PERSONAL) {
             if (userId <= 0L) {
                 return List.of();
             }
+            List<StoredTrack> favorites = musicLibraryRepository.favorites(guildId, userId);
+            List<StoredTrack> personalHistory = musicLibraryRepository.personalHistory(guildId, userId);
+            PersonalizedStation selected = station == null ? PersonalizedStation.CUSTOM : station;
+            if (selected.recentSeedsOnly()) {
+                List<StoredTrack> recent = personalHistory.stream().limit(12).toList();
+                if (!recent.isEmpty()) {
+                    return PersonalListeningInsights.discoverySeeds(List.of(), recent, 12);
+                }
+            }
             return PersonalListeningInsights.discoverySeeds(
-                    musicLibraryRepository.favorites(guildId, userId),
-                    musicLibraryRepository.personalHistory(guildId, userId),
+                    favorites,
+                    personalHistory,
                     20);
         }
         return PersonalListeningInsights.discoverySeeds(
@@ -1810,6 +1871,7 @@ public class PlayerManager {
         private final RadioMode mode;
         private final RadioStrategy strategy;
         private final TrackRequester owner;
+        private final PersonalizedStation station;
         private final long startedAtEpochMillis = System.currentTimeMillis();
         private final ArrayDeque<String> recentTrackKeys = new ArrayDeque<>();
         private final ArrayDeque<String> recentTrackIdentities = new ArrayDeque<>();
@@ -1823,10 +1885,15 @@ public class PlayerManager {
         private String lastTrack = "—";
         private String lastReason = "—";
 
-        private RadioState(RadioMode mode, RadioStrategy strategy, TrackRequester owner) {
+        private RadioState(
+                RadioMode mode,
+                RadioStrategy strategy,
+                TrackRequester owner,
+                PersonalizedStation station) {
             this.mode = mode;
             this.strategy = strategy == null ? RadioStrategy.FAMILIAR : strategy;
             this.owner = owner;
+            this.station = station == null ? PersonalizedStation.CUSTOM : station;
         }
 
         synchronized RadioMode mode() {
@@ -1839,6 +1906,10 @@ public class PlayerManager {
 
         synchronized TrackRequester owner() {
             return owner;
+        }
+
+        synchronized PersonalizedStation station() {
+            return station;
         }
 
         synchronized long startedAtEpochMillis() {

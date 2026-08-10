@@ -39,6 +39,7 @@ import ru.flawden.BascovDiscordBot.lavaplayer.TrackScheduler;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequester;
 import ru.flawden.BascovDiscordBot.lavaplayer.VoiceConnectionResult;
 import ru.flawden.BascovDiscordBot.recommendation.RadioStrategy;
+import ru.flawden.BascovDiscordBot.recommendation.PersonalizedStation;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationFeedbackEntry;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationFeedbackService;
 import ru.flawden.BascovDiscordBot.recommendation.PersonalRankingModel;
@@ -177,6 +178,7 @@ public class ModernInteractions extends ListenerAdapter {
                 case "status" -> status(event);
                 case "doctor" -> doctor(event);
                 case "radio" -> radio(event);
+                case "mix" -> mix(event);
                 case "session" -> session(event);
                 case "play" -> play(event);
                 case "search" -> search(event);
@@ -860,6 +862,163 @@ public class ModernInteractions extends ListenerAdapter {
                 .map(SystemDoctor.Check::severity)
                 .max(SystemDoctor.Severity::compareTo)
                 .orElse(SystemDoctor.Severity.OK);
+    }
+
+    private void mix(SlashCommandInteractionEvent event) {
+        Guild guild = event.getGuild();
+        Member member = event.getMember();
+        String subcommand = event.getSubcommandName() == null ? "list" : event.getSubcommandName();
+
+        if ("list".equals(subcommand)) {
+            EmbedBuilder embed = new EmbedBuilder()
+                    .setTitle("🎛️ Персональные миксы")
+                    .setColor(Color.CYAN)
+                    .setDescription("Готовые product-presets поверх smart radio. Они используют тот же безопасный playback pipeline, "
+                            + "но тебе не нужно вручную выбирать mode/strategy.");
+            for (PersonalizedStation station : PersonalizedStation.curatedStations()) {
+                embed.addField(
+                        station.label(),
+                        station.description() + "\n`/mix start station:" + station.slug() + "`",
+                        false);
+            }
+            event.replyEmbeds(embed
+                            .setFooter("/radio остаётся ручным/инженерным интерфейсом • /mix — готовые станции")
+                            .build())
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        if ("status".equals(subcommand)) {
+            RadioSnapshot snapshot = playerManager.radioSnapshot(guild.getIdLong());
+            PersonalizedStation station = playerManager.activeStation(guild.getIdLong());
+            if (!snapshot.enabled() || !station.curated()) {
+                event.replyEmbeds(new EmbedBuilder()
+                                .setTitle("🎛️ Персональный микс")
+                                .setColor(Color.GRAY)
+                                .setDescription(snapshot.enabled()
+                                        ? "Сейчас запущено ручное `/radio`, а не готовая `/mix`-станция."
+                                        : "Сейчас персональная станция выключена.")
+                                .setFooter("Используй /mix list и /mix start")
+                                .build())
+                        .setEphemeral(true)
+                        .queue();
+                return;
+            }
+            event.replyEmbeds(new EmbedBuilder()
+                            .setTitle("🎛️ " + station.label())
+                            .setColor(Color.CYAN)
+                            .setDescription(station.description())
+                            .addField("Underlying radio",
+                                    "`personal / " + snapshot.strategy().name().toLowerCase(Locale.ROOT) + "`",
+                                    true)
+                            .addField("Сгенерировано", "`" + snapshot.generatedTracks() + "`", true)
+                            .addField("Последний трек", "`" + sanitizeInline(snapshot.lastTrack()) + "`", false)
+                            .addField("Почему", sanitizeInline(snapshot.lastReason()), false)
+                            .setFooter("Станция ephemeral: restart/deploy оставляет её OFF • feedback/model сохраняются")
+                            .build())
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        if ("stop".equals(subcommand)) {
+            RadioSnapshot snapshot = playerManager.radioSnapshot(guild.getIdLong());
+            PersonalizedStation station = playerManager.activeStation(guild.getIdLong());
+            if (!snapshot.enabled() || !station.curated()) {
+                event.replyEmbeds(MusicEmbeds.error(
+                                "🎛️ Микс уже выключен",
+                                snapshot.enabled()
+                                        ? "Сейчас работает ручное `/radio`; останови его через `/radio stop`."
+                                        : "Активной персональной станции нет."))
+                        .setEphemeral(true)
+                        .queue();
+                return;
+            }
+            boolean owner = snapshot.ownerUserId() == event.getUser().getIdLong();
+            if (!owner && !administrationPolicy.canManage(member)) {
+                event.replyEmbeds(MusicEmbeds.error(
+                                "🎛️ Нельзя выключить чужой микс",
+                                "Остановить станцию может тот, кто её включил, либо owner / Manage Server / manager-role."))
+                        .setEphemeral(true)
+                        .queue();
+                return;
+            }
+            playerManager.stopRadio(guild.getIdLong());
+            event.replyEmbeds(MusicEmbeds.success(
+                            "🎛️ " + station.label() + " выключен",
+                            "Текущий трек не остановлен; после обычной очереди автопродолжения больше не будет."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        MusicControlPolicy.Decision decision = controlPolicy.canStartOrQueue(
+                member,
+                member.getVoiceState(),
+                guild.getSelfMember().getVoiceState());
+        if (!decision.allowed()) {
+            event.replyEmbeds(MusicEmbeds.error("🎧 Управление недоступно", decision.message()))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        PersonalizedStation station = PersonalizedStation.fromSlug(
+                event.getOption("station", "my-mix", OptionMapping::getAsString));
+        long userId = event.getUser().getIdLong();
+        if (!playerManager.hasStationSeeds(guild.getIdLong(), station, userId)) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🎛️ Пока не из чего строить " + station.label(),
+                            "Добавь favorites или послушай/закажи несколько треков, чтобы появилась personal history."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        var botChannel = guild.getSelfMember().getVoiceState().getChannel();
+        var targetChannel = botChannel != null ? botChannel : member.getVoiceState().getChannel();
+        if (targetChannel == null) {
+            event.replyEmbeds(MusicEmbeds.error(
+                            "🔍 Голосовой канал потерян",
+                            "Войди в голосовой канал и повтори `/mix start`."))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        TrackRequester owner = new TrackRequester(userId, member.getEffectiveName());
+        event.deferReply().queue(hook -> playerManager
+                .ensureVoiceConnection(guild, targetChannel)
+                .whenComplete((connection, failure) -> {
+                    if (failure != null) {
+                        log.error("Voice connection future failed while starting mix in guild {}", guild.getId(), failure);
+                        editVoiceFailure(hook, new VoiceConnectionResult(
+                                VoiceConnectionResult.Status.FAILED,
+                                "Внутренняя ошибка голосового подключения."));
+                        return;
+                    }
+                    if (!connection.connected()) {
+                        editVoiceFailure(hook, connection);
+                        return;
+                    }
+                    RadioStartResult result = playerManager.startStation(guild, station, owner);
+                    String title = result.status() == RadioStartResult.Status.UPDATED
+                            ? "🎛️ Станция переключена"
+                            : "🎛️ Станция включена";
+                    String seedHint = station.recentSeedsOnly()
+                            ? "Seeds: свежая personal history; дальше session intelligence быстро подстраивает направление."
+                            : "Seeds: favorites + personal history.";
+                    hook.editOriginalEmbeds(MusicEmbeds.success(
+                                    title + " • " + station.label(),
+                                    station.description() + " "
+                                            + seedHint + " "
+                                            + "Под капотом: `personal / "
+                                            + station.strategy().name().toLowerCase(Locale.ROOT)
+                                            + "`. Recommendation feedback, vectors, collaborative signals и bandit "
+                                            + "используются по тем же fail-open правилам, а playback остаётся через обычный ytsearch pipeline."))
+                            .queue();
+                }));
     }
 
     private void radio(SlashCommandInteractionEvent event) {
@@ -3912,7 +4071,7 @@ public class ModernInteractions extends ListenerAdapter {
                     .addField("Перенос", "`/settings export` `/settings import`", false)
                     .addField("Сброс", "`/settings reset` открывает интерактивное подтверждение; `confirm:true` больше вводить не нужно.", false)
                     .addField("Диагностика", "`/doctor summary|gateway|voice|storage|session|source|failures` — actionable diagnosis; `/status` — raw snapshot; `/session status|recover` — checkpoint/recovery.", false)
-                    .addField("Smart radio", "`/radio start|status|why|feedback|model|session|bandit|stop` — discovery + feedback + personal/session ranking + online exploration policy.", false);
+                    .addField("Smart radio", "`/radio start|status|why|feedback|model|session|bandit|stop` — ручной radio-контроль; `/mix list|start|status|stop` — готовые персональные станции.", false);
         }
         return embed.build();
     }

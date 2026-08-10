@@ -145,6 +145,28 @@ Doctor намеренно не делает внешние HTTP/Maven/YouTube pr
 /radio stop
 ```
 
+### `/mix` — готовые персональные станции
+
+```text
+/mix list
+/mix start station:my-mix
+/mix start station:discoveries
+/mix start station:familiar
+/mix start station:mood
+/mix status
+/mix stop
+```
+
+`/mix` намеренно не дублирует recommendation engine. Это product-layer над тем же `PlayerManager`/smart-radio lifecycle:
+
+- `my-mix` → `personal/similar`, favorites + personal history;
+- `discoveries` → `personal/discovery`, hard novelty остаётся обязательной;
+- `familiar` → `personal/familiar`, внешнее discovery не требуется;
+- `mood` → `personal/similar`, максимум 12 самых свежих personal-history seed + существующий ephemeral session-profile.
+
+Manual `/radio start` помечает активный режим как `CUSTOM`; `/mix status` поэтому не выдаёт ручное radio за curated station. Restart/deploy сбрасывает station вместе с остальным ephemeral radio-state; durable recommendation feedback/model не меняются.
+
+
 `familiar` остаётся локальным; `similar` и `discovery` используют Last.fm candidate generation, если настроен `LASTFM_API_KEY`. При наличии `LISTENBRAINZ_TOKEN` ranking дополнительно получает collaborative artist signal из ListenBrainz; он fail-open и не заменяет Last.fm candidate generation. `discovery` исключает already-known tracks по normalized artist/title identity до personal/vector/collaborative/bandit scoring. `/radio why` объясняет последнюю рекомендацию. `personal` radio дополнительно использует ephemeral session taste, который строится только из feedback после текущего `/radio start`. Playback после candidate generation по-прежнему идёт через обычный `ytsearch:`.
 
 Radio продолжает только действительно пустую очередь и добавляет по одному кандидату. `personal` строит seed из favorites/personal history владельца, `server` — из guild history. Режим ephemeral и после restart/deploy остаётся выключенным.

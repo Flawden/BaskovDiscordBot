@@ -6,6 +6,17 @@
 
 ## [Unreleased]
 
+## [1.21.0] — 2026-08-10
+
+### Mixes & Personalized Stations
+
+- Добавлена продуктовая команда `/mix list|start|status|stop` поверх существующего smart-radio lifecycle. `/radio` остаётся низкоуровневым/manual интерфейсом, а `/mix` выбирает готовый персональный preset без необходимости понимать `mode` и `strategy`.
+- Доступны четыре станции: `Мой микс` (`personal/similar`), `Открытия` (`personal/discovery` с hard novelty), `Знакомое` (`personal/familiar`) и `Настроение сейчас` (`personal/similar` с seed из самой свежей personal history).
+- Добавлен domain enum `PersonalizedStation`; `PlayerManager.startStation(...)` делегирует в общий `startRadioInternal(...)`, поэтому станции не получают отдельного playback/queue/voice пути и сохраняют прежние policy/permission/voice guards.
+- `Настроение сейчас` использует максимум 12 свежих personal-history seed и затем существующий `AdaptiveSessionModel`; остальные станции используют bounded favorites + personal history seed pool. При пустой свежей истории mood автоматически откатывается к обычному personal seed pool.
+- Активная curated station хранится только в ephemeral `RadioState`; `/mix status` показывает station/underlying strategy/последний recommendation, а restart/deploy оставляет station OFF. Recommendation feedback V2, long-term model, vectors, collaborative signals и bandit продолжают использоваться без нового persistence.
+- Добавлены unit/architecture regressions на стабильные station slugs, mapping стратегий, mood seed policy, command contract, разграничение manual `/radio` vs curated `/mix` и запрет station layer обходить hard novelty или владеть playback transport.
+
 ## [1.20.0] — 2026-08-10
 
 ### Contextual Bandit & Exploration Learning

@@ -67,6 +67,21 @@ public final class ModernCommandCatalog {
                                 new SubcommandData("session", "Показывает краткосрочный вкус текущей radio-сессии"),
                                 new SubcommandData("bandit", "Показывает обучаемую exploration-политику radio"),
                                 new SubcommandData("stop", "Выключает smart radio; текущий трек не останавливается")),
+                Commands.slash("mix", "Готовые персональные станции поверх обучаемого radio")
+                        .addSubcommands(
+                                new SubcommandData("list", "Показывает доступные персональные станции"),
+                                new SubcommandData("start", "Запускает готовую персональную станцию")
+                                        .addOptions(new OptionData(
+                                                OptionType.STRING,
+                                                "station",
+                                                "Какой микс включить",
+                                                true)
+                                                .addChoice("Мой микс", "my-mix")
+                                                .addChoice("Открытия", "discoveries")
+                                                .addChoice("Знакомое", "familiar")
+                                                .addChoice("Настроение сейчас", "mood")),
+                                new SubcommandData("status", "Показывает активную станцию и underlying radio"),
+                                new SubcommandData("stop", "Выключает персональную станцию; текущий трек продолжает играть")),
                 Commands.slash("play", "Ищет и добавляет песню")
                         .addOptions(new OptionData(
                                 OptionType.STRING,

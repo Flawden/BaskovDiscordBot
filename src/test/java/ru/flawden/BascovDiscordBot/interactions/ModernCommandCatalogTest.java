@@ -21,7 +21,7 @@ class ModernCommandCatalogTest {
 
         assertEquals(commands.size(), names.size());
         assertEquals(Set.of(
-                "help", "version", "status", "doctor", "radio", "play", "search", "discover", "history", "replay", "favorites", "playlist",
+                "help", "version", "status", "doctor", "radio", "mix", "play", "search", "discover", "history", "replay", "favorites", "playlist",
                 "pause", "resume", "previous", "skip", "voteskip", "stop", "queue", "now", "seek",
                 "volume", "repeat", "shuffle", "remove", "move", "clear", "queue-manage", "session", "moderation", "settings"), names);
     }
@@ -49,6 +49,24 @@ class ModernCommandCatalogTest {
                 .collect(Collectors.toMap(option -> option.getName(), option -> option));
         assertEquals(2, startOptions.get("mode").getChoices().size());
         assertEquals(3, startOptions.get("strategy").getChoices().size());
+    }
+
+    @Test
+    void mixCommandExposesCuratedProductStations() {
+        SlashCommandData mix = command("mix");
+        assertEquals(Set.of("list", "start", "status", "stop"),
+                mix.getSubcommands().stream()
+                        .map(subcommand -> subcommand.getName())
+                        .collect(Collectors.toSet()));
+
+        var station = mix.getSubcommands().stream()
+                .filter(subcommand -> "start".equals(subcommand.getName()))
+                .flatMap(subcommand -> subcommand.getOptions().stream())
+                .filter(option -> "station".equals(option.getName()))
+                .findFirst()
+                .orElseThrow();
+
+        assertEquals(4, station.getChoices().size());
     }
 
     @Test
