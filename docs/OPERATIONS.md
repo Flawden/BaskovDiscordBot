@@ -12,20 +12,21 @@ Baskov Discord Bot v1.1.0 расширяет production observability: живо�
 - `DAVE / E2EE` — native runtime и protocol version;
 - `Music` / `Playback modes` — active/playing sessions, queued tracks, repeat/volume/history/seek;
 - `Voice transport` / `Voice history` / `Voice recovery` — transport state, frame polling, root-cause counters и bounded recovery;
-- `Storage readiness` — live probe трёх persistent stores;
+- `Storage readiness` — live probe пяти persistent stores;
 - `Persistence backups` — состояние backup scheduler, success/fail counters, retention и последний успешный snapshot;
 - `Reliability` — агрегированный READY/DEGRADED state для gateway + storage + backups и число recovery failures;
 - `Команды с запуска` — success/fail/total, failure rate, распределение Prefix/Slash/Buttons и время последней ошибки.
 
 ## Persistence preflight и live probe
 
-До подключения JDA проверяются четыре долговременных storage path:
+До подключения JDA проверяются пять долговременных storage path:
 
 ```text
 guild-settings.properties
 music-library.tsv
 music-sessions.tsv
 recommendation-feedback.tsv
+baskov-auth.tsv
 ```
 
 Пути обязаны быть различными. Существующий объект должен быть обычным readable/writable file и не symlink. Рядом с каждым storage выполняется реальная create/write/delete probe.
@@ -66,6 +67,7 @@ guild-settings.properties
 music-library.tsv
 music-sessions.tsv
 recommendation-feedback.tsv
+baskov-auth.tsv
 manifest.properties
 ```
 

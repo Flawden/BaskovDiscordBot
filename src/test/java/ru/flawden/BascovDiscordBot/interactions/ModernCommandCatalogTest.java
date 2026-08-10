@@ -21,7 +21,7 @@ class ModernCommandCatalogTest {
 
         assertEquals(commands.size(), names.size());
         assertEquals(Set.of(
-                "help", "version", "status", "home", "doctor", "radio", "mix", "play", "search", "discover", "history", "replay", "favorites", "playlist",
+                "help", "version", "status", "home", "device", "doctor", "radio", "mix", "play", "search", "discover", "history", "replay", "favorites", "playlist",
                 "pause", "resume", "previous", "skip", "voteskip", "stop", "queue", "now", "seek",
                 "volume", "repeat", "shuffle", "remove", "move", "clear", "queue-manage", "session", "moderation", "settings"), names);
     }
@@ -32,6 +32,18 @@ class ModernCommandCatalogTest {
         SlashCommandData home = command("home");
         assertTrue(home.getOptions().isEmpty());
         assertTrue(home.getSubcommands().isEmpty());
+    }
+
+
+    @Test
+    void deviceCommandExposesPairStatusAndTargetedRevoke() {
+        SlashCommandData device = command("device");
+        assertEquals(Set.of("pair", "status", "revoke"),
+                device.getSubcommands().stream().map(subcommand -> subcommand.getName()).collect(Collectors.toSet()));
+        assertTrue(device.getSubcommands().stream()
+                .filter(subcommand -> "revoke".equals(subcommand.getName()))
+                .flatMap(subcommand -> subcommand.getOptions().stream())
+                .anyMatch(option -> "session-id".equals(option.getName())));
     }
 
     @Test

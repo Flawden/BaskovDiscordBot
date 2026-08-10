@@ -17,20 +17,21 @@ class PersistenceReadinessTest {
     Path tempDirectory;
 
     @Test
-    void acceptsFourDistinctWritableStores() throws Exception {
+    void acceptsFiveDistinctWritableStores() throws Exception {
         Path settings = tempDirectory.resolve("data/guild-settings.properties");
         Path library = tempDirectory.resolve("data/music-library.tsv");
         Path sessions = tempDirectory.resolve("data/music-sessions.tsv");
         Path feedback = tempDirectory.resolve("data/recommendation-feedback.tsv");
+        Path auth = tempDirectory.resolve("data/baskov-auth.tsv");
         Files.createDirectories(settings.getParent());
         Files.writeString(settings, "# settings\n");
 
-        PersistenceReadiness readiness = new PersistenceReadiness(settings, library, sessions, feedback);
+        PersistenceReadiness readiness = new PersistenceReadiness(settings, library, sessions, feedback, auth);
         PersistenceReadiness.Snapshot snapshot = readiness.requireReady();
 
         assertTrue(snapshot.ready());
         assertEquals("READY", snapshot.status());
-        assertEquals(4, snapshot.stores());
+        assertEquals(5, snapshot.stores());
         assertEquals(1, snapshot.existingFiles());
         try (var stream = Files.list(settings.getParent())) {
             assertFalse(stream.anyMatch(path -> path.getFileName().toString().startsWith(".baskov-storage-preflight-")));
@@ -44,7 +45,8 @@ class PersistenceReadinessTest {
                 shared,
                 shared,
                 tempDirectory.resolve("data/sessions.tsv"),
-                tempDirectory.resolve("data/recommendations.tsv"));
+                tempDirectory.resolve("data/recommendations.tsv"),
+                tempDirectory.resolve("data/auth.tsv"));
 
         IllegalStateException exception = assertThrows(IllegalStateException.class, readiness::requireReady);
 
@@ -60,7 +62,8 @@ class PersistenceReadinessTest {
                 settings,
                 tempDirectory.resolve("library.tsv"),
                 tempDirectory.resolve("sessions.tsv"),
-                tempDirectory.resolve("recommendations.tsv"));
+                tempDirectory.resolve("recommendations.tsv"),
+                tempDirectory.resolve("auth.tsv"));
 
         assertThrows(IllegalStateException.class, readiness::requireReady);
         assertEquals("FAILED", readiness.snapshot().status());
@@ -71,7 +74,8 @@ class PersistenceReadinessTest {
         Path library = tempDirectory.resolve("live/library.tsv");
         Path sessions = tempDirectory.resolve("live/sessions.tsv");
         Path feedback = tempDirectory.resolve("live/recommendations.tsv");
-        PersistenceReadiness readiness = new PersistenceReadiness(settings, library, sessions, feedback);
+        Path auth = tempDirectory.resolve("live/auth.tsv");
+        PersistenceReadiness readiness = new PersistenceReadiness(settings, library, sessions, feedback, auth);
 
         assertTrue(readiness.requireReady().ready());
         Files.createDirectories(settings);

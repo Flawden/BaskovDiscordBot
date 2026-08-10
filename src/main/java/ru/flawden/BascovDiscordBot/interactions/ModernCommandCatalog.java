@@ -33,6 +33,12 @@ public final class ModernCommandCatalog {
                 Commands.slash("version", "Показывает версию запущенного бота"),
                 Commands.slash("status", "Показывает состояние Discord, музыки и команд"),
                 Commands.slash("home", "Открывает персональный музыкальный хаб Баскова"),
+                Commands.slash("device", "Связывает Baskov Music устройства и управляет сессиями")
+                        .addSubcommands(
+                                new SubcommandData("pair", "Создаёт одноразовый код для нового устройства"),
+                                new SubcommandData("status", "Показывает привязанные устройства"),
+                                new SubcommandData("revoke", "Отзывает выбранную device session")
+                                        .addOption(OptionType.STRING, "session-id", "ID устройства из /device status", true)),
                 Commands.slash("doctor", "Диагностирует подсистемы и подсказывает следующий шаг")
                         .addSubcommands(
                                 new SubcommandData("summary", "Общая health-сводка и приоритет проблем"),

@@ -12,6 +12,7 @@ public final class ProductApiResponse {
     public record Capabilities(
             String apiVersion,
             String mode,
+            boolean authenticationRequiredForReads,
             boolean mutationsEnabled,
             boolean authenticationRequiredForMutations,
             List<String> resources) {
@@ -19,7 +20,7 @@ public final class ProductApiResponse {
 
     public record Home(
             long guildId,
-            long userId,
+            String userId,
             LocalDate date,
             Continuation continuation,
             List<Mix> today,
@@ -32,7 +33,7 @@ public final class ProductApiResponse {
 
     public record Mixes(
             long guildId,
-            long userId,
+            String userId,
             LocalDate date,
             Continuation continuation,
             List<Mix> today,
@@ -56,7 +57,7 @@ public final class ProductApiResponse {
 
     public record Library(
             long guildId,
-            long userId,
+            String userId,
             int favorites,
             int personalHistory,
             List<Track> recent) {

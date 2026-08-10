@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.28.0**.
+Текущая версия релизной ветки: **v1.29.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -15,7 +15,7 @@
 - Daily Mixes & Station Continuity: `/mix list|themes|start|resume|status|stop` включает «Микс дня» и «Открытия дня» со стабильным daily seed-набором, а bounded process-local continuity до 36 часов сохраняет station/date/seed cursor/anti-repeat memory для явного `/mix resume`; restart/deploy не автозапускает музыку и новых persistence-файлов нет;
 - Mix Generation & Diversity Control: curated mix теперь разводит исполнителей и насыщенные tags на уровне seed/ranker/final transport, `/mix themes` строит положительные темы из feedback V2, а `station:theme` создаёт динамический тематический поток без нового persistence; hard novelty остаётся выше diversity/theme scoring;
 - Personalized Home / Music Hub: `/home` собирает client-neutral `HomeSnapshot` с continuation, daily/for-you mix cards, positive themes, library counters, recent preview и taste maturity; Discord только рендерит snapshot, а domain/service не зависит от JDA и уже готов стать read-model будущего Product API/Android;
-- Product API Boundary: `MusicProductService` стал общей client-neutral application-границей для Discord и будущих клиентов; read-only HTTP preview `/api/v1/home|mixes|player|library|capabilities` использует отдельные versioned wire DTO и mapper, выключен по умолчанию, работает только при явном opt-in и bind-ится на loopback. Mutation endpoints намеренно отложены до v1.29 Users/Auth;
+- Product API Boundary + Device Identity: `MusicProductService` остаётся общей client-neutral application-границей, а `v1.29` добавляет provider-neutral `BaskovUser`, Discord pairing proof, hashed device sessions и authenticated reads. `/device pair|status|revoke` управляет устройствами; `/api/v1/home|mixes|player|library` больше не принимает произвольный `userId`, а выводит linked Discord identity из bearer session и проверяет guild membership. Music mutations пока выключены;
 - Playback Source Abstraction & Provider Resilience: system-selected recommendation сначала превращается в provider-neutral `TrackIdentity`, затем `PlaybackResolver` строит client-aware YouTube/SoundCloud candidates; runtime health registry считает technical failures/misses/fallbacks, после 3 подряд технических ошибок открывает 90-секундный cooldown, автоматически переводит Smart Radio/Mix на следующий provider и после cooldown делает probe. Прямые `/play`/URL остаются explicit-source path без автоматической подмены; health process-local и не создаёт новый persistence;
 - `/search` с пятью результатами YouTube, одноразовыми кнопками выбора и пятиминутной owner-bound сессией; autocomplete последних запросов работает в `/play` и `/search`;
 - личное persistent избранное до 100 треков на пользователя и сервер через `/favorites list|add|play|play-all|remove|search|clear`; favorites участвуют в локальном autocomplete и используют существующий ordered batch playback;
@@ -29,7 +29,7 @@
 - `/now` с визуальным прогрессом, state-aware двухрядным пультом previous/±15s/pause/next/shuffle/repeat, disabled-состояниями и кнопкой refresh; `/status` с активными playback modes, uptime, Discord gateway, voice transport snapshot и последними voice/source ошибками;
 - Discord Experience 1.6: секционная `/help` с кнопочной навигацией, live refresh `/status` и одноразовые owner/guild-bound подтверждения для stop/clear/delete/reset;
 - динамический Docker heartbeat, который подтверждает свежее подключение к Discord, считает gateway transitions/disconnected samples и показывает последнее CONNECTED;
-- atomic persistence backups четырёх storage-файлов внутри `/app/data/backups` с bounded retention и owner-only permissions;
+- atomic persistence backups пяти storage-файлов внутри `/app/data/backups` с bounded retention и owner-only permissions;
 - live storage probe в `/status`, агрегированный reliability state и command failure rate/последняя ошибка;
 - JDA 6.5.0 с настоящей JNI libDAVE `ce725965e`, положительной protocol version и подтверждением playback только после реального запроса аудиофрейма Discord media transport;
 - bounded voice recovery: отключённый JDA auto-reconnect, до трёх контролируемых повторных подключений с backoff и сохранением checkpoint при исчерпании попыток;
@@ -70,12 +70,12 @@ docker compose up -d --build
 docker compose logs -f bot
 ```
 
-По умолчанию боту не нужен входящий HTTP-порт: Product API preview отключён и Spring запускается в non-web режиме. Перед подключением к Discord выполняется fail-fast storage preflight для guild settings, music library, session checkpoint и recommendation feedbacks; после подключения приложение обновляет readiness heartbeat каждые 10 секунд, а Docker считает контейнер healthy только при свежем `CONNECTED`-сигнале.
+По умолчанию боту не нужен входящий HTTP-порт: Product API отключён и Spring запускается в non-web режиме. Перед подключением к Discord выполняется fail-fast storage preflight для guild settings, music library, session checkpoint, recommendation feedback и `baskov-auth.tsv`; после подключения приложение обновляет readiness heartbeat каждые 10 секунд, а Docker считает контейнер healthy только при свежем `CONNECTED`-сигнале.
 
 
-### Product API v1 preview
+### Product API v1 + device pairing
 
-`v1.28.0` добавляет первую HTTP-границу будущего Baskov Music, но до появления собственной user/device identity в `v1.29` она строго read-only и отключена по умолчанию. Для локальной loopback-проверки:
+`v1.29.0` добавляет собственную identity/auth boundary Baskov Music. API по-прежнему отключён и bind-ится на loopback по умолчанию. Новый клиент сначала подтверждает Discord identity через `/device pair`, затем обменивает одноразовый код на device session:
 
 ```bash
 export BASKOV_PRODUCT_API_ENABLED=true
@@ -85,7 +85,20 @@ export BASKOV_PRODUCT_API_PORT=18080
 ./mvnw spring-boot:run
 ```
 
-После запуска доступны `GET /api/v1/capabilities`, `/home`, `/mixes`, `/player`, `/library`. Docker Compose намеренно не публикует API-порт наружу. `POST`/mutation use-cases появятся только вместе с authentication/authorization.
+Pairing flow:
+
+```text
+Discord /device pair
+→ one-time code
+→ POST /api/v1/auth/device/pair
+→ access + refresh token
+```
+
+`GET /api/v1/capabilities` остаётся публичным внутри opt-in API. `/api/v1/home|mixes|player|library`, `/api/v1/auth/me` и `/api/v1/auth/devices` требуют bearer token. User-scoped reads больше не принимают `userId` query parameter; backend использует linked Discord identity и проверяет membership в запрошенном guild.
+
+Plaintext access/refresh tokens не сохраняются: `baskov-auth.tsv` содержит только SHA-256 hashes. По умолчанию pairing code живёт 5 минут, access token — 30 минут, refresh token — 30 дней, максимум 8 активных устройств. Docker Compose намеренно не публикует API-порт наружу.
+
+Music mutation endpoints (`start/skip/favorite/...`) всё ещё выключены: `v1.29` отделяет account security от переноса playback permission/orchestration в HTTP.
 
 ### Настройки музыкальной сессии
 
@@ -109,6 +122,11 @@ export BASKOV_PRODUCT_API_PORT=18080
 | `DISCORD_BOT_MUSIC_LIBRARY_FILE` | `data/music-library.tsv` | отдельный atomic-файл постоянных плейлистов, истории и личного избранного; в Docker `/app/data/music-library.tsv` |
 | `DISCORD_BOT_MUSIC_SESSION_FILE` | `data/music-sessions.tsv` | atomic checkpoint активных voice/music-сессий; в Docker `/app/data/music-sessions.tsv` |
 | `DISCORD_BOT_RECOMMENDATION_FEEDBACK_FILE` | `data/recommendation-feedback.tsv` | persistent bounded history результатов рекомендаций; в Docker `/app/data/recommendation-feedback.tsv` |
+| `BASKOV_AUTH_FILE` | `data/baskov-auth.tsv` | users, external identity links и hashed device sessions; в Docker `/app/data/baskov-auth.tsv` |
+| `BASKOV_AUTH_PAIRING_TTL` | `5m` | срок жизни одноразового Discord pairing code |
+| `BASKOV_AUTH_ACCESS_TOKEN_TTL` | `30m` | срок жизни access token |
+| `BASKOV_AUTH_REFRESH_TOKEN_TTL` | `30d` | срок жизни rotating refresh token |
+| `BASKOV_AUTH_MAX_DEVICE_SESSIONS` | `8` | максимум активных device sessions на BaskovUser |
 | `DISCORD_BOT_MUSIC_SESSION_CHECKPOINT_INTERVAL` | `5s` | период сохранения активной сессии |
 | `DISCORD_BOT_MUSIC_SESSION_MAX_AGE` | `6h` | максимальный возраст checkpoint для автозапуска |
 | `DISCORD_BOT_MUSIC_SESSION_RESTORE_ON_STARTUP` | `true` | восстановление после restart/redeploy |
@@ -116,7 +134,7 @@ export BASKOV_PRODUCT_API_PORT=18080
 | `DISCORD_BOT_MUSIC_SESSION_VOICE_RECOVERY_ENABLED` | `true` | bounded recovery при неожиданном LEAVE или пропаже frame polling |
 | `DISCORD_BOT_MUSIC_SESSION_MAX_RECOVERY_ATTEMPTS` | `3` | максимум transport-recovery попыток |
 | `DISCORD_BOT_MUSIC_SESSION_RECOVERY_BACKOFF` | `2s` | базовый линейный backoff между попытками |
-| `DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_ENABLED` | `true` | включает periodic snapshot трёх persistent storage |
+| `DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_ENABLED` | `true` | включает periodic snapshot пяти persistent storage |
 | `DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_DIRECTORY` | `data/backups` | локальный каталог backup; в Docker принудительно `/app/data/backups` |
 | `DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_INTERVAL` | `6h` | период между backup snapshot |
 | `DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_RETENTION` | `14` | максимальное число ZIP-backup, старые удаляются |
@@ -128,6 +146,7 @@ GitHub-hosted delivery и резервный self-hosted режим описан
 Contextual online exploration policy описана в [`docs/CONTEXTUAL-BANDIT-EXPLORATION.md`](docs/CONTEXTUAL-BANDIT-EXPLORATION.md).
 Готовые персональные станции и их mapping описаны в [`docs/PERSONALIZED-MIXES-STATIONS.md`](docs/PERSONALIZED-MIXES-STATIONS.md), а daily-выпуски и `/mix resume` — в [`docs/DAILY-MIXES-CONTINUITY.md`](docs/DAILY-MIXES-CONTINUITY.md). Diversity/thematic generation описаны в [`docs/MIX-GENERATION-DIVERSITY.md`](docs/MIX-GENERATION-DIVERSITY.md).
 Персональный Home read-model и граница будущих клиентов описаны в [`docs/PERSONALIZED-HOME-MUSIC-HUB.md`](docs/PERSONALIZED-HOME-MUSIC-HUB.md).
+Product API и device identity/auth описаны в [`docs/PRODUCT-API.md`](docs/PRODUCT-API.md) и [`docs/USERS-AUTH-DEVICE-SESSIONS.md`](docs/USERS-AUTH-DEVICE-SESSIONS.md).
 Track identity и provider-neutral catalog foundation описаны в [`docs/TRACK-IDENTITY-CATALOG.md`](docs/TRACK-IDENTITY-CATALOG.md), а client-aware playback resolver — в [`docs/PLAYBACK-SOURCE-RESOLVER.md`](docs/PLAYBACK-SOURCE-RESOLVER.md).
 Интерактивная помощь, status refresh и destructive confirmations описаны в [`docs/DISCORD-EXPERIENCE.md`](docs/DISCORD-EXPERIENCE.md).
 Интерактивный поиск и безопасный выбор трека описаны в [`docs/SEARCH-TRACK-SELECTION.md`](docs/SEARCH-TRACK-SELECTION.md).

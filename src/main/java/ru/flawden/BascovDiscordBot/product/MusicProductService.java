@@ -58,6 +58,6 @@ public class MusicProductService {
     }
 
     public ProductCapabilities capabilities() {
-        return ProductCapabilities.readOnlyPreview();
+        return ProductCapabilities.authenticatedRead();
     }
 }

@@ -22,6 +22,7 @@ import ru.flawden.BascovDiscordBot.commands.VersionEvent;
 import ru.flawden.BascovDiscordBot.commands.music.MediaQueryResolver;
 import ru.flawden.BascovDiscordBot.commands.music.MusicControlPolicy;
 import ru.flawden.BascovDiscordBot.commands.music.MusicEmbeds;
+import ru.flawden.BascovDiscordBot.auth.DeviceAuthService;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
 import ru.flawden.BascovDiscordBot.dave.DaveRuntimeInfo;
 import ru.flawden.BascovDiscordBot.home.HomeSnapshot;
@@ -120,6 +121,7 @@ public class ModernInteractions extends ListenerAdapter {
     private final ConfirmationStore confirmationStore;
     private final RecommendationFeedbackService recommendationFeedback;
     private final MusicProductService musicProductService;
+    private final DeviceAuthService deviceAuthService;
 
     public ModernInteractions(
             PlayerManager playerManager,
@@ -142,7 +144,8 @@ public class ModernInteractions extends ListenerAdapter {
             DaveRuntimeInfo daveRuntimeInfo,
             ConfirmationStore confirmationStore,
             RecommendationFeedbackService recommendationFeedback,
-            MusicProductService musicProductService) {
+            MusicProductService musicProductService,
+            DeviceAuthService deviceAuthService) {
         this.playerManager = playerManager;
         this.controlPolicy = controlPolicy;
         this.queryResolver = queryResolver;
@@ -164,6 +167,7 @@ public class ModernInteractions extends ListenerAdapter {
         this.confirmationStore = confirmationStore;
         this.recommendationFeedback = recommendationFeedback;
         this.musicProductService = musicProductService;
+        this.deviceAuthService = deviceAuthService;
     }
 
     @Override
@@ -184,6 +188,7 @@ public class ModernInteractions extends ListenerAdapter {
                 case "status" -> status(event);
                 case "doctor" -> doctor(event);
                 case "home" -> home(event);
+                case "device" -> device(event);
                 case "radio" -> radio(event);
                 case "mix" -> mix(event);
                 case "session" -> session(event);
@@ -752,7 +757,7 @@ public class ModernInteractions extends ListenerAdapter {
 
         TrackRequester requester = new TrackRequester(
                 event.getUser().getIdLong(),
-                member.getEffectiveName());
+                member.getName());
         event.deferEdit().queue(hook -> playerManager
                 .ensureVoiceConnection(guild, targetChannel)
                 .whenComplete((connection, failure) -> {
@@ -885,6 +890,64 @@ public class ModernInteractions extends ListenerAdapter {
                 .map(SystemDoctor.Check::severity)
                 .max(SystemDoctor.Severity::compareTo)
                 .orElse(SystemDoctor.Severity.OK);
+    }
+
+    private void device(SlashCommandInteractionEvent event) {
+        String subcommand = event.getSubcommandName() == null ? "status" : event.getSubcommandName();
+        long discordUserId = event.getUser().getIdLong();
+        try {
+            switch (subcommand) {
+                case "pair" -> {
+                    var grant = deviceAuthService.issueDiscordPairing(discordUserId, event.getUser().getName());
+                    long seconds = Math.max(1L, (grant.expiresAtEpochMillis() - System.currentTimeMillis() + 999L) / 1000L);
+                    event.replyEmbeds(MusicEmbeds.success(
+                                    "📱 Подключение устройства",
+                                    "Одноразовый код: `" + grant.code() + "`\n"
+                                            + "Действует ещё примерно `" + seconds + "` сек. и сгорает после первого использования.\n\n"
+                                            + "Код подтверждает твою Discord identity для Baskov Music. Не публикуй его в общем чате."))
+                            .setEphemeral(true)
+                            .queue();
+                }
+                case "status" -> {
+                    List<DeviceAuthService.DeviceView> devices = deviceAuthService.devicesForDiscord(discordUserId);
+                    String description;
+                    if (devices.isEmpty()) {
+                        description = "Привязанных устройств пока нет. Используй `/device pair`, чтобы создать одноразовый код.";
+                    } else {
+                        StringBuilder body = new StringBuilder();
+                        for (DeviceAuthService.DeviceView device : devices) {
+                            body.append(device.revoked() || device.expired() ? "⚪ " : "🟢 ")
+                                    .append("**").append(sanitizeInline(device.deviceName())).append("**\n")
+                                    .append("session: `").append(device.sessionId()).append("`")
+                                    .append(device.revoked() ? " • revoked" : device.expired() ? " • expired" : " • active")
+                                    .append('\n');
+                        }
+                        description = body.toString();
+                    }
+                    event.replyEmbeds(new EmbedBuilder()
+                                    .setTitle("📱 Baskov Music devices")
+                                    .setDescription(description)
+                                    .setColor(Color.CYAN)
+                                    .setFooter("Access/refresh tokens никогда не показываются в Discord и не хранятся в plaintext")
+                                    .build())
+                            .setEphemeral(true)
+                            .queue();
+                }
+                case "revoke" -> {
+                    String sessionId = event.getOption("session-id").getAsString();
+                    deviceAuthService.revokeDeviceForDiscord(discordUserId, sessionId);
+                    event.replyEmbeds(MusicEmbeds.success(
+                                    "🔒 Device session отозвана",
+                                    "Сессия `" + sanitizeInline(sessionId) + "` больше не сможет обновлять или использовать токены."))
+                            .setEphemeral(true)
+                            .queue();
+                }
+                default -> event.replyEmbeds(MusicEmbeds.error("❌ Неизвестная device-команда", "Используй `/device pair`, `/device status` или `/device revoke`."))
+                        .setEphemeral(true).queue();
+            }
+        } catch (DeviceAuthService.AuthException exception) {
+            event.replyEmbeds(MusicEmbeds.error("🔐 Device auth", exception.getMessage())).setEphemeral(true).queue();
+        }
     }
 
     private void home(SlashCommandInteractionEvent event) {
@@ -1158,7 +1221,7 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
-        TrackRequester owner = new TrackRequester(userId, member.getEffectiveName());
+        TrackRequester owner = new TrackRequester(userId, member.getName());
         event.deferReply().queue(hook -> playerManager
                 .ensureVoiceConnection(guild, targetChannel)
                 .whenComplete((connection, failure) -> {
@@ -1376,7 +1439,7 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
-        TrackRequester owner = new TrackRequester(userId, member.getEffectiveName());
+        TrackRequester owner = new TrackRequester(userId, member.getName());
         event.deferReply().queue(hook -> playerManager
                 .ensureVoiceConnection(guild, targetChannel)
                 .whenComplete((connection, failure) -> {
@@ -2517,7 +2580,7 @@ public class ModernInteractions extends ListenerAdapter {
                 .toList();
         TrackRequester requester = new TrackRequester(
                 event.getUser().getIdLong(),
-                member.getEffectiveName());
+                member.getName());
         event.deferReply().queue(hook -> playerManager
                 .ensureVoiceConnection(guild, targetChannel)
                 .whenComplete((connection, failure) -> {
@@ -2625,7 +2688,7 @@ public class ModernInteractions extends ListenerAdapter {
 
         searchHistory.remember(event.getUser().getIdLong(), rawQuery);
         TrackRequester requester =
-                new TrackRequester(event.getUser().getIdLong(), member.getEffectiveName());
+                new TrackRequester(event.getUser().getIdLong(), member.getName());
         event.deferReply().queue(hook -> playerManager
                 .ensureVoiceConnection(guild, targetChannel)
                 .whenComplete((connection, failure) -> {
@@ -4238,6 +4301,7 @@ public class ModernInteractions extends ListenerAdapter {
                     .setTitle("🎤 Басков • быстрый обзор")
                     .setDescription("Slash-команды — основной интерфейс. Выбери раздел кнопками ниже.")
                     .addField("🏠 Главный экран", "`/home` собирает продолжение, миксы дня, темы, библиотеку и недавнее в одну персональную сводку.", false)
+                    .addField("📱 Устройства", "`/device pair|status|revoke` связывает будущие Baskov Music клиенты с твоей Discord identity.", false)
                     .addField("▶️ Быстрый старт", "`/play` → `/now` → `/queue`", false)
                     .addField("🔎 Найти трек", "`/search` показывает до пяти вариантов; `/discover` продолжает знакомый поиск.", false)
                     .addField("📚 Сохранить музыку", "`/favorites`, `/playlist` и `/history` переживают restart контейнера.", false)

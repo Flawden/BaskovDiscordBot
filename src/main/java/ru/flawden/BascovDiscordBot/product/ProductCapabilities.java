@@ -2,26 +2,28 @@ package ru.flawden.BascovDiscordBot.product;
 
 import java.util.List;
 
-/** Explicitly describes which parts of the first product API are safe to expose. */
+/** Explicitly describes which parts of the product API are safe to expose. */
 public record ProductCapabilities(
         String apiVersion,
         String mode,
+        boolean authenticationRequiredForReads,
         boolean mutationsEnabled,
         boolean authenticationRequiredForMutations,
         List<String> resources) {
 
     public ProductCapabilities {
         apiVersion = apiVersion == null || apiVersion.isBlank() ? "v1" : apiVersion.trim();
-        mode = mode == null || mode.isBlank() ? "READ_ONLY_PREVIEW" : mode.trim();
+        mode = mode == null || mode.isBlank() ? "AUTHENTICATED_READ" : mode.trim();
         resources = List.copyOf(resources == null ? List.of() : resources);
     }
 
-    public static ProductCapabilities readOnlyPreview() {
+    public static ProductCapabilities authenticatedRead() {
         return new ProductCapabilities(
                 "v1",
-                "READ_ONLY_PREVIEW",
+                "AUTHENTICATED_READ",
+                true,
                 false,
                 true,
-                List.of("home", "mixes", "player", "library", "capabilities"));
+                List.of("auth", "me", "devices", "home", "mixes", "player", "library", "capabilities"));
     }
 }

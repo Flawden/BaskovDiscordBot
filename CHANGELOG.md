@@ -6,6 +6,22 @@
 
 ## [Unreleased]
 
+## [1.29.0] — 2026-08-10
+
+### Users, Auth & Device Sessions
+
+- Добавлены provider-neutral `BaskovUser`, `ExternalIdentity` и persistent `DeviceSession`: Discord становится первой внешней identity, но account/session model больше не принадлежит Discord UI.
+- Добавлена ephemeral `/device pair|status|revoke`: pairing-код создаётся только внутри аутентифицированного Discord interaction, одноразовый, process-local и по умолчанию живёт 5 минут. HTTP-клиент не может сам передать произвольный Discord user id как proof.
+- Добавлен `baskov-auth.tsv` (`BASKOV_AUTH_V1`) с atomic replace и owner-only permissions. Persistent store содержит users, identity links и только SHA-256 access/refresh token hashes; plaintext tokens выдаются только pair/refresh response. Store включён в persistence readiness и backup ZIP.
+- Добавлен `DeviceAuthService`: access tokens 30 минут, refresh tokens 30 дней, SecureRandom issuance, refresh rotation обоих токенов, logout/revoke и max 8 active device sessions по умолчанию. Настройки вынесены в `BASKOV_AUTH_*` environment properties.
+- Product API v1 переведён из unauthenticated read preview в `AUTHENTICATED_READ`: `/home`, `/mixes`, `/player`, `/library` требуют Bearer token, user-scoped reads выводят linked Discord identity из device principal и больше не принимают `userId` query parameter.
+- Добавлен `ProductGuildAccessPort`: token сам по себе не даёт читать произвольный guild; runtime JDA adapter проверяет membership linked Discord identity. HTTP controller не импортирует JDA.
+- Добавлены `/api/v1/auth/device/pair`, `/refresh`, `/logout`, `/me`, `/devices` и targeted device revoke. Music mutations остаются выключены: auth lifecycle отделён от будущего переноса playback/permission mutations в client-neutral application layer.
+- API остаётся disabled + non-web + loopback-bound по умолчанию, Docker порт наружу не публикуется. Legacy favorites/history/feedback storage keys намеренно не мигрируют в этом релизе: `BaskovUser` связывается с существующим Discord profile без потери накопленного recommendation data.
+- Добавлены unit/architecture regressions на one-time pairing, token hashing/rotation/revoke, device limits, persistent auth reload, bearer-derived identity, guild access boundary и отсутствие plaintext secrets. User-Agent внешних recommendation/collaborative запросов обновлён до `v1.29.0 device-auth`.
+
+
+
 ## [1.28.0] — 2026-08-10
 
 ### Product API Boundary

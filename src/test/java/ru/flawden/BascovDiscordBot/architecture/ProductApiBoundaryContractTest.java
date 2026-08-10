@@ -34,7 +34,7 @@ class ProductApiBoundaryContractTest {
     }
 
     @Test
-    void v128HttpSurfaceIsReadOnlyUntilAuthenticationExists() throws Exception {
+    void v129HttpSurfaceRequiresBearerIdentityForUserScopedReads() throws Exception {
         String controller = read("product/api/ProductApiController.java");
         String capabilities = read("product/ProductCapabilities.java");
 
@@ -42,8 +42,9 @@ class ProductApiBoundaryContractTest {
         assertTrue(controller.contains("@GetMapping(\"/mixes\")"));
         assertTrue(controller.contains("@GetMapping(\"/player\")"));
         assertTrue(controller.contains("@GetMapping(\"/library\")"));
-        assertFalse(controller.contains("@PostMapping"));
-        assertTrue(capabilities.contains("false,"));
+        assertTrue(controller.contains("HttpHeaders.AUTHORIZATION"));
+        assertFalse(controller.contains("@RequestParam long userId"));
+        assertTrue(capabilities.contains("authenticationRequiredForReads"));
         assertTrue(capabilities.contains("authenticationRequiredForMutations"));
     }
 
@@ -93,7 +94,7 @@ class ProductApiBoundaryContractTest {
     }
 
     @Test
-    void v128AddsWebAdapterWithoutPublishingContainerPort() throws Exception {
+    void v129KeepsWebAdapterUnpublishedByDefault() throws Exception {
         String pom = Files.readString(Path.of("pom.xml"));
         String compose = Files.readString(Path.of("docker-compose.yml"));
 

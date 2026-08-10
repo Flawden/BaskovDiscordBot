@@ -29,10 +29,11 @@ class PersistenceBackupServiceTest {
         Path library = write("data/music-library.tsv", "library\n");
         Path sessions = write("data/music-sessions.tsv", "sessions\n");
         Path feedback = write("data/recommendation-feedback.tsv", "feedback\n");
+        Path auth = write("data/baskov-auth.tsv", "auth\n");
         OperationsProperties properties = properties(5);
         MutableClock clock = new MutableClock(Instant.parse("2026-08-08T12:00:00Z"));
         PersistenceBackupService service = new PersistenceBackupService(
-                properties, settings, library, sessions, feedback, clock);
+                properties, settings, library, sessions, feedback, auth, clock);
 
         Path archive = service.createBackupNow();
 
@@ -40,12 +41,13 @@ class PersistenceBackupServiceTest {
         assertTrue(Files.isRegularFile(archive));
         assertEquals("READY", service.snapshot().status());
         assertEquals(1L, service.snapshot().successfulBackups());
-        assertEquals(4, service.snapshot().lastIncludedStores());
+        assertEquals(5, service.snapshot().lastIncludedStores());
         try (ZipFile zip = new ZipFile(archive.toFile())) {
             assertNotNull(zip.getEntry("guild-settings.properties"));
             assertNotNull(zip.getEntry("music-library.tsv"));
             assertNotNull(zip.getEntry("music-sessions.tsv"));
             assertNotNull(zip.getEntry("recommendation-feedback.tsv"));
+            assertNotNull(zip.getEntry("baskov-auth.tsv"));
             assertNotNull(zip.getEntry("manifest.properties"));
             String manifest = new String(zip.getInputStream(zip.getEntry("manifest.properties")).readAllBytes());
             assertTrue(manifest.contains("format=BASKOV_PERSISTENCE_BACKUP_V1"));
@@ -64,10 +66,11 @@ class PersistenceBackupServiceTest {
         Path library = write("stores/library.tsv", "two\n");
         Path sessions = write("stores/sessions.tsv", "three\n");
         Path feedback = write("stores/recommendations.tsv", "four\n");
+        Path auth = write("stores/auth.tsv", "five\n");
         OperationsProperties properties = properties(2);
         MutableClock clock = new MutableClock(Instant.parse("2026-08-08T12:00:00Z"));
         PersistenceBackupService service = new PersistenceBackupService(
-                properties, settings, library, sessions, feedback, clock);
+                properties, settings, library, sessions, feedback, auth, clock);
 
         service.createBackupNow();
         clock.advance(Duration.ofSeconds(1));
@@ -94,6 +97,7 @@ class PersistenceBackupServiceTest {
                 tempDirectory.resolve("library.tsv"),
                 tempDirectory.resolve("sessions.tsv"),
                 tempDirectory.resolve("recommendations.tsv"),
+                tempDirectory.resolve("auth.tsv"),
                 Clock.systemUTC());
 
         assertNull(service.createBackupNow());

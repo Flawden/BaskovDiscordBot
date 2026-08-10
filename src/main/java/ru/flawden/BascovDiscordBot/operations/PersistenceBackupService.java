@@ -4,6 +4,7 @@ import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import ru.flawden.BascovDiscordBot.config.AuthProperties;
 import ru.flawden.BascovDiscordBot.config.MusicLibraryProperties;
 import ru.flawden.BascovDiscordBot.config.MusicSessionProperties;
 import ru.flawden.BascovDiscordBot.config.OperationsProperties;
@@ -69,13 +70,15 @@ public class PersistenceBackupService {
             PersistenceProperties persistenceProperties,
             MusicLibraryProperties musicLibraryProperties,
             MusicSessionProperties musicSessionProperties,
-            RecommendationFeedbackProperties recommendationFeedbackProperties) {
+            RecommendationFeedbackProperties recommendationFeedbackProperties,
+            AuthProperties authProperties) {
         this(
                 properties,
                 persistenceProperties.getFile(),
                 musicLibraryProperties.getFile(),
                 musicSessionProperties.getFile(),
                 recommendationFeedbackProperties.getFile(),
+                authProperties.getFile(),
                 Clock.systemUTC());
     }
 
@@ -85,13 +88,15 @@ public class PersistenceBackupService {
             Path musicLibrary,
             Path musicSessions,
             Path recommendationFeedback,
+            Path auth,
             Clock clock) {
         this.properties = Objects.requireNonNull(properties, "properties");
         this.stores = List.of(
                 new Store("guild-settings.properties", normalize(guildSettings)),
                 new Store("music-library.tsv", normalize(musicLibrary)),
                 new Store("music-sessions.tsv", normalize(musicSessions)),
-                new Store("recommendation-feedback.tsv", normalize(recommendationFeedback)));
+                new Store("recommendation-feedback.tsv", normalize(recommendationFeedback)),
+                new Store("baskov-auth.tsv", normalize(auth)));
         this.clock = Objects.requireNonNull(clock, "clock");
         this.scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable, "baskov-persistence-backup");

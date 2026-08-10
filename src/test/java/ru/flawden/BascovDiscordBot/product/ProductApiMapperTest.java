@@ -27,9 +27,10 @@ class ProductApiMapperTest {
                 LocalDate.of(2026, 8, 10),
                 4L)));
 
-        var result = mapper.home(source);
+        var result = mapper.home(source, "baskov-user-1");
 
         assertEquals(10L, result.guildId());
+        assertEquals("baskov-user-1", result.userId());
         assertEquals("RESUMABLE", result.continuation().kind());
         assertEquals("daily-mix", result.continuation().stationSlug());
         assertEquals(1, result.today().size());
@@ -38,7 +39,7 @@ class ProductApiMapperTest {
 
     @Test
     void absentContinuationBecomesJsonFriendlyNull() {
-        var result = mapper.home(home(Optional.empty()));
+        var result = mapper.home(home(Optional.empty()), "baskov-user-1");
         assertNull(result.continuation());
     }
 
@@ -57,8 +58,9 @@ class ProductApiMapperTest {
     }
 
     @Test
-    void capabilitiesAdvertiseNoMutationsBeforeAuthRelease() {
-        var result = mapper.capabilities(ProductCapabilities.readOnlyPreview());
+    void capabilitiesAdvertiseAuthenticatedReadsWithoutMusicMutations() {
+        var result = mapper.capabilities(ProductCapabilities.authenticatedRead());
+        assertTrue(result.authenticationRequiredForReads());
         assertFalse(result.mutationsEnabled());
         assertTrue(result.authenticationRequiredForMutations());
     }

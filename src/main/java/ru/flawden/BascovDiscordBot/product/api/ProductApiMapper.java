@@ -17,15 +17,16 @@ public class ProductApiMapper {
         return new ProductApiResponse.Capabilities(
                 source.apiVersion(),
                 source.mode(),
+                source.authenticationRequiredForReads(),
                 source.mutationsEnabled(),
                 source.authenticationRequiredForMutations(),
                 source.resources());
     }
 
-    public ProductApiResponse.Home home(HomeSnapshot source) {
+    public ProductApiResponse.Home home(HomeSnapshot source, String productUserId) {
         return new ProductApiResponse.Home(
                 source.guildId(),
-                source.userId(),
+                productUserId,
                 source.date(),
                 source.continuation().map(this::continuation).orElse(null),
                 mixes(source.today()),
@@ -33,7 +34,7 @@ public class ProductApiMapper {
                 themes(source.themes()),
                 new ProductApiResponse.Library(
                         source.guildId(),
-                        source.userId(),
+                        productUserId,
                         source.library().favorites(),
                         source.library().personalHistory(),
                         tracks(source.recent())),
@@ -44,10 +45,10 @@ public class ProductApiMapper {
                         source.taste().recommendations()));
     }
 
-    public ProductApiResponse.Mixes mixes(ProductMixesSnapshot source) {
+    public ProductApiResponse.Mixes mixes(ProductMixesSnapshot source, String productUserId) {
         return new ProductApiResponse.Mixes(
                 source.guildId(),
-                source.userId(),
+                productUserId,
                 source.date(),
                 source.continuation().map(this::continuation).orElse(null),
                 mixes(source.today()),
@@ -55,10 +56,10 @@ public class ProductApiMapper {
                 themes(source.themes()));
     }
 
-    public ProductApiResponse.Library library(ProductLibrarySnapshot source) {
+    public ProductApiResponse.Library library(ProductLibrarySnapshot source, String productUserId) {
         return new ProductApiResponse.Library(
                 source.guildId(),
-                source.userId(),
+                productUserId,
                 source.favorites(),
                 source.personalHistory(),
                 tracks(source.recent()));
