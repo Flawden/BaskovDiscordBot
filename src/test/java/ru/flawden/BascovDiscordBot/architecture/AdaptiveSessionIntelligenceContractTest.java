@@ -17,7 +17,9 @@ class AdaptiveSessionIntelligenceContractTest {
         String player = read("lavaplayer/PlayerManager.java");
 
         assertTrue(model.contains("recommendedAtEpochMillis() < startedAtEpochMillis"));
-        assertTrue(player.contains("startedAtEpochMillis = System.currentTimeMillis()"));
+        assertTrue(player.contains("this.startedAtEpochMillis = continuation == null"));
+        assertTrue(player.contains("? System.currentTimeMillis()"));
+        assertTrue(player.contains(": continuation.startedAtEpochMillis()"));
         assertTrue(!model.contains("Files."));
     }
 

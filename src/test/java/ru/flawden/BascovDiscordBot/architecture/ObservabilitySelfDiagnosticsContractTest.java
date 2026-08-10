@@ -55,7 +55,7 @@ class ObservabilitySelfDiagnosticsContractTest {
         String interactions = Files.readString(Path.of(
                 "src/main/java/ru/flawden/BascovDiscordBot/interactions/ModernInteractions.java"));
         int start = interactions.indexOf("private void doctor(SlashCommandInteractionEvent event)");
-        int end = interactions.indexOf("private void session(SlashCommandInteractionEvent event)");
+        int end = interactions.indexOf("private MessageEmbed doctorEmbed(", start);
         String doctor = interactions.substring(start, end);
 
         assertTrue(doctor.contains("systemDoctor.diagnose(event.getGuild())"));
