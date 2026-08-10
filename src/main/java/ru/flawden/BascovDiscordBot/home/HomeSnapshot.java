@@ -1,5 +1,7 @@
 package ru.flawden.BascovDiscordBot.home;
 
+import ru.flawden.BascovDiscordBot.catalog.TrackIdentity;
+
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
@@ -90,10 +92,15 @@ public record HomeSnapshot(
         }
     }
 
-    public record TrackPreview(String title, String artist) {
+    public record TrackPreview(String stableKey, String title, String artist) {
         public TrackPreview {
             title = safe(title, "Неизвестный трек");
             artist = safe(artist, "Неизвестно");
+            stableKey = safe(stableKey, TrackIdentity.of(artist, title).stableKey());
+        }
+
+        public TrackPreview(String title, String artist) {
+            this(TrackIdentity.of(artist, title).stableKey(), title, artist);
         }
     }
 

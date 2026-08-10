@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.27.0**.
+Текущая версия релизной ветки: **v1.28.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -15,6 +15,7 @@
 - Daily Mixes & Station Continuity: `/mix list|themes|start|resume|status|stop` включает «Микс дня» и «Открытия дня» со стабильным daily seed-набором, а bounded process-local continuity до 36 часов сохраняет station/date/seed cursor/anti-repeat memory для явного `/mix resume`; restart/deploy не автозапускает музыку и новых persistence-файлов нет;
 - Mix Generation & Diversity Control: curated mix теперь разводит исполнителей и насыщенные tags на уровне seed/ranker/final transport, `/mix themes` строит положительные темы из feedback V2, а `station:theme` создаёт динамический тематический поток без нового persistence; hard novelty остаётся выше diversity/theme scoring;
 - Personalized Home / Music Hub: `/home` собирает client-neutral `HomeSnapshot` с continuation, daily/for-you mix cards, positive themes, library counters, recent preview и taste maturity; Discord только рендерит snapshot, а domain/service не зависит от JDA и уже готов стать read-model будущего Product API/Android;
+- Product API Boundary: `MusicProductService` стал общей client-neutral application-границей для Discord и будущих клиентов; read-only HTTP preview `/api/v1/home|mixes|player|library|capabilities` использует отдельные versioned wire DTO и mapper, выключен по умолчанию, работает только при явном opt-in и bind-ится на loopback. Mutation endpoints намеренно отложены до v1.29 Users/Auth;
 - Playback Source Abstraction & Provider Resilience: system-selected recommendation сначала превращается в provider-neutral `TrackIdentity`, затем `PlaybackResolver` строит client-aware YouTube/SoundCloud candidates; runtime health registry считает technical failures/misses/fallbacks, после 3 подряд технических ошибок открывает 90-секундный cooldown, автоматически переводит Smart Radio/Mix на следующий provider и после cooldown делает probe. Прямые `/play`/URL остаются explicit-source path без автоматической подмены; health process-local и не создаёт новый persistence;
 - `/search` с пятью результатами YouTube, одноразовыми кнопками выбора и пятиминутной owner-bound сессией; autocomplete последних запросов работает в `/play` и `/search`;
 - личное persistent избранное до 100 треков на пользователя и сервер через `/favorites list|add|play|play-all|remove|search|clear`; favorites участвуют в локальном autocomplete и используют существующий ordered batch playback;
@@ -69,7 +70,22 @@ docker compose up -d --build
 docker compose logs -f bot
 ```
 
-Боту не нужен входящий HTTP-порт. Перед подключением к Discord выполняется fail-fast storage preflight для guild settings, music library, session checkpoint и recommendation feedbacks; после подключения приложение обновляет readiness heartbeat каждые 10 секунд, а Docker считает контейнер healthy только при свежем `CONNECTED`-сигнале.
+По умолчанию боту не нужен входящий HTTP-порт: Product API preview отключён и Spring запускается в non-web режиме. Перед подключением к Discord выполняется fail-fast storage preflight для guild settings, music library, session checkpoint и recommendation feedbacks; после подключения приложение обновляет readiness heartbeat каждые 10 секунд, а Docker считает контейнер healthy только при свежем `CONNECTED`-сигнале.
+
+
+### Product API v1 preview
+
+`v1.28.0` добавляет первую HTTP-границу будущего Baskov Music, но до появления собственной user/device identity в `v1.29` она строго read-only и отключена по умолчанию. Для локальной loopback-проверки:
+
+```bash
+export BASKOV_PRODUCT_API_ENABLED=true
+export BASKOV_PRODUCT_API_WEB_APPLICATION_TYPE=servlet
+export BASKOV_PRODUCT_API_BIND_ADDRESS=127.0.0.1
+export BASKOV_PRODUCT_API_PORT=18080
+./mvnw spring-boot:run
+```
+
+После запуска доступны `GET /api/v1/capabilities`, `/home`, `/mixes`, `/player`, `/library`. Docker Compose намеренно не публикует API-порт наружу. `POST`/mutation use-cases появятся только вместе с authentication/authorization.
 
 ### Настройки музыкальной сессии
 

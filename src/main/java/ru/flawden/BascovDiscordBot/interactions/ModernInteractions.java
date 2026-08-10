@@ -25,7 +25,7 @@ import ru.flawden.BascovDiscordBot.commands.music.MusicEmbeds;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
 import ru.flawden.BascovDiscordBot.dave.DaveRuntimeInfo;
 import ru.flawden.BascovDiscordBot.home.HomeSnapshot;
-import ru.flawden.BascovDiscordBot.home.MusicHomeService;
+import ru.flawden.BascovDiscordBot.product.MusicProductService;
 import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.BatchMusicLoadResult;
 import ru.flawden.BascovDiscordBot.lavaplayer.MusicLoadResult;
@@ -119,7 +119,7 @@ public class ModernInteractions extends ListenerAdapter {
     private final DaveRuntimeInfo daveRuntimeInfo;
     private final ConfirmationStore confirmationStore;
     private final RecommendationFeedbackService recommendationFeedback;
-    private final MusicHomeService musicHomeService;
+    private final MusicProductService musicProductService;
 
     public ModernInteractions(
             PlayerManager playerManager,
@@ -142,7 +142,7 @@ public class ModernInteractions extends ListenerAdapter {
             DaveRuntimeInfo daveRuntimeInfo,
             ConfirmationStore confirmationStore,
             RecommendationFeedbackService recommendationFeedback,
-            MusicHomeService musicHomeService) {
+            MusicProductService musicProductService) {
         this.playerManager = playerManager;
         this.controlPolicy = controlPolicy;
         this.queryResolver = queryResolver;
@@ -163,7 +163,7 @@ public class ModernInteractions extends ListenerAdapter {
         this.daveRuntimeInfo = daveRuntimeInfo;
         this.confirmationStore = confirmationStore;
         this.recommendationFeedback = recommendationFeedback;
-        this.musicHomeService = musicHomeService;
+        this.musicProductService = musicProductService;
     }
 
     @Override
@@ -890,7 +890,7 @@ public class ModernInteractions extends ListenerAdapter {
     private void home(SlashCommandInteractionEvent event) {
         long guildId = event.getGuild().getIdLong();
         long userId = event.getUser().getIdLong();
-        HomeSnapshot snapshot = musicHomeService.snapshot(guildId, userId);
+        HomeSnapshot snapshot = musicProductService.home(guildId, userId);
 
         EmbedBuilder embed = new EmbedBuilder()
                 .setTitle("🏠 Твой Baskov Music")

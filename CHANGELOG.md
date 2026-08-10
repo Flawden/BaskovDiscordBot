@@ -6,6 +6,17 @@
 
 ## [Unreleased]
 
+## [1.28.0] — 2026-08-10
+
+### Product API Boundary
+
+- Добавлен client-neutral `MusicProductService` как application boundary поверх существующих Home/Player read-моделей. Discord `/home` переведён с прямого `MusicHomeService` на ту же product-границу, которую использует внешний adapter.
+- Добавлены provider-neutral `ProductPlaybackSnapshot`, `ProductMixesSnapshot`, `ProductLibrarySnapshot` и explicit `ProductCapabilities`. Current playback и Home recent preview отдают `TrackIdentity.stableKey`, а не YouTube/SoundCloud locator.
+- Добавлен versioned HTTP preview `/api/v1/capabilities|home|mixes|player|library` с отдельными wire DTO (`ProductApiResponse`) и `ProductApiMapper`: внутренние domain records не сериализуются наружу напрямую.
+- HTTP surface в v1.28 строго read-only: mutation endpoints отсутствуют до отдельного v1.29 Users/Auth release. API отключён по умолчанию (`BASKOV_PRODUCT_API_ENABLED=false`), Spring запускается как non-web (`BASKOV_PRODUCT_API_WEB_APPLICATION_TYPE=none`), bind при opt-in — `127.0.0.1:18080`; Docker не публикует порт наружу.
+- В `PlayerManager` добавлен read-only lookup по guild id без `computeIfAbsent`, чтобы product read-model не создавал музыкальную сессию как побочный эффект чтения. Persistence, recommendation feedback и playback transport formats не меняются.
+- Добавлен stable `INVALID_ARGUMENT` HTTP error shape и architecture/unit regressions на client-neutral boundary, shared Discord/application use-case, wire DTO separation, read-only security posture и отсутствие container port publication. User-Agent внешних recommendation/collaborative запросов обновлён до `v1.28.0 product-api-boundary`.
+
 ## [1.27.0] — 2026-08-10
 
 ### Provider Health & Automatic Fallback

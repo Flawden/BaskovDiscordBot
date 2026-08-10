@@ -42,7 +42,7 @@ class PersonalizedHomeMusicHubContractTest {
         String interactions = read("interactions/ModernInteractions.java");
 
         assertTrue(interactions.contains("case \"home\" -> home(event)"));
-        assertTrue(interactions.contains("musicHomeService.snapshot"));
+        assertTrue(interactions.contains("musicProductService.home"));
         assertTrue(interactions.contains("HomeSnapshot"));
         assertFalse(method(interactions, "private void home(", "private static String homeMixLines(")
                 .contains("recommendationFeedback.tasteProfile"));

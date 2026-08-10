@@ -442,6 +442,14 @@ public class PlayerManager {
         return Optional.ofNullable(musicManagers.get(guild.getIdLong()));
     }
 
+    /** Read-only lookup used by client-neutral product surfaces that only know the guild id. */
+    public Optional<GuildMusicManager> findMusicManager(long guildId) {
+        if (guildId <= 0L) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(musicManagers.get(guildId));
+    }
+
     /**
      * Устанавливает ограниченное voice-подключение без бесконечного reconnect.
      */

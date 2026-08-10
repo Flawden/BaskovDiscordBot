@@ -160,7 +160,7 @@ public class ListenBrainzCollaborativeProvider implements CollaborativeSignalPro
                 .timeout(properties.getRequestTimeout())
                 .header("Accept", "application/json")
                 .header("Authorization", "Token " + properties.getListenbrainzToken())
-                .header("User-Agent", "BaskovDiscordBot/1.27.0 provider-resilience");
+                .header("User-Agent", "BaskovDiscordBot/1.28.0 product-api-boundary");
     }
 
     URI buildLookupUri(String artist, String title) {
