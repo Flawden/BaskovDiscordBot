@@ -1,15 +1,16 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.18.0**.
+Текущая версия релизной ветки: **v1.19.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
 ## Возможности
 
 - slash-команды воспроизведения и полноценного управления очередью;
-- Smart Discovery Engine: `/radio start|status|why|feedback|model|stop` поддерживает `familiar/similar/discovery`; Last.fm генерирует похожих кандидатов при наличии `LASTFM_API_KEY`, а discovery жёстко фильтрует уже знакомые треки и сохраняет обычный `ytsearch:` playback pipeline;
+- Smart Discovery Engine: `/radio start|status|why|feedback|model|session|stop` поддерживает `familiar/similar/discovery`; Last.fm генерирует похожих кандидатов при наличии `LASTFM_API_KEY`, а discovery жёстко фильтрует уже знакомые треки и сохраняет обычный `ytsearch:` playback pipeline;
 - Recommendation Model / Embeddings Foundation: Personal Ranking Model дополнен локальным `feature-hash-v1` 64D embedding-provider, taste-vector и cosine similarity; `/radio model` показывает vector confidence/coverage, а `/radio why` объясняет отдельный vector-вклад. Интерфейс embedding-provider отделён от playback и готов к будущему semantic provider без изменения `ytsearch:` тракта;
 - Collaborative Signals: optional ListenBrainz artist graph добавляет независимый collaborative-вклад к Last.fm + personal/vector ranker; без `LISTENBRAINZ_TOKEN` или при сбое upstream система fail-open продолжает старый recommendation pipeline;
+- Adaptive Session Intelligence: текущее `personal` radio строит ephemeral short-term taste из feedback после последнего `/radio start`; `/radio session` показывает session momentum/confidence и strongest artist/tag affinity, а restart/new start намеренно сбрасывает краткосрочный слой без изменения durable feedback;
 - `/search` с пятью результатами YouTube, одноразовыми кнопками выбора и пятиминутной owner-bound сессией; autocomplete последних запросов работает в `/play` и `/search`;
 - личное persistent избранное до 100 треков на пользователя и сервер через `/favorites list|add|play|play-all|remove|search|clear`; favorites участвуют в локальном autocomplete и используют существующий ordered batch playback;
 - постоянная история до 50 треков на сервер плюс personal history до 200 заказанных и реально дошедших до истории треков на пользователя; `/history scope:server|mine`, `/replay scope:server|mine`, `/discover profile|for-me` и серверные плейлисты с owner/admin-управлением, autocomplete, lifecycle-операциями, поиском, capture queue и ordered batch playback;

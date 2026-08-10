@@ -132,7 +132,7 @@ DJ-роли и голосование описаны в [`DJ-ROLES-AND-VOTING.md
 
 Doctor намеренно не делает внешние HTTP/Maven/YouTube probes из Discord-команды: зависший upstream не должен подвешивать саму диагностику. Failure journal не хранит Discord user IDs, stack traces или secrets.
 
-## Smart Radio / Hybrid Recommendation (v1.18.0)
+## Smart Radio / Adaptive Hybrid Recommendation (v1.19.0)
 
 ```text
 /radio start [mode:personal|server] [strategy:familiar|similar|discovery]
@@ -140,10 +140,11 @@ Doctor намеренно не делает внешние HTTP/Maven/YouTube pr
 /radio why
 /radio feedback
 /radio model
+/radio session
 /radio stop
 ```
 
-`familiar` остаётся локальным; `similar` и `discovery` используют Last.fm candidate generation, если настроен `LASTFM_API_KEY`. При наличии `LISTENBRAINZ_TOKEN` ranking дополнительно получает collaborative artist signal из ListenBrainz; он fail-open и не заменяет Last.fm candidate generation. `discovery` исключает already-known tracks по normalized artist/title identity до personal/vector/collaborative scoring. `/radio why` объясняет последнюю рекомендацию. Playback после candidate generation по-прежнему идёт через обычный `ytsearch:`.
+`familiar` остаётся локальным; `similar` и `discovery` используют Last.fm candidate generation, если настроен `LASTFM_API_KEY`. При наличии `LISTENBRAINZ_TOKEN` ranking дополнительно получает collaborative artist signal из ListenBrainz; он fail-open и не заменяет Last.fm candidate generation. `discovery` исключает already-known tracks по normalized artist/title identity до personal/vector/collaborative scoring. `/radio why` объясняет последнюю рекомендацию. `personal` radio дополнительно использует ephemeral session taste, который строится только из feedback после текущего `/radio start`. Playback после candidate generation по-прежнему идёт через обычный `ytsearch:`.
 
 Radio продолжает только действительно пустую очередь и добавляет по одному кандидату. `personal` строит seed из favorites/personal history владельца, `server` — из guild history. Режим ephemeral и после restart/deploy остаётся выключенным.
 
@@ -157,4 +158,8 @@ Radio продолжает только действительно пустую 
 
 ### `/radio model`
 
-Read-only personal ranking snapshot: evidence/confidence, adaptive exploration rate, strongest artist/tag affinity и локальный 64D taste-vector (`feature-hash-v1`) с vector confidence/coverage.
+Read-only долгосрочный personal ranking snapshot: evidence/confidence, adaptive exploration rate, strongest artist/tag affinity и локальный 64D taste-vector (`feature-hash-v1`) с vector confidence/coverage.
+
+### `/radio session`
+
+Read-only краткосрочный snapshot только текущего `personal` radio: session start, evidence/confidence, momentum и strongest session artist/tag affinity. Сбрасывается при новом `/radio start` и restart/deploy; в persistence не записывается.

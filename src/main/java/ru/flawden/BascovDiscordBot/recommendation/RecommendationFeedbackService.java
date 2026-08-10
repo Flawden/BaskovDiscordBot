@@ -73,6 +73,15 @@ public class RecommendationFeedbackService {
                 RecommendationFeedbackRepository.MAX_ENTRIES_PER_USER));
     }
 
+    public SessionTasteProfile sessionTasteProfile(long guildId, long userId, long startedAtEpochMillis) {
+        return AdaptiveSessionModel.build(
+                repository.history(
+                        guildId,
+                        userId,
+                        RecommendationFeedbackRepository.MAX_ENTRIES_PER_USER),
+                startedAtEpochMillis);
+    }
+
     public void recordPlayback(long guildId, PlaybackFeedbackEvent event) {
         if (guildId <= 0L || event == null || !isRadioTrack(event.request())) {
             return;

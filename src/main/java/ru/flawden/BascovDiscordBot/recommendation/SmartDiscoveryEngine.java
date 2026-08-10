@@ -158,6 +158,18 @@ public class SmartDiscoveryEngine {
         if (Math.abs(scored.tagAffinity()) >= 0.01d) {
             reason.append(" • tags ").append(signedPercent(scored.tagAffinity()));
         }
+        if (Math.abs(scored.sessionContribution()) >= 0.005d) {
+            reason.append(" • session ")
+                    .append(signedPercent(scored.sessionTaste()))
+                    .append(" @ ")
+                    .append(Math.round(scored.sessionConfidence() * 100.0d))
+                    .append("% confidence");
+        }
+        if (scored.sessionExplorationBonus() > 0.0d) {
+            reason.append(" • session explore +")
+                    .append(Math.round(scored.sessionExplorationBonus() * 100.0d))
+                    .append("%");
+        }
         if (Math.abs(scored.vectorContribution()) >= 0.005d) {
             reason.append(" • vector ")
                     .append(signedPercent(scored.vectorSimilarity()))

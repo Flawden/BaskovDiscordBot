@@ -253,6 +253,11 @@ public class PlayerManager {
         return discoveryEngine.collaborativeProviderName();
     }
 
+    public long radioSessionStartedAtEpochMillis(long guildId) {
+        RadioState state = radioStates.get(guildId);
+        return state == null ? 0L : state.startedAtEpochMillis();
+    }
+
     public RadioSnapshot radioSnapshot(long guildId) {
         RadioState state = radioStates.get(guildId);
         return state == null ? RadioSnapshot.disabled() : state.snapshot(true);
@@ -1473,11 +1478,19 @@ public class PlayerManager {
         var tasteProfile = state.mode() == RadioMode.PERSONAL && state.owner().userId() > 0L
                 ? recommendationFeedback.tasteProfile(guildId, state.owner().userId())
                 : ru.flawden.BascovDiscordBot.recommendation.PersonalTasteProfile.empty();
+        var sessionTaste = state.mode() == RadioMode.PERSONAL && state.owner().userId() > 0L
+                ? recommendationFeedback.sessionTasteProfile(
+                        guildId,
+                        state.owner().userId(),
+                        state.startedAtEpochMillis())
+                : ru.flawden.BascovDiscordBot.recommendation.SessionTasteProfile.empty(0L);
         return new RecommendationContext(
                 known,
                 new LinkedHashSet<>(state.recentTrackIdentities()),
                 new LinkedHashSet<>(state.recentArtists()),
-                tasteProfile);
+                tasteProfile,
+                ru.flawden.BascovDiscordBot.recommendation.CollaborativeArtistSignals.empty(),
+                sessionTaste);
     }
 
     private static String boundedRadioQuery(String query) {
@@ -1793,6 +1806,7 @@ public class PlayerManager {
         private final RadioMode mode;
         private final RadioStrategy strategy;
         private final TrackRequester owner;
+        private final long startedAtEpochMillis = System.currentTimeMillis();
         private final ArrayDeque<String> recentTrackKeys = new ArrayDeque<>();
         private final ArrayDeque<String> recentTrackIdentities = new ArrayDeque<>();
         private final ArrayDeque<String> recentArtists = new ArrayDeque<>();
@@ -1821,6 +1835,10 @@ public class PlayerManager {
 
         synchronized TrackRequester owner() {
             return owner;
+        }
+
+        synchronized long startedAtEpochMillis() {
+            return startedAtEpochMillis;
         }
 
         synchronized boolean refillInProgress() {

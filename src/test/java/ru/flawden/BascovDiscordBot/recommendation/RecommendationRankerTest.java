@@ -164,4 +164,83 @@ class RecommendationRankerTest {
         assertEquals(fresh.identity(), selected.candidate().identity());
     }
 
+    @Test
+    void positiveSessionAffinityCanBreakNearTieAgainstLongTermNeutralCandidate() {
+        RecommendationCandidate rawWinner = new RecommendationCandidate(
+                "Other Artist", "Track A", 0.825d, "Last.fm", "raw", Set.of("other"));
+        RecommendationCandidate sessionWinner = new RecommendationCandidate(
+                "Today Artist", "Track B", 0.805d, "Last.fm", "session", Set.of("pop punk"));
+        SessionTasteProfile session = new SessionTasteProfile(
+                1_800_000_000_000L,
+                2,
+                4,
+                0,
+                1.0d,
+                Map.of(),
+                Map.of(RecommendationIdentity.normalizeArtist("Today Artist"), 8.0d),
+                Map.of("pop punk", 6.0d));
+        RecommendationContext context = new RecommendationContext(
+                Set.of(), Set.of(), Set.of(), PersonalTasteProfile.empty(),
+                CollaborativeArtistSignals.empty(), session);
+
+        RecommendationRanker.ScoredCandidate selected = RecommendationRanker.best(
+                        List.of(rawWinner, sessionWinner), RadioStrategy.SIMILAR, context)
+                .orElseThrow();
+
+        assertEquals(sessionWinner.identity(), selected.candidate().identity());
+        assertTrue(selected.sessionContribution() > 0.0d);
+    }
+
+    @Test
+    void negativeSessionAffinitySuppressesCandidateThatWouldOtherwiseWin() {
+        RecommendationCandidate sessionDisliked = new RecommendationCandidate(
+                "Bad Tonight", "Track A", 0.92d, "Last.fm", "bad");
+        RecommendationCandidate fresh = new RecommendationCandidate(
+                "Fresh Artist", "Track B", 0.86d, "Last.fm", "fresh");
+        SessionTasteProfile session = new SessionTasteProfile(
+                1_800_000_000_000L,
+                2,
+                0,
+                4,
+                -1.0d,
+                Map.of(sessionDisliked.identity(), -10.0d),
+                Map.of(RecommendationIdentity.normalizeArtist("Bad Tonight"), -8.0d),
+                Map.of());
+        RecommendationContext context = new RecommendationContext(
+                Set.of(), Set.of(), Set.of(), PersonalTasteProfile.empty(),
+                CollaborativeArtistSignals.empty(), session);
+
+        assertEquals(fresh.identity(), RecommendationRanker.best(
+                        List.of(sessionDisliked, fresh), RadioStrategy.SIMILAR, context)
+                .orElseThrow()
+                .candidate()
+                .identity());
+    }
+
+    @Test
+    void sessionAffinityCannotResurrectKnownTrackInDiscovery() {
+        RecommendationCandidate known = new RecommendationCandidate(
+                "Loved Tonight", "Known", 1.0d, "Last.fm", "known");
+        RecommendationCandidate fresh = new RecommendationCandidate(
+                "Fresh Artist", "Fresh", 0.40d, "Last.fm", "fresh");
+        SessionTasteProfile session = new SessionTasteProfile(
+                1_800_000_000_000L,
+                3,
+                6,
+                0,
+                1.0d,
+                Map.of(known.identity(), 20.0d),
+                Map.of(RecommendationIdentity.normalizeArtist(known.artist()), 20.0d),
+                Map.of());
+        RecommendationContext context = new RecommendationContext(
+                Set.of(known.identity()), Set.of(), Set.of(), PersonalTasteProfile.empty(),
+                CollaborativeArtistSignals.empty(), session);
+
+        RecommendationRanker.ScoredCandidate selected = RecommendationRanker.best(
+                        List.of(known, fresh), RadioStrategy.DISCOVERY, context)
+                .orElseThrow();
+
+        assertEquals(fresh.identity(), selected.candidate().identity());
+    }
+
 }

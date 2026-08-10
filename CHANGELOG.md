@@ -6,6 +6,17 @@
 
 ## [Unreleased]
 
+## [1.19.0] — 2026-08-09
+
+### Adaptive Session Intelligence
+
+- Добавлен ephemeral `SessionTasteProfile` и `AdaptiveSessionModel`: ranking теперь различает долгосрочный вкус пользователя и краткосрочное настроение текущего smart-radio запуска. Session-profile строится только из recommendation feedback, записанного после текущего `/radio start`, и намеренно сбрасывается при новом start/restart/deploy.
+- Session affinity учитывает track/artist/tag сигналы с recency decay; короткая модель набирает confidence быстрее durable profile, чтобы несколько свежих реакций могли изменить near-tie ranking уже внутри одной музыкальной сессии.
+- `RecommendationRanker` получил bounded session contribution и contextual exploration pressure: положительный momentum усиливает текущий session taste, а серия свежих отрицательных feedback-сигналов немного повышает exploration для ещё неизвестных track+artist. Hard novelty/recent-track rejection выполняется раньше session scoring и не может быть отменён контекстом.
+- Добавлена `/radio session`: read-only snapshot начала текущей сессии, evidence/confidence, momentum и strongest session artist/tag affinity. Server-radio не получает персональный session taste владельца; `/radio model` остаётся долгосрочным профилем.
+- `/radio why` показывает material `session +N% @ confidence` и отдельный session exploration bonus. Long-term feedback V2, 64D vectors, Last.fm и ListenBrainz pipeline не меняются; новых persistence-файлов/миграций нет.
+- Добавлены regression/architecture tests на session boundary, recency decay, positive/negative momentum, near-tie reranking, server-radio isolation и запрет session layer обходить discovery novelty или владеть playback transport.
+
 ## [1.18.0] — 2026-08-09
 
 ### Collaborative Signals & Hybrid Recommendation

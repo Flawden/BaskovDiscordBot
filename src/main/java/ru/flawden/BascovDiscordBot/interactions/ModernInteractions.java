@@ -46,6 +46,7 @@ import ru.flawden.BascovDiscordBot.recommendation.PersonalTasteProfile;
 import ru.flawden.BascovDiscordBot.recommendation.PersonalTasteVector;
 import ru.flawden.BascovDiscordBot.recommendation.PersonalTasteVectorModel;
 import ru.flawden.BascovDiscordBot.recommendation.FeatureHashRecommendationEmbeddingProvider;
+import ru.flawden.BascovDiscordBot.recommendation.SessionTasteProfile;
 import ru.flawden.BascovDiscordBot.library.FavoriteOperationResult;
 import ru.flawden.BascovDiscordBot.library.FavoriteSearchHit;
 import ru.flawden.BascovDiscordBot.library.PersonalListeningInsights;
@@ -912,6 +913,15 @@ public class ModernInteractions extends ListenerAdapter {
             return;
         }
 
+        if ("session".equals(subcommand)) {
+            event.replyEmbeds(recommendationSessionEmbed(
+                            guild.getIdLong(),
+                            event.getUser().getIdLong()))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
         if ("stop".equals(subcommand)) {
             RadioSnapshot snapshot = playerManager.radioSnapshot(guild.getIdLong());
             boolean owner = snapshot.enabled() && snapshot.ownerUserId() == event.getUser().getIdLong();
@@ -1005,7 +1015,8 @@ public class ModernInteractions extends ListenerAdapter {
                                             + "`similar/discovery` используют Last.fm при наличии `LASTFM_API_KEY`; "
                                             + "при наличии `LISTENBRAINZ_TOKEN` дополнительно учитывается collaborative artist graph. "
                                             + "Любой внешний сигнал fail-open, а playback остаётся через обычный ytsearch pipeline. "
-                                            + "После трёх подряд неудачных refill radio отключится само."))
+                                            + "Краткосрочный session-profile стартует с нуля при каждом `/radio start`; "
+                                            + "после трёх подряд неудачных refill radio отключится само."))
                             .queue();
                 }));
     }
@@ -1078,8 +1089,54 @@ public class ModernInteractions extends ListenerAdapter {
                 .collect(java.util.stream.Collectors.joining(" • "));
         embed.addField("Artist affinity", artists.isBlank() ? "`пока нет`" : artists, false)
                 .addField("Tag affinity", tags.isBlank() ? "`пока нет metadata`" : tags, false)
-                .setFooter("Веса и taste-vector пересобираются из bounded feedback; /radio why показывает personal + vector + collaborative вклад");
+                .setFooter("Долгосрочная модель переживает restart; /radio session показывает краткосрочный session-context");
         return embed.build();
+    }
+
+    private MessageEmbed recommendationSessionEmbed(long guildId, long userId) {
+        RadioSnapshot snapshot = playerManager.radioSnapshot(guildId);
+        long startedAt = playerManager.radioSessionStartedAtEpochMillis(guildId);
+        if (!snapshot.enabled()) {
+            return new EmbedBuilder()
+                    .setTitle("⚡ Adaptive session intelligence")
+                    .setColor(Color.GRAY)
+                    .setDescription("Smart radio сейчас выключено. Session-profile создаётся заново при каждом `/radio start` и намеренно не persist-ится.")
+                    .build();
+        }
+        if (snapshot.mode() != RadioMode.PERSONAL || snapshot.ownerUserId() != userId) {
+            return new EmbedBuilder()
+                    .setTitle("⚡ Adaptive session intelligence")
+                    .setColor(Color.GRAY)
+                    .setDescription("Краткосрочная персональная модель работает только для твоего `personal` radio. Server-radio не наследует вкус одного пользователя.")
+                    .build();
+        }
+        SessionTasteProfile profile = recommendationFeedback.sessionTasteProfile(guildId, userId, startedAt);
+        String artists = profile.topArtists(5).stream()
+                .map(entry -> "`" + sanitizeInline(entry.getKey()) + " " + signedScore(entry.getValue()) + "`")
+                .collect(java.util.stream.Collectors.joining(" • "));
+        String tags = profile.topTags(5).stream()
+                .map(entry -> "`" + sanitizeInline(entry.getKey()) + " " + signedScore(entry.getValue()) + "`")
+                .collect(java.util.stream.Collectors.joining(" • "));
+        String momentum = profile.momentum() > 0.15d
+                ? "попадаем в настроение"
+                : profile.momentum() < -0.15d ? "нужно исследовать шире" : "нейтрально";
+        EmbedBuilder embed = new EmbedBuilder()
+                .setTitle("⚡ Adaptive session intelligence")
+                .setColor(profile.evidenceSignals() == 0 ? Color.GRAY : Color.CYAN)
+                .addField("Session", startedAt > 0L ? "<t:" + (startedAt / 1000L) + ":R>" : "`—`", true)
+                .addField("Evidence", "`" + profile.evidenceSignals() + "` • confidence `"
+                        + Math.round(profile.confidence() * 100.0d) + "%`", true)
+                .addField("Momentum", "`" + String.format(Locale.ROOT, "%+.0f%%", profile.momentum() * 100.0d)
+                        + "` • " + momentum, false);
+        if (profile.evidenceSignals() == 0) {
+            embed.setDescription("Эта radio-сессия ещё не накопила feedback. Дослушай/скипни несколько рекомендаций — краткосрочный слой начнёт менять ranking.");
+        } else {
+            embed.addField("Session artist affinity", artists.isBlank() ? "`пока нет`" : artists, false)
+                    .addField("Session tag affinity", tags.isBlank() ? "`пока нет metadata`" : tags, false);
+        }
+        return embed
+                .setFooter("Ephemeral: reset при /radio start и restart/deploy • долгосрочный профиль остаётся в /radio model")
+                .build();
     }
 
     private static String signedScore(double value) {

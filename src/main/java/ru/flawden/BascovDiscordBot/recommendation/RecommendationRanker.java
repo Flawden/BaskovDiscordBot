@@ -5,7 +5,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Deterministic hybrid ranker: provider similarity + novelty/diversity + personal feedback model.
+ * Deterministic hybrid ranker: provider similarity + novelty/diversity +
+ * durable personal taste + ephemeral session context + vectors + collaborative signals.
  */
 public final class RecommendationRanker {
 
@@ -55,7 +56,7 @@ public final class RecommendationRanker {
         boolean artistRecent = context.recentArtists().contains(artist);
 
         if (recent || (strategy.hardNovelty() && known)) {
-            return rejected(candidate, known, artistRecent, context.personalTaste(), strategy, embeddingProvider, tasteVector);
+            return rejected(candidate, known, artistRecent, context, strategy, embeddingProvider, tasteVector);
         }
 
         double novelty = known ? 0.0d : 1.0d;
@@ -82,6 +83,20 @@ public final class RecommendationRanker {
             case DISCOVERY -> 0.40d;
         } * context.personalTaste().confidence();
         double personalContribution = taste.personalTaste() * personalWeight;
+
+        AdaptiveSessionModel.SessionScore session = AdaptiveSessionModel.score(
+                candidate,
+                context.sessionTaste());
+        double sessionWeight = switch (strategy) {
+            case FAMILIAR -> 0.08d;
+            case SIMILAR -> 0.22d;
+            case DISCOVERY -> 0.26d;
+        } * session.confidence();
+        double sessionContribution = session.sessionTaste() * sessionWeight;
+        double sessionExplorationBonus = AdaptiveSessionModel.explorationAdjustment(
+                context.sessionTaste(),
+                candidate);
+
         double vectorSimilarity = tasteVector.available()
                 ? RecommendationVectorMath.cosine(tasteVector.vector(), embeddingProvider.embed(candidate))
                 : 0.0d;
@@ -98,9 +113,9 @@ public final class RecommendationRanker {
             case DISCOVERY -> 0.16d;
         };
         double collaborativeContribution = collaborativeAffinity * collaborativeWeight;
-        double finalScore = Math.max(-1.0d, Math.min(1.30d,
-                baseScore + personalContribution + vectorContribution
-                        + collaborativeContribution + taste.explorationBonus()));
+        double finalScore = Math.max(-1.0d, Math.min(1.40d,
+                baseScore + personalContribution + sessionContribution + vectorContribution
+                        + collaborativeContribution + taste.explorationBonus() + sessionExplorationBonus));
 
         return new ScoredCandidate(
                 candidate,
@@ -115,6 +130,11 @@ public final class RecommendationRanker {
                 taste.personalTaste(),
                 taste.explorationRate(),
                 taste.explorationBonus(),
+                session.sessionTaste(),
+                sessionContribution,
+                session.confidence(),
+                session.momentum(),
+                sessionExplorationBonus,
                 vectorSimilarity,
                 vectorContribution,
                 tasteVector.confidence(),
@@ -129,11 +149,12 @@ public final class RecommendationRanker {
             RecommendationCandidate candidate,
             boolean known,
             boolean artistRecent,
-            PersonalTasteProfile profile,
+            RecommendationContext context,
             RadioStrategy strategy,
             RecommendationEmbeddingProvider embeddingProvider,
             PersonalTasteVector tasteVector) {
-        PersonalRankingModel.TasteScore taste = PersonalRankingModel.score(candidate, profile, strategy);
+        PersonalRankingModel.TasteScore taste = PersonalRankingModel.score(candidate, context.personalTaste(), strategy);
+        AdaptiveSessionModel.SessionScore session = AdaptiveSessionModel.score(candidate, context.sessionTaste());
         return new ScoredCandidate(
                 candidate,
                 -1.0d,
@@ -146,6 +167,11 @@ public final class RecommendationRanker {
                 taste.tagAffinity(),
                 taste.personalTaste(),
                 taste.explorationRate(),
+                0.0d,
+                session.sessionTaste(),
+                0.0d,
+                session.confidence(),
+                session.momentum(),
                 0.0d,
                 0.0d,
                 0.0d,
@@ -170,6 +196,11 @@ public final class RecommendationRanker {
             double personalTaste,
             double explorationRate,
             double explorationBonus,
+            double sessionTaste,
+            double sessionContribution,
+            double sessionConfidence,
+            double sessionMomentum,
+            double sessionExplorationBonus,
             double vectorSimilarity,
             double vectorContribution,
             double vectorConfidence,
