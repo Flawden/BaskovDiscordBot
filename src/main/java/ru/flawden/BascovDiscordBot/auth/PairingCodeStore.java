@@ -1,5 +1,6 @@
 package ru.flawden.BascovDiscordBot.auth;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.AuthProperties;
 
@@ -23,6 +24,7 @@ public class PairingCodeStore {
     private final SecureRandom random;
     private final Map<String, PairingGrant> grants = new LinkedHashMap<>();
 
+    @Autowired
     public PairingCodeStore(AuthProperties properties) {
         this(properties, Clock.systemUTC(), new SecureRandom());
     }

@@ -1,5 +1,6 @@
 package ru.flawden.BascovDiscordBot.auth;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.config.AuthProperties;
 
@@ -23,6 +24,7 @@ public class DeviceAuthService {
     private final Clock clock;
     private final SecureRandom random;
 
+    @Autowired
     public DeviceAuthService(AuthRepository repository, PairingCodeStore pairingCodes, AuthProperties properties) {
         this(repository,pairingCodes,properties,Clock.systemUTC(),new SecureRandom());
     }
