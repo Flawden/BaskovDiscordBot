@@ -1,5 +1,6 @@
 package ru.flawden.BascovDiscordBot.lavaplayer;
 
+import com.sedmelluq.discord.lavaplayer.format.StandardAudioDataFormats;
 import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
 import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.source.AudioSourceManager;
@@ -16,6 +17,7 @@ import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
 import net.dv8tion.jda.api.managers.AudioManager;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.commands.music.MediaQueryResolver;
+import ru.flawden.BascovDiscordBot.catalog.TrackIdentity;
 import ru.flawden.BascovDiscordBot.config.MusicProperties;
 import ru.flawden.BascovDiscordBot.config.MusicSessionProperties;
 import ru.flawden.BascovDiscordBot.operations.MusicRuntimeSnapshot;
@@ -143,6 +145,7 @@ public class PlayerManager {
         this.playbackResolver = Objects.requireNonNull(playbackResolver, "playbackResolver");
         this.sessionRepository = sessionRepository;
         this.audioPlayerManager = new DefaultAudioPlayerManager();
+        this.audioPlayerManager.getConfiguration().setOutputFormat(StandardAudioDataFormats.DISCORD_OPUS);
 
         YoutubeAudioSourceManager youtubeSourceManager = new YoutubeAudioSourceManager();
         this.audioPlayerManager.registerSourceManager(youtubeSourceManager);
@@ -217,6 +220,112 @@ public class PlayerManager {
             guild.getAudioManager().setSendingHandler(manager.getSendHandler());
             return manager;
         });
+    }
+
+    /**
+     * Resolves one logical track through the shared PlaybackResolver and prepares an isolated
+     * foreground Opus stream for a non-Discord client. No guild queue or voice state is mutated.
+     */
+    public CompletableFuture<ExternalAudioTrackStream> openExternalPlayback(
+            TrackIdentity track,
+            PlaybackClientCapabilities capabilities) {
+        Objects.requireNonNull(track, "track");
+        Objects.requireNonNull(capabilities, "capabilities");
+
+        PlaybackResolution resolution = playbackResolver.resolve(track, capabilities);
+        if (!resolution.resolved()) {
+            String reason = resolution.waitingForProviderRecovery()
+                    ? "All playback providers are cooling down; retry after " + resolution.retryAfter()
+                    : "PlaybackResolver found no provider candidate";
+            return CompletableFuture.failedFuture(new IllegalStateException(reason));
+        }
+
+        CompletableFuture<ExternalAudioTrackStream> future = new CompletableFuture<>();
+        tryExternalPlaybackCandidate(resolution, 0, new Object(), future, new ArrayList<>());
+        return future.orTimeout(
+                Math.max(1L, properties.getPlaybackReadyTimeout().toMillis()),
+                TimeUnit.MILLISECONDS);
+    }
+
+    private void tryExternalPlaybackCandidate(
+            PlaybackResolution resolution,
+            int index,
+            Object orderingKey,
+            CompletableFuture<ExternalAudioTrackStream> future,
+            List<String> failures) {
+        if (future.isDone()) {
+            return;
+        }
+        if (index < 0 || index >= resolution.candidates().size()) {
+            String details = failures.isEmpty()
+                    ? "No playback provider could resolve the track"
+                    : String.join(" | ", failures);
+            future.completeExceptionally(new IllegalStateException(details));
+            return;
+        }
+
+        PlaybackSourceReference source = resolution.candidates().get(index);
+        audioPlayerManager.loadItemOrdered(orderingKey, source.identifier(), new AudioLoadResultHandler() {
+            @Override
+            public void trackLoaded(AudioTrack track) {
+                finishExternalPlaybackTrack(source, track, future);
+            }
+
+            @Override
+            public void playlistLoaded(AudioPlaylist playlist) {
+                AudioTrack selected = playlist.getSelectedTrack();
+                if (selected == null && playlist.getTracks() != null && !playlist.getTracks().isEmpty()) {
+                    selected = playlist.getTracks().get(0);
+                }
+                if (selected == null) {
+                    playbackResolver.recordMiss(source);
+                    failures.add(source.provider() + ": empty playlist");
+                    tryExternalPlaybackCandidate(resolution, index + 1, orderingKey, future, failures);
+                    return;
+                }
+                finishExternalPlaybackTrack(source, selected, future);
+            }
+
+            @Override
+            public void noMatches() {
+                playbackResolver.recordMiss(source);
+                failures.add(source.provider() + ": no matches");
+                tryExternalPlaybackCandidate(resolution, index + 1, orderingKey, future, failures);
+            }
+
+            @Override
+            public void loadFailed(FriendlyException exception) {
+                String message = exception == null || exception.getMessage() == null
+                        ? "load failed"
+                        : exception.getMessage();
+                playbackResolver.recordFailure(source, message);
+                failures.add(source.provider() + ": " + message);
+                tryExternalPlaybackCandidate(resolution, index + 1, orderingKey, future, failures);
+            }
+        });
+    }
+
+    private void finishExternalPlaybackTrack(
+            PlaybackSourceReference source,
+            AudioTrack track,
+            CompletableFuture<ExternalAudioTrackStream> future) {
+        if (future.isDone()) {
+            return;
+        }
+        if (track == null || track.getDuration() <= 0L) {
+            future.completeExceptionally(new IllegalStateException("Resolved track is not playable"));
+            return;
+        }
+        if (track.getDuration() > properties.getMaxTrackDuration().toMillis()) {
+            future.completeExceptionally(new IllegalStateException("Resolved track exceeds maxTrackDuration"));
+            return;
+        }
+
+        playbackResolver.recordSuccess(source);
+        var player = audioPlayerManager.createPlayer();
+        player.setVolume(100);
+        player.playTrack(track);
+        future.complete(new ExternalAudioTrackStream(player, track));
     }
 
     public boolean hasRadioSeeds(long guildId, RadioMode mode, long userId) {

@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import ru.flawden.BascovDiscordBot.auth.DeviceAuthService;
+import ru.flawden.BascovDiscordBot.product.ProductPlaybackUnavailableException;
 
 /** Stable v1 error shape for validation and authentication failures. */
 @RestControllerAdvice(basePackages = "ru.flawden.BascovDiscordBot.product.api")
@@ -15,6 +16,12 @@ public class ProductApiErrorHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ProductApiResponse.Error> invalidArgument(IllegalArgumentException exception) {
         return ResponseEntity.badRequest().body(new ProductApiResponse.Error("INVALID_ARGUMENT", exception.getMessage()));
+    }
+
+    @ExceptionHandler(ProductPlaybackUnavailableException.class)
+    public ResponseEntity<ProductApiResponse.Error> playbackUnavailable(ProductPlaybackUnavailableException exception) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ProductApiResponse.Error("PLAYBACK_UNAVAILABLE", exception.getMessage()));
     }
 
     @ExceptionHandler(DeviceAuthService.AuthException.class)

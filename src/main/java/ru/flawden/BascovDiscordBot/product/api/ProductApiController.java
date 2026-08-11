@@ -9,7 +9,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import ru.flawden.BascovDiscordBot.product.MusicProductService;
+import ru.flawden.BascovDiscordBot.product.ProductPlaybackStreamService;
 
+import jakarta.servlet.http.HttpServletResponse;
+
+import java.io.IOException;
 import java.util.Objects;
 
 /**
@@ -24,11 +28,17 @@ public class ProductApiController {
     private final MusicProductService product;
     private final ProductApiMapper mapper;
     private final ProductApiAccessGuard access;
+    private final ProductPlaybackStreamService playbackStreams;
 
-    public ProductApiController(MusicProductService product, ProductApiMapper mapper, ProductApiAccessGuard access) {
+    public ProductApiController(
+            MusicProductService product,
+            ProductApiMapper mapper,
+            ProductApiAccessGuard access,
+            ProductPlaybackStreamService playbackStreams) {
         this.product = Objects.requireNonNull(product, "product");
         this.mapper = Objects.requireNonNull(mapper, "mapper");
         this.access = Objects.requireNonNull(access, "access");
+        this.playbackStreams = Objects.requireNonNull(playbackStreams, "playbackStreams");
     }
 
     @GetMapping("/capabilities")
@@ -82,5 +92,24 @@ public class ProductApiController {
             @RequestParam long guildId) {
         var principal = access.requireGuild(authorization, guildId);
         return mapper.library(product.library(guildId, principal.discordUserId()), principal.userId());
+    }
+
+    @GetMapping(value = "/playback/stream", produces = "audio/ogg")
+    public void playbackStream(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @RequestParam long guildId,
+            @RequestParam String artist,
+            @RequestParam String title,
+            HttpServletResponse response) throws IOException {
+        var principal = access.requireGuild(authorization, guildId);
+        try (var session = playbackStreams.open(guildId, principal.discordUserId(), artist, title)) {
+            response.setStatus(HttpServletResponse.SC_OK);
+            response.setContentType("audio/ogg");
+            response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+            response.setHeader("Accept-Ranges", "none");
+            response.setHeader("X-Accel-Buffering", "no");
+            response.setHeader("X-Baskov-Playback-Duration-Millis", Long.toString(session.durationMillis()));
+            session.writeOgg(response.getOutputStream());
+        }
     }
 }

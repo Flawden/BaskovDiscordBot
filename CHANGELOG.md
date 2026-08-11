@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+## [1.32.0] — 2026-08-11
+
+### Mobile Playback Stream API
+
+- Added authenticated foreground `GET /api/v1/playback/stream?guildId=...&artist=...&title=...` for Baskov Android local playback. The client sends only provider-neutral track metadata; server-side `PlaybackResolver` still owns YouTube/SoundCloud choice and fallback.
+- Added isolated external LavaPlayer playback sessions that never touch Discord guild queues/voice state. Resolved Opus packets are remuxed into an `audio/ogg` response without decode/transcode.
+- Mobile streams are guild-authenticated, bounded to four concurrent sessions per backend process, use the existing max-track-duration limit, disable byte-range semantics for this first foreground slice, and return stable `503 PLAYBACK_UNAVAILABLE` when a stream cannot be prepared.
+- Product API remains `AUTHENTICATED_READ` with `mutationsEnabled=false`; remote Discord playback mutations are still absent. No persistence format changes or new stores.
+- Added Ogg muxer and product-boundary regressions plus the `docs/MOBILE-PLAYBACK-STREAM.md` design/contract note.
+
 ## [1.31.0] — 2026-08-11
 
 ### Android Library & Mix Navigation Read API

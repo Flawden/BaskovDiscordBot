@@ -34,7 +34,7 @@ class ProductApiBoundaryContractTest {
     }
 
     @Test
-    void v131HttpSurfaceRequiresBearerIdentityForUserScopedReads() throws Exception {
+    void v132HttpSurfaceRequiresBearerIdentityForUserScopedReads() throws Exception {
         String controller = read("product/api/ProductApiController.java");
         String capabilities = read("product/ProductCapabilities.java");
 
@@ -44,10 +44,25 @@ class ProductApiBoundaryContractTest {
         assertTrue(controller.contains("@GetMapping(\"/mixes/{stationSlug}\")"));
         assertTrue(controller.contains("@GetMapping(\"/player\")"));
         assertTrue(controller.contains("@GetMapping(\"/library\")"));
+        assertTrue(controller.contains("/playback/stream"));
         assertTrue(controller.contains("HttpHeaders.AUTHORIZATION"));
         assertFalse(controller.contains("@RequestParam long userId"));
         assertTrue(capabilities.contains("authenticationRequiredForReads"));
         assertTrue(capabilities.contains("authenticationRequiredForMutations"));
+    }
+
+    @Test
+    void mobilePlaybackStreamKeepsProviderResolutionOnBackend() throws Exception {
+        String controller = read("product/api/ProductApiController.java");
+        String service = read("product/ProductPlaybackStreamService.java");
+        String adapter = read("product/RuntimeProductPlaybackStreamAdapter.java");
+
+        assertTrue(controller.contains("ProductPlaybackStreamService"));
+        assertFalse(controller.contains("PlayerManager"));
+        assertFalse(service.contains("youtube"));
+        assertFalse(service.contains("soundcloud"));
+        assertTrue(adapter.contains("PlaybackClientCapabilities.android"));
+        assertTrue(adapter.contains("OggOpusWriter"));
     }
 
     @Test
@@ -96,7 +111,7 @@ class ProductApiBoundaryContractTest {
     }
 
     @Test
-    void v131KeepsBaseWebAdapterUnpublishedByDefault() throws Exception {
+    void v132KeepsBaseWebAdapterUnpublishedByDefault() throws Exception {
         String pom = Files.readString(Path.of("pom.xml"));
         String compose = Files.readString(Path.of("docker-compose.yml"));
 

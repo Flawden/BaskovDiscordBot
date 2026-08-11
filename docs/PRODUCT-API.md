@@ -1,5 +1,9 @@
 # Baskov Music Product API v1
 
+## v1.32 Mobile Playback Stream
+
+`v1.32.0` adds an authenticated **foreground local-playback stream** for Android: `/api/v1/playback/stream` accepts provider-neutral `artist/title`, reuses the server-side `PlaybackResolver`, loads the exact transport through LavaPlayer and remuxes its Opus packets to `audio/ogg`. Android does not perform provider search or extraction. The endpoint is read-like media delivery; Product API still reports `mutationsEnabled=false`.
+
 ## v1.31 Android Library & Mix Navigation
 
 The authenticated read boundary now exposes full bounded personal favorites/history lists through `/api/v1/library` and exact curated-station details through `/api/v1/mixes/{stationSlug}`. `seedPreview` is intentionally a seed preview rather than a predicted playback queue. Music mutations remain disabled.
@@ -42,6 +46,8 @@ GET /api/v1/home?guildId=...
 GET /api/v1/mixes?guildId=...
 GET /api/v1/player?guildId=...
 GET /api/v1/library?guildId=...
+GET /api/v1/mixes/{stationSlug}?guildId=...
+GET /api/v1/playback/stream?guildId=...&artist=...&title=...  # audio/ogg
 ```
 
 `home/mixes/library` still read the legacy music profile through the Discord identity linked to the `BaskovUser`. Existing favorites/history/feedback are intentionally not mass-migrated from Discord persistence keys.
@@ -93,7 +99,7 @@ I — ExternalIdentity
 S — DeviceSession with token hashes
 ```
 
-It remains the fifth persistent store and participates in readiness/backup. v1.30 adds no storage file or format migration.
+It remains the fifth persistent store and participates in readiness/backup. v1.32 adds no storage file or format migration.
 
 ## Runtime defaults and remote profile
 
@@ -125,6 +131,6 @@ This is **not** a direct public API configuration. The raw Spring port must stay
 
 ## Why music mutations are still off
 
-Authentication and client discovery are now sufficient for Android read MVP, but remote playback changes require a separate client-neutral permission/session ownership model. `ProductCapabilities.mutationsEnabled=false` therefore still means no remote music mutation endpoints.
+Foreground local audio streaming does not mutate Discord guild playback state: it opens an isolated server-side transport for the authenticated mobile client. Remote Discord playback changes still require a separate client-neutral permission/session ownership model. `ProductCapabilities.mutationsEnabled=false` therefore still means no remote music mutation endpoints.
 
 Auth lifecycle (`pair/refresh/logout/revoke`) continues to mutate auth state by design.

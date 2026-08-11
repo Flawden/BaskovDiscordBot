@@ -24,6 +24,6 @@ public record ProductCapabilities(
                 true,
                 false,
                 true,
-                List.of("auth", "me", "devices", "guilds", "home", "mixes", "player", "library", "capabilities"));
+                List.of("auth", "me", "devices", "guilds", "home", "mixes", "player", "library", "playback", "capabilities"));
     }
 }
