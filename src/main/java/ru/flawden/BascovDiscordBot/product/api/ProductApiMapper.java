@@ -23,9 +23,17 @@ public class ProductApiMapper {
                 source.resources());
     }
 
+    public ProductApiResponse.Guilds guilds(String productUserId, List<ProductGuildAccessPort.GuildSummary> source) {
+        return new ProductApiResponse.Guilds(
+                productUserId,
+                source.stream()
+                        .map(guild -> new ProductApiResponse.Guild(snowflake(guild.guildId()), guild.name()))
+                        .toList());
+    }
+
     public ProductApiResponse.Home home(HomeSnapshot source, String productUserId) {
         return new ProductApiResponse.Home(
-                source.guildId(),
+                snowflake(source.guildId()),
                 productUserId,
                 source.date(),
                 source.continuation().map(this::continuation).orElse(null),
@@ -33,7 +41,7 @@ public class ProductApiMapper {
                 mixes(source.forYou()),
                 themes(source.themes()),
                 new ProductApiResponse.Library(
-                        source.guildId(),
+                        snowflake(source.guildId()),
                         productUserId,
                         source.library().favorites(),
                         source.library().personalHistory(),
@@ -47,7 +55,7 @@ public class ProductApiMapper {
 
     public ProductApiResponse.Mixes mixes(ProductMixesSnapshot source, String productUserId) {
         return new ProductApiResponse.Mixes(
-                source.guildId(),
+                snowflake(source.guildId()),
                 productUserId,
                 source.date(),
                 source.continuation().map(this::continuation).orElse(null),
@@ -58,7 +66,7 @@ public class ProductApiMapper {
 
     public ProductApiResponse.Library library(ProductLibrarySnapshot source, String productUserId) {
         return new ProductApiResponse.Library(
-                source.guildId(),
+                snowflake(source.guildId()),
                 productUserId,
                 source.favorites(),
                 source.personalHistory(),
@@ -67,7 +75,7 @@ public class ProductApiMapper {
 
     public ProductApiResponse.Player player(ProductPlaybackSnapshot source) {
         return new ProductApiResponse.Player(
-                source.guildId(),
+                snowflake(source.guildId()),
                 source.sessionActive(),
                 source.playing(),
                 source.paused(),
@@ -84,6 +92,10 @@ public class ProductApiMapper {
                         source.radio().theme(),
                         source.radio().strategy(),
                         source.radio().generatedTracks()));
+    }
+
+    private static String snowflake(long value) {
+        return Long.toUnsignedString(value);
     }
 
     private ProductApiResponse.Continuation continuation(HomeSnapshot.ContinuationCard source) {

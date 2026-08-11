@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [1.30.0] — 2026-08-10
+
+### Android Gateway Foundation
+
+- Добавлен authenticated `GET /api/v1/guilds`: внешний клиент после device pairing получает только те Discord guilds, где linked Discord identity действительно состоит; JDA остаётся за `ProductGuildAccessPort`, HTTP controller не импортирует Discord runtime.
+- Discord snowflake IDs на HTTP wire boundary переведены в decimal strings (`guildId`), пока Android/Web ещё не зависят от numeric JSON contract. Internal Java domain по-прежнему использует `long`; conversion выполняет `ProductApiMapper`.
+- Добавлен committed OpenAPI 3.0.3 contract `docs/openapi/baskov-product-api-v1.yaml` для текущих authenticated read/auth endpoints без новой Maven/runtime dependency.
+- Добавлен opt-in `docker-compose.product-api.yml`: при `BASKOV_PRODUCT_API_REMOTE_ENABLED=true` CI/CD публикует Spring API только на VPS host-loopback `127.0.0.1:${BASKOV_PRODUCT_API_HOST_PORT:-18080}`, включает forwarded-header handling и проверяет `/api/v1/capabilities` после deploy. Base production profile остаётся API-off/non-web/unpublished.
+- Remote API profile запрещён вместе с `BOT_NETWORK_MODE=host`, чтобы container `0.0.0.0` bind не превратился в прямой public listener. HTTPS/TLS, hostname и edge rate limiting остаются обязательной reverse-proxy boundary перед реальным мобильным доступом.
+- Music mutations по-прежнему выключены (`mutationsEnabled=false`): v1.30 готовит Android read/bootstrap path, но не переносит Discord playback permissions и orchestration в HTTP. Нового persistence и миграций нет; остаются пять storage-файлов.
+- Добавлены unit/architecture regressions на guild discovery, JSON-safe snowflakes, OpenAPI surface, host-loopback publication, delivery opt-in и запрет music mutations. User-Agent внешних recommendation/collaborative запросов обновлён до `v1.30.0 android-gateway`.
+
 ## [1.29.0] — 2026-08-10
 
 ### Users, Auth & Device Sessions

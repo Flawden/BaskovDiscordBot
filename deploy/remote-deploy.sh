@@ -4,6 +4,7 @@ set -Eeuo pipefail
 DEPLOY_DIR="${1:?Deployment directory is required}"
 COMPOSE_FILE="${DEPLOY_DIR}/docker-compose.yml"
 HOST_COMPOSE_FILE="${DEPLOY_DIR}/docker-compose.host-network.yml"
+PRODUCT_API_COMPOSE_FILE="${DEPLOY_DIR}/docker-compose.product-api.yml"
 INPUT_FILE="${DEPLOY_DIR}/.deploy-input"
 ENV_FILE="${DEPLOY_DIR}/.env"
 PREVIOUS_ENV_FILE="${DEPLOY_DIR}/.env.previous"
@@ -46,6 +47,8 @@ source "${INPUT_FILE}"
 : "${DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_INTERVAL_B64:?DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_INTERVAL_B64 is missing}"
 : "${DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_RETENTION_B64:?DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_RETENTION_B64 is missing}"
 : "${BOT_NETWORK_MODE_B64:?BOT_NETWORK_MODE_B64 is missing}"
+: "${BASKOV_PRODUCT_API_REMOTE_ENABLED_B64:?BASKOV_PRODUCT_API_REMOTE_ENABLED_B64 is missing}"
+: "${BASKOV_PRODUCT_API_HOST_PORT_B64:?BASKOV_PRODUCT_API_HOST_PORT_B64 is missing}"
 : "${DISCORD_BOT_VOICE_LOG_LEVEL_B64:?DISCORD_BOT_VOICE_LOG_LEVEL_B64 is missing}"
 : "${DISCORD_BOT_MUSIC_DEFAULT_VOLUME_B64:?DISCORD_BOT_MUSIC_DEFAULT_VOLUME_B64 is missing}"
 : "${DISCORD_BOT_MUSIC_MAX_VOLUME_B64:?DISCORD_BOT_MUSIC_MAX_VOLUME_B64 is missing}"
@@ -85,6 +88,8 @@ DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_ENABLED="$(decode "${DISCORD_BOT_OPERA
 DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_INTERVAL="$(decode "${DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_INTERVAL_B64}")"
 DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_RETENTION="$(decode "${DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_RETENTION_B64}")"
 BOT_NETWORK_MODE="$(decode "${BOT_NETWORK_MODE_B64}")"
+BASKOV_PRODUCT_API_REMOTE_ENABLED="$(decode "${BASKOV_PRODUCT_API_REMOTE_ENABLED_B64}")"
+BASKOV_PRODUCT_API_HOST_PORT="$(decode "${BASKOV_PRODUCT_API_HOST_PORT_B64}")"
 DISCORD_BOT_VOICE_LOG_LEVEL="$(decode "${DISCORD_BOT_VOICE_LOG_LEVEL_B64}")"
 DISCORD_BOT_MUSIC_DEFAULT_VOLUME="$(decode "${DISCORD_BOT_MUSIC_DEFAULT_VOLUME_B64}")"
 DISCORD_BOT_MUSIC_MAX_VOLUME="$(decode "${DISCORD_BOT_MUSIC_MAX_VOLUME_B64}")"
@@ -201,6 +206,25 @@ if [[ "${BOT_NETWORK_MODE}" == "host" && ! -f "${HOST_COMPOSE_FILE}" ]]; then
   echo "Host-network compose override is missing" >&2
   exit 1
 fi
+if [[ ! "${BASKOV_PRODUCT_API_REMOTE_ENABLED}" =~ ^(true|false)$ ]]; then
+  echo "Baskov Product API remote enabled must be true or false" >&2
+  exit 1
+fi
+if [[ ! "${BASKOV_PRODUCT_API_HOST_PORT}" =~ ^[0-9]+$ ]] \
+    || (( BASKOV_PRODUCT_API_HOST_PORT < 1024 || BASKOV_PRODUCT_API_HOST_PORT > 65535 )); then
+  echo "Baskov Product API host port must be between 1024 and 65535" >&2
+  exit 1
+fi
+if [[ "${BASKOV_PRODUCT_API_REMOTE_ENABLED}" == "true" ]]; then
+  if [[ "${BOT_NETWORK_MODE}" == "host" ]]; then
+    echo "Remote Product API profile requires bridge network mode so the API can stay host-loopback-only" >&2
+    exit 1
+  fi
+  if [[ ! -f "${PRODUCT_API_COMPOSE_FILE}" ]]; then
+    echo "Product API compose override is missing" >&2
+    exit 1
+  fi
+fi
 if [[ ! "${DISCORD_BOT_MUSIC_MAX_VOLUME}" =~ ^[0-9]+$ ]] \
     || (( DISCORD_BOT_MUSIC_MAX_VOLUME < 1 || DISCORD_BOT_MUSIC_MAX_VOLUME > 500 )); then
   echo "Music max volume must be between 1 and 500" >&2
@@ -289,6 +313,8 @@ write_env() {
     printf 'DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_INTERVAL=%s\n' "${DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_INTERVAL}"
     printf 'DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_RETENTION=%s\n' "${DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_RETENTION}"
     printf 'BOT_NETWORK_MODE=%s\n' "${BOT_NETWORK_MODE}"
+    printf 'BASKOV_PRODUCT_API_REMOTE_ENABLED=%s\n' "${BASKOV_PRODUCT_API_REMOTE_ENABLED}"
+    printf 'BASKOV_PRODUCT_API_HOST_PORT=%s\n' "${BASKOV_PRODUCT_API_HOST_PORT}"
     printf 'DISCORD_BOT_VOICE_LOG_LEVEL=%s\n' "${DISCORD_BOT_VOICE_LOG_LEVEL}"
     printf 'DISCORD_BOT_MUSIC_DEFAULT_VOLUME=%s\n' "${DISCORD_BOT_MUSIC_DEFAULT_VOLUME}"
     printf 'DISCORD_BOT_MUSIC_MAX_VOLUME=%s\n' "${DISCORD_BOT_MUSIC_MAX_VOLUME}"
@@ -314,6 +340,11 @@ compose_with_env() {
   local args=(--env-file "${env_file}" -f "${COMPOSE_FILE}")
   if [[ "${mode:-bridge}" == "host" ]]; then
     args+=(-f "${HOST_COMPOSE_FILE}")
+  fi
+  local product_api_enabled
+  product_api_enabled="$(awk -F= '$1 == "BASKOV_PRODUCT_API_REMOTE_ENABLED" {print $2; exit}' "${env_file}")"
+  if [[ "${product_api_enabled:-false}" == "true" ]]; then
+    args+=(-f "${PRODUCT_API_COMPOSE_FILE}")
   fi
   docker compose "${args[@]}" "$@"
 }
@@ -360,6 +391,21 @@ verify_runtime() {
   if ! docker exec "${BOT_CONTAINER_NAME}" /app/healthcheck.sh; then
     echo "In-container heartbeat verification failed" >&2
     return 1
+  fi
+  if [[ "$(read_env_value BASKOV_PRODUCT_API_REMOTE_ENABLED)" == "true" ]]; then
+    local product_api_host_port
+    product_api_host_port="$(read_env_value BASKOV_PRODUCT_API_HOST_PORT)"
+    local product_api_status
+    product_api_status="$(timeout 3 bash -c '
+      exec 3<>/dev/tcp/127.0.0.1/'"${product_api_host_port}"'
+      printf "GET /api/v1/capabilities HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n" >&3
+      IFS= read -r line <&3
+      printf "%s" "$line"
+    ' 2>/dev/null || true)"
+    if [[ ! "${product_api_status}" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]]; then
+      echo "Host-loopback Product API verification failed: ${product_api_status:-no response}" >&2
+      return 1
+    fi
   fi
   if [[ "${require_native_dave}" == "true" ]]; then
     container_logs="$(docker logs "${BOT_CONTAINER_NAME}" 2>&1)"

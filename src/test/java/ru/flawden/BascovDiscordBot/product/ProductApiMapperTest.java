@@ -29,12 +29,22 @@ class ProductApiMapperTest {
 
         var result = mapper.home(source, "baskov-user-1");
 
-        assertEquals(10L, result.guildId());
+        assertEquals("10", result.guildId());
         assertEquals("baskov-user-1", result.userId());
         assertEquals("RESUMABLE", result.continuation().kind());
         assertEquals("daily-mix", result.continuation().stationSlug());
         assertEquals(1, result.today().size());
         assertEquals("linkin park::numb", result.recent().get(0).stableKey());
+    }
+
+    @Test
+    void mapsAccessibleGuildsWithJsonSafeSnowflakeStrings() {
+        var result = mapper.guilds("baskov-user-1", List.of(
+                new ru.flawden.BascovDiscordBot.product.api.ProductGuildAccessPort.GuildSummary(123456789012345678L, "Music Guild")));
+
+        assertEquals("baskov-user-1", result.userId());
+        assertEquals("123456789012345678", result.guilds().get(0).guildId());
+        assertEquals("Music Guild", result.guilds().get(0).name());
     }
 
     @Test

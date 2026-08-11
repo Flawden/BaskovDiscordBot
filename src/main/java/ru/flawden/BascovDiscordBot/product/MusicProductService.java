@@ -11,7 +11,7 @@ import java.util.Objects;
  *
  * <p>Discord and the external HTTP adapter must call these use cases instead of
  * reaching into runtime/repositories independently. Mutating use cases are
- * intentionally deferred until v1.29 authentication and device identity exist.</p>
+ * intentionally deferred until a dedicated authenticated mutation/permission release.</p>
  */
 @Component
 public class MusicProductService {

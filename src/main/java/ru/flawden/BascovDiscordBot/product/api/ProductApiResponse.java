@@ -18,8 +18,15 @@ public final class ProductApiResponse {
             List<String> resources) {
     }
 
+    public record Guilds(String userId, List<Guild> guilds) {
+        public Guilds { guilds = List.copyOf(guilds == null ? List.of() : guilds); }
+    }
+
+    public record Guild(String guildId, String name) {
+    }
+
     public record Home(
-            long guildId,
+            String guildId,
             String userId,
             LocalDate date,
             Continuation continuation,
@@ -32,7 +39,7 @@ public final class ProductApiResponse {
     }
 
     public record Mixes(
-            long guildId,
+            String guildId,
             String userId,
             LocalDate date,
             Continuation continuation,
@@ -42,7 +49,7 @@ public final class ProductApiResponse {
     }
 
     public record Player(
-            long guildId,
+            String guildId,
             boolean sessionActive,
             boolean playing,
             boolean paused,
@@ -56,7 +63,7 @@ public final class ProductApiResponse {
     }
 
     public record Library(
-            long guildId,
+            String guildId,
             String userId,
             int favorites,
             int personalHistory,

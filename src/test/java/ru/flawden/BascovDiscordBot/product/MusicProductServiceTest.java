@@ -65,7 +65,7 @@ class MusicProductServiceTest {
     }
 
     @Test
-    void capabilitiesRequireAuthForV129Reads() {
+    void capabilitiesRequireAuthForV130Reads() {
         ProductCapabilities capabilities = service().capabilities();
 
         assertEquals("v1", capabilities.apiVersion());
@@ -73,7 +73,7 @@ class MusicProductServiceTest {
         assertTrue(capabilities.authenticationRequiredForReads());
         assertFalse(capabilities.mutationsEnabled());
         assertTrue(capabilities.authenticationRequiredForMutations());
-        assertEquals(List.of("auth", "me", "devices", "home", "mixes", "player", "library", "capabilities"), capabilities.resources());
+        assertEquals(List.of("auth", "me", "devices", "guilds", "home", "mixes", "player", "library", "capabilities"), capabilities.resources());
     }
 
     private static MusicProductService service() {

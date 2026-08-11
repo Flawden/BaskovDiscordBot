@@ -148,6 +148,13 @@ jobs:
           BOT_NETWORK_MODE=host \
             docker compose -f deploy/docker-compose.yml \
               -f deploy/docker-compose.host-network.yml config >/dev/null
+          BOT_IMAGE=ghcr.io/example/baskov-discord-bot:ci \
+          BOT_CONTAINER_NAME=baskov-discord-bot-ci \
+          DISCORD_BOT_TOKEN=ci-placeholder \
+          BOT_NETWORK_MODE=bridge \
+          BASKOV_PRODUCT_API_HOST_PORT=18080 \
+            docker compose -f deploy/docker-compose.yml \
+              -f deploy/docker-compose.product-api.yml config >/dev/null
 
       - name: Diagnose Maven delivery environment
         run: ./.github/scripts/maven-ci.sh diagnose
@@ -281,7 +288,7 @@ jobs:
           ssh -i "${BASKOV_SSH_KEY}" -o UserKnownHostsFile="${BASKOV_KNOWN_HOSTS}" -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "install -d -m 700 '${deploy_dir}'"
           scp -i "${BASKOV_SSH_KEY}" -o UserKnownHostsFile="${BASKOV_KNOWN_HOSTS}" -P "${DEPLOY_PORT:-22}" \
-            deploy/docker-compose.yml deploy/docker-compose.host-network.yml \
+            deploy/docker-compose.yml deploy/docker-compose.host-network.yml deploy/docker-compose.product-api.yml \
             deploy/remote-deploy.sh \
             "${DEPLOY_USER}@${DEPLOY_HOST}:${deploy_dir}/"
 
@@ -330,6 +337,8 @@ jobs:
           LISTENBRAINZ_API_BASE_URL: ${{ vars.LISTENBRAINZ_API_BASE_URL }}
           BOT_COLLABORATIVE_ARTIST_LIMIT: ${{ vars.DISCORD_BOT_COLLABORATIVE_ARTIST_LIMIT }}
           BOT_LISTENBRAINZ_RADIO_MODE: ${{ vars.DISCORD_BOT_LISTENBRAINZ_RADIO_MODE }}
+          BASKOV_PRODUCT_API_REMOTE_ENABLED: ${{ vars.BASKOV_PRODUCT_API_REMOTE_ENABLED }}
+          BASKOV_PRODUCT_API_HOST_PORT: ${{ vars.BASKOV_PRODUCT_API_HOST_PORT }}
         run: |
           set -Eeuo pipefail
           deploy_dir="${DEPLOY_DIR:-${{ needs.context.outputs.default_deploy_dir }}}"
@@ -356,6 +365,8 @@ jobs:
           persistence_backup_interval="${BOT_OPERATIONS_PERSISTENCE_BACKUP_INTERVAL:-6h}"
           persistence_backup_retention="${BOT_OPERATIONS_PERSISTENCE_BACKUP_RETENTION:-14}"
           network_mode="${BOT_NETWORK_MODE:-bridge}"
+          product_api_remote_enabled="${BASKOV_PRODUCT_API_REMOTE_ENABLED:-false}"
+          product_api_host_port="${BASKOV_PRODUCT_API_HOST_PORT:-18080}"
           if [[ -n "${BOT_NETWORK_MODE_OVERRIDE}" && "${BOT_NETWORK_MODE_OVERRIDE}" != "environment" ]]; then
             network_mode="${BOT_NETWORK_MODE_OVERRIDE}"
           fi
@@ -400,6 +411,8 @@ jobs:
             printf 'DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_INTERVAL_B64=%s\n' "$(encode "${persistence_backup_interval}")"
             printf 'DISCORD_BOT_OPERATIONS_PERSISTENCE_BACKUP_RETENTION_B64=%s\n' "$(encode "${persistence_backup_retention}")"
             printf 'BOT_NETWORK_MODE_B64=%s\n' "$(encode "${network_mode}")"
+            printf 'BASKOV_PRODUCT_API_REMOTE_ENABLED_B64=%s\n' "$(encode "${product_api_remote_enabled}")"
+            printf 'BASKOV_PRODUCT_API_HOST_PORT_B64=%s\n' "$(encode "${product_api_host_port}")"
             printf 'DISCORD_BOT_VOICE_LOG_LEVEL_B64=%s\n' "$(encode "${voice_log_level}")"
             printf 'DISCORD_BOT_MUSIC_DEFAULT_VOLUME_B64=%s\n' "$(encode "${default_volume}")"
             printf 'DISCORD_BOT_MUSIC_MAX_VOLUME_B64=%s\n' "$(encode "${max_volume}")"

@@ -1,22 +1,23 @@
 # Baskov Music Product API v1
 
-`v1.29.0` переводит HTTP boundary из read-only preview в **authenticated read API**. Product API всё ещё отключён и bind-ится на loopback по умолчанию, но user-scoped endpoints больше не принимают произвольный `userId`: личность выводится из bearer device session.
+`v1.30.0` promotes the authenticated read boundary into an **Android-gateway foundation**. Identity still comes from `BaskovUser` device sessions introduced in v1.29, while v1.30 adds authenticated guild discovery, a committed OpenAPI contract and an opt-in host-loopback deployment profile for a future TLS reverse proxy.
 
-## Безопасная модель
+## Security model
 
-1. Пользователь внутри Discord вызывает `/device pair`.
-2. Бот показывает ephemeral одноразовый 8-символьный код с TTL 5 минут.
-3. Новый клиент вызывает `POST /api/v1/auth/device/pair` с кодом и именем устройства.
-4. Backend создаёт или находит provider-neutral `BaskovUser`, связывает его с Discord identity и создаёт `DeviceSession`.
-5. Клиент получает access token + refresh token. В `baskov-auth.tsv` сохраняются только SHA-256 хэши токенов.
-6. Access token используется как `Authorization: Bearer <token>`; refresh token ротируется при каждом refresh.
-7. Для guild-scoped reads backend дополнительно проверяет, что linked Discord identity действительно состоит в указанном guild.
+1. The user invokes `/device pair` inside Discord.
+2. Discord returns an ephemeral one-time 8-character code with a default 5-minute TTL.
+3. A client calls `POST /api/v1/auth/device/pair` with that code and a device name.
+4. Backend creates or finds the provider-neutral `BaskovUser`, links Discord identity and creates a `DeviceSession`.
+5. Client receives access + refresh tokens. `baskov-auth.tsv` stores only SHA-256 hashes.
+6. Access token is sent as `Authorization: Bearer <token>`; refresh rotates both token hashes.
+7. `GET /api/v1/guilds` discovers guilds available to the linked Discord identity.
+8. Every guild-scoped read re-checks that the linked Discord identity is actually a member of the requested guild.
 
-Pairing-коды process-local, одноразовые и никогда не записываются в persistent storage. Access/refresh plaintext выдаются только в pair/refresh response и не логируются.
+Pairing codes are process-local, one-time and never persisted. Plaintext access/refresh tokens exist only in pair/refresh responses and client storage.
 
 ## Endpoints
 
-Без bearer:
+Without bearer:
 
 ```text
 GET  /api/v1/capabilities
@@ -24,7 +25,7 @@ POST /api/v1/auth/device/pair
 POST /api/v1/auth/refresh
 ```
 
-С bearer:
+With bearer:
 
 ```text
 POST   /api/v1/auth/logout
@@ -32,13 +33,38 @@ GET    /api/v1/auth/me
 GET    /api/v1/auth/devices
 DELETE /api/v1/auth/devices/{sessionId}
 
+GET /api/v1/guilds
 GET /api/v1/home?guildId=...
 GET /api/v1/mixes?guildId=...
 GET /api/v1/player?guildId=...
 GET /api/v1/library?guildId=...
 ```
 
-`home/mixes/library` получают legacy music profile через Discord identity, привязанную к `BaskovUser`. В `v1.29` существующие favorites/history/feedback intentionally **не мигрируются** с Discord numeric ID: account boundary вводится без риска для уже накопленного музыкального профиля.
+`home/mixes/library` still read the legacy music profile through the Discord identity linked to the `BaskovUser`. Existing favorites/history/feedback are intentionally not mass-migrated from Discord persistence keys.
+
+## Wire identifiers
+
+Provider-neutral account IDs remain Baskov UUID strings.
+
+Discord snowflakes in JSON responses are also strings:
+
+```json
+{
+  "guildId": "123456789012345678"
+}
+```
+
+This prevents loss of integer precision in future JavaScript clients. Internally the Java runtime may continue using `long`; conversion happens in `ProductApiMapper` at the wire boundary.
+
+## OpenAPI
+
+The committed client contract is:
+
+```text
+docs/openapi/baskov-product-api-v1.yaml
+```
+
+It is source-controlled intentionally instead of adding another runtime/Maven dependency. Android/Web clients can use it as the versioned API reference while architecture tests guard the critical endpoint/security/identifier invariants.
 
 ## Token lifecycle
 
@@ -51,11 +77,11 @@ refresh token TTL  30d
 active devices     max 8
 ```
 
-Refresh token rotation инвалидирует предыдущие access/refresh hashes этой session. Logout/revoke устанавливают session как revoked; другое устройство того же пользователя продолжает работать.
+Refresh rotation invalidates the previous access/refresh hashes for that session. Logout/revoke affects only the selected device session.
 
 ## Persistence
 
-Новый `data/baskov-auth.tsv` имеет формат `BASKOV_AUTH_V1` и содержит три типа записей:
+`data/baskov-auth.tsv` remains `BASKOV_AUTH_V1`:
 
 ```text
 U — BaskovUser
@@ -63,11 +89,11 @@ I — ExternalIdentity
 S — DeviceSession with token hashes
 ```
 
-Файл входит в storage readiness и обычный bounded backup ZIP. В owner-only persistent store нет plaintext access/refresh tokens.
+It remains the fifth persistent store and participates in readiness/backup. v1.30 adds no storage file or format migration.
 
-## Runtime defaults
+## Runtime defaults and remote profile
 
-API остаётся opt-in:
+Base API posture remains opt-in and non-web:
 
 ```text
 BASKOV_PRODUCT_API_ENABLED=false
@@ -76,10 +102,25 @@ BASKOV_PRODUCT_API_BIND_ADDRESS=127.0.0.1
 BASKOV_PRODUCT_API_PORT=18080
 ```
 
-Docker Compose по-прежнему не публикует `18080` наружу. Перед будущим remote/mobile exposure нужен отдельный TLS/reverse-proxy deployment contract; сам `v1.29` не открывает production port.
+Base `docker-compose.yml` still publishes no port.
 
-## Почему music mutations всё ещё выключены
+For a TLS reverse proxy on the VPS, CI/CD can explicitly enable:
 
-Authentication уже существует, но `v1.29` не смешивает её с переносом Discord permission/playback orchestration в HTTP. `ProductCapabilities.mutationsEnabled=false` относится именно к **music mutations** (`start/skip/favorite/...`). Auth lifecycle (`pair/refresh/logout/revoke`) естественно изменяет auth state.
+```text
+BASKOV_PRODUCT_API_REMOTE_ENABLED=true
+BASKOV_PRODUCT_API_HOST_PORT=18080
+```
 
-Следующий Android-facing этап может безопасно добавить client-neutral authenticated mutation use-cases поверх уже существующих `BaskovUser`/`DeviceSession`, не принимая Discord user IDs от клиента и не раскрывая transport/provider identifiers.
+The `docker-compose.product-api.yml` override starts Spring web mode and publishes only:
+
+```text
+127.0.0.1:<host-port>:18080
+```
+
+This is **not** a direct public API configuration. The raw Spring port must stay unreachable from the Internet; HTTPS and edge rate limiting belong at the reverse proxy. Host-network mode is intentionally rejected when the remote API profile is enabled.
+
+## Why music mutations are still off
+
+Authentication and client discovery are now sufficient for Android read MVP, but remote playback changes require a separate client-neutral permission/session ownership model. `ProductCapabilities.mutationsEnabled=false` therefore still means no remote music mutation endpoints.
+
+Auth lifecycle (`pair/refresh/logout/revoke`) continues to mutate auth state by design.

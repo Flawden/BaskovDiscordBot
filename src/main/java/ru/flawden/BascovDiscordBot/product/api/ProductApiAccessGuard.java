@@ -3,6 +3,7 @@ package ru.flawden.BascovDiscordBot.product.api;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.auth.DeviceAuthService;
 
+import java.util.List;
 import java.util.Objects;
 
 /** Authenticates bearer sessions and enforces Discord-guild membership without exposing JDA to controllers. */
@@ -20,6 +21,13 @@ public class ProductApiAccessGuard {
         DeviceAuthService.Principal p=require(authorization);
         if(!guildAccess.canAccess(guildId,p.discordUserId())) throw new DeviceAuthService.AuthException("GUILD_ACCESS_DENIED","Linked Discord user is not a member of this guild");
         return p;
+    }
+    public GuildAccess requireGuilds(String authorization){
+        DeviceAuthService.Principal p=require(authorization);
+        return new GuildAccess(p, guildAccess.accessibleGuilds(p.discordUserId()));
+    }
+    public record GuildAccess(DeviceAuthService.Principal principal, List<ProductGuildAccessPort.GuildSummary> guilds) {
+        public GuildAccess { guilds = List.copyOf(guilds == null ? List.of() : guilds); }
     }
     static String bearer(String header){
         if(header==null||header.isBlank()) throw new DeviceAuthService.AuthException("ACCESS_TOKEN_MISSING","Authorization Bearer token is required");

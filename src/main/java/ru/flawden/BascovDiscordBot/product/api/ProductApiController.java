@@ -12,8 +12,8 @@ import ru.flawden.BascovDiscordBot.product.MusicProductService;
 import java.util.Objects;
 
 /**
- * Authenticated read-only v1 product API. Disabled by default and loopback-bound;
- * music mutations remain intentionally unavailable until a later authenticated API release.
+ * Authenticated read-only v1 product API. Disabled by default; the optional remote profile
+ * is host-loopback-published for a TLS reverse proxy. Music mutations remain unavailable.
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -33,6 +33,13 @@ public class ProductApiController {
     @GetMapping("/capabilities")
     public ProductApiResponse.Capabilities capabilities() {
         return mapper.capabilities(product.capabilities());
+    }
+
+    @GetMapping("/guilds")
+    public ProductApiResponse.Guilds guilds(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
+        var guildAccess = access.requireGuilds(authorization);
+        return mapper.guilds(guildAccess.principal().userId(), guildAccess.guilds());
     }
 
     @GetMapping("/home")

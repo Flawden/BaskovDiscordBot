@@ -34,10 +34,11 @@ class ProductApiBoundaryContractTest {
     }
 
     @Test
-    void v129HttpSurfaceRequiresBearerIdentityForUserScopedReads() throws Exception {
+    void v130HttpSurfaceRequiresBearerIdentityForUserScopedReads() throws Exception {
         String controller = read("product/api/ProductApiController.java");
         String capabilities = read("product/ProductCapabilities.java");
 
+        assertTrue(controller.contains("@GetMapping(\"/guilds\")"));
         assertTrue(controller.contains("@GetMapping(\"/home\")"));
         assertTrue(controller.contains("@GetMapping(\"/mixes\")"));
         assertTrue(controller.contains("@GetMapping(\"/player\")"));
@@ -94,7 +95,7 @@ class ProductApiBoundaryContractTest {
     }
 
     @Test
-    void v129KeepsWebAdapterUnpublishedByDefault() throws Exception {
+    void v130KeepsBaseWebAdapterUnpublishedByDefault() throws Exception {
         String pom = Files.readString(Path.of("pom.xml"));
         String compose = Files.readString(Path.of("docker-compose.yml"));
 
