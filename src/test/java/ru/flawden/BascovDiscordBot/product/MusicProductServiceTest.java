@@ -51,6 +51,16 @@ class MusicProductServiceTest {
         assertEquals(0, library.favorites());
         assertEquals(0, library.personalHistory());
         assertTrue(library.recent().isEmpty());
+        assertTrue(library.favoriteTracks().isEmpty());
+        assertTrue(library.historyTracks().isEmpty());
+    }
+
+    @Test
+    void mixDetailRejectsUnknownStationInsteadOfFallingBackSilently() {
+        MusicProductService service = service();
+
+        assertThrows(IllegalArgumentException.class, () -> service.mix(10L, 20L, "not-a-station"));
+        assertEquals("my-mix", service.mix(10L, 20L, "my-mix").stationSlug());
     }
 
     @Test

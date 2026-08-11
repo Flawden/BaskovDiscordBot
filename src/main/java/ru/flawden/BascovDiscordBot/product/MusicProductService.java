@@ -3,7 +3,11 @@ package ru.flawden.BascovDiscordBot.product;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.home.HomeSnapshot;
 import ru.flawden.BascovDiscordBot.home.MusicHomeService;
+import ru.flawden.BascovDiscordBot.library.StoredTrack;
+import ru.flawden.BascovDiscordBot.recommendation.PersonalizedStation;
 
+import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 
 /**
@@ -40,14 +44,32 @@ public class MusicProductService {
                 home.themes());
     }
 
+    public ProductMixDetailSnapshot mix(long guildId, long userId, String stationSlug) {
+        PersonalizedStation station = curatedStation(stationSlug);
+        List<HomeSnapshot.TrackPreview> seeds = previews(readPort.stationSeeds(guildId, userId, station));
+        return new ProductMixDetailSnapshot(
+                guildId,
+                userId,
+                station.slug(),
+                station.label(),
+                station.description(),
+                !seeds.isEmpty(),
+                station.dailySeeded(),
+                seeds);
+    }
+
     public ProductLibrarySnapshot library(long guildId, long userId) {
         HomeSnapshot home = home(guildId, userId);
+        List<HomeSnapshot.TrackPreview> favorites = previews(readPort.favorites(guildId, userId));
+        List<HomeSnapshot.TrackPreview> history = previews(readPort.personalHistory(guildId, userId));
         return new ProductLibrarySnapshot(
                 home.guildId(),
                 home.userId(),
-                home.library().favorites(),
-                home.library().personalHistory(),
-                home.recent());
+                favorites.size(),
+                history.size(),
+                home.recent(),
+                favorites,
+                history);
     }
 
     public ProductPlaybackSnapshot player(long guildId) {
@@ -59,5 +81,26 @@ public class MusicProductService {
 
     public ProductCapabilities capabilities() {
         return ProductCapabilities.authenticatedRead();
+    }
+
+    private static PersonalizedStation curatedStation(String stationSlug) {
+        if (stationSlug == null || stationSlug.isBlank()) {
+            throw new IllegalArgumentException("stationSlug cannot be blank");
+        }
+        String normalized = stationSlug.trim().toLowerCase(Locale.ROOT);
+        return PersonalizedStation.curatedStations().stream()
+                .filter(station -> station.slug().equals(normalized))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Unknown curated station: " + stationSlug));
+    }
+
+    private static List<HomeSnapshot.TrackPreview> previews(List<StoredTrack> tracks) {
+        if (tracks == null || tracks.isEmpty()) {
+            return List.of();
+        }
+        return tracks.stream()
+                .filter(Objects::nonNull)
+                .map(track -> new HomeSnapshot.TrackPreview(track.title(), track.author()))
+                .toList();
     }
 }

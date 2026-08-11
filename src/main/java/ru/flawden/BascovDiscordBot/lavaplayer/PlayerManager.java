@@ -238,6 +238,20 @@ public class PlayerManager {
                 LocalDate.now(ZoneId.systemDefault())).isEmpty();
     }
 
+    /** Read-only preview of the personal seed set that would initialize a curated station. */
+    public List<StoredTrack> stationSeedPreview(long guildId, PersonalizedStation station, long userId) {
+        if (guildId <= 0L || userId <= 0L) {
+            return List.of();
+        }
+        PersonalizedStation selected = station == null ? PersonalizedStation.MY_MIX : station;
+        return List.copyOf(radioSeeds(
+                guildId,
+                RadioMode.PERSONAL,
+                userId,
+                selected,
+                LocalDate.now(ZoneId.systemDefault())));
+    }
+
     public RadioStartResult startRadio(Guild guild, RadioMode mode, TrackRequester owner) {
         return startRadio(guild, mode, RadioStrategy.FAMILIAR, owner);
     }

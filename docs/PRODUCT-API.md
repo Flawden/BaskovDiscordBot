@@ -1,5 +1,9 @@
 # Baskov Music Product API v1
 
+## v1.31 Android Library & Mix Navigation
+
+The authenticated read boundary now exposes full bounded personal favorites/history lists through `/api/v1/library` and exact curated-station details through `/api/v1/mixes/{stationSlug}`. `seedPreview` is intentionally a seed preview rather than a predicted playback queue. Music mutations remain disabled.
+
 `v1.30.0` promotes the authenticated read boundary into an **Android-gateway foundation**. Identity still comes from `BaskovUser` device sessions introduced in v1.29, while v1.30 adds authenticated guild discovery, a committed OpenAPI contract and an opt-in host-loopback deployment profile for a future TLS reverse proxy.
 
 ## Security model

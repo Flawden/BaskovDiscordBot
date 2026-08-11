@@ -68,6 +68,26 @@ class ProductApiMapperTest {
     }
 
     @Test
+    void mapsExpandedLibraryAndMixSeedPreview() {
+        ProductLibrarySnapshot library = new ProductLibrarySnapshot(
+                10L, 20L, 1, 1,
+                List.of(new HomeSnapshot.TrackPreview("Numb", "Linkin Park")),
+                List.of(new HomeSnapshot.TrackPreview("Monster", "Skillet")),
+                List.of(new HomeSnapshot.TrackPreview("Numb", "Linkin Park")));
+
+        var libraryWire = mapper.library(library, "baskov-user-1");
+        assertEquals("skillet::monster", libraryWire.favoriteTracks().get(0).stableKey());
+        assertEquals("linkin park::numb", libraryWire.historyTracks().get(0).stableKey());
+
+        ProductMixDetailSnapshot detail = new ProductMixDetailSnapshot(
+                10L, 20L, "my-mix", "Мой микс", "personal", true, false,
+                List.of(new HomeSnapshot.TrackPreview("Monster", "Skillet")));
+        var mixWire = mapper.mix(detail, "baskov-user-1");
+        assertEquals("my-mix", mixWire.stationSlug());
+        assertEquals("skillet::monster", mixWire.seedPreview().get(0).stableKey());
+    }
+
+    @Test
     void capabilitiesAdvertiseAuthenticatedReadsWithoutMusicMutations() {
         var result = mapper.capabilities(ProductCapabilities.authenticatedRead());
         assertTrue(result.authenticationRequiredForReads());

@@ -3,11 +3,14 @@ package ru.flawden.BascovDiscordBot.product;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.catalog.TrackIdentity;
 import ru.flawden.BascovDiscordBot.lavaplayer.GuildMusicManager;
+import ru.flawden.BascovDiscordBot.library.MusicLibraryRepository;
+import ru.flawden.BascovDiscordBot.library.StoredTrack;
 import ru.flawden.BascovDiscordBot.lavaplayer.PlayerManager;
 import ru.flawden.BascovDiscordBot.lavaplayer.RadioSnapshot;
 import ru.flawden.BascovDiscordBot.lavaplayer.TrackRequest;
 import ru.flawden.BascovDiscordBot.recommendation.PersonalizedStation;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -16,9 +19,26 @@ import java.util.Optional;
 public class RuntimeMusicProductReadAdapter implements MusicProductReadPort {
 
     private final PlayerManager playerManager;
+    private final MusicLibraryRepository libraryRepository;
 
-    public RuntimeMusicProductReadAdapter(PlayerManager playerManager) {
+    public RuntimeMusicProductReadAdapter(PlayerManager playerManager, MusicLibraryRepository libraryRepository) {
         this.playerManager = Objects.requireNonNull(playerManager, "playerManager");
+        this.libraryRepository = Objects.requireNonNull(libraryRepository, "libraryRepository");
+    }
+
+    @Override
+    public List<StoredTrack> favorites(long guildId, long userId) {
+        return libraryRepository.favorites(guildId, userId);
+    }
+
+    @Override
+    public List<StoredTrack> personalHistory(long guildId, long userId) {
+        return libraryRepository.personalHistory(guildId, userId);
+    }
+
+    @Override
+    public List<StoredTrack> stationSeeds(long guildId, long userId, PersonalizedStation station) {
+        return playerManager.stationSeedPreview(guildId, station, userId);
     }
 
     @Override

@@ -4,13 +4,15 @@ import ru.flawden.BascovDiscordBot.home.HomeSnapshot;
 
 import java.util.List;
 
-/** Small library summary suitable for Home, Discord and the first external API contract. */
+/** Read-only personal library snapshot for external clients. */
 public record ProductLibrarySnapshot(
         long guildId,
         long userId,
         int favorites,
         int personalHistory,
-        List<HomeSnapshot.TrackPreview> recent) {
+        List<HomeSnapshot.TrackPreview> recent,
+        List<HomeSnapshot.TrackPreview> favoriteTracks,
+        List<HomeSnapshot.TrackPreview> historyTracks) {
 
     public ProductLibrarySnapshot {
         if (guildId <= 0L || userId <= 0L) {
@@ -19,5 +21,7 @@ public record ProductLibrarySnapshot(
         favorites = Math.max(0, favorites);
         personalHistory = Math.max(0, personalHistory);
         recent = List.copyOf(recent == null ? List.of() : recent);
+        favoriteTracks = List.copyOf(favoriteTracks == null ? List.of() : favoriteTracks);
+        historyTracks = List.copyOf(historyTracks == null ? List.of() : historyTracks);
     }
 }

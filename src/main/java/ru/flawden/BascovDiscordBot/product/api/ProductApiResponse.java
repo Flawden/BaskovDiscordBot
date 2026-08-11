@@ -67,7 +67,20 @@ public final class ProductApiResponse {
             String userId,
             int favorites,
             int personalHistory,
-            List<Track> recent) {
+            List<Track> recent,
+            List<Track> favoriteTracks,
+            List<Track> historyTracks) {
+    }
+
+    public record MixDetail(
+            String guildId,
+            String userId,
+            String stationSlug,
+            String label,
+            String description,
+            boolean available,
+            boolean daily,
+            List<Track> seedPreview) {
     }
 
     public record Continuation(

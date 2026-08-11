@@ -5,6 +5,7 @@ import ru.flawden.BascovDiscordBot.home.HomeSnapshot;
 import ru.flawden.BascovDiscordBot.product.ProductCapabilities;
 import ru.flawden.BascovDiscordBot.product.ProductLibrarySnapshot;
 import ru.flawden.BascovDiscordBot.product.ProductMixesSnapshot;
+import ru.flawden.BascovDiscordBot.product.ProductMixDetailSnapshot;
 import ru.flawden.BascovDiscordBot.product.ProductPlaybackSnapshot;
 
 import java.util.List;
@@ -45,7 +46,9 @@ public class ProductApiMapper {
                         productUserId,
                         source.library().favorites(),
                         source.library().personalHistory(),
-                        tracks(source.recent())),
+                        tracks(source.recent()),
+                        List.of(),
+                        List.of()),
                 tracks(source.recent()),
                 new ProductApiResponse.Taste(
                         source.taste().evidenceSignals(),
@@ -70,7 +73,21 @@ public class ProductApiMapper {
                 productUserId,
                 source.favorites(),
                 source.personalHistory(),
-                tracks(source.recent()));
+                tracks(source.recent()),
+                tracks(source.favoriteTracks()),
+                tracks(source.historyTracks()));
+    }
+
+    public ProductApiResponse.MixDetail mix(ProductMixDetailSnapshot source, String productUserId) {
+        return new ProductApiResponse.MixDetail(
+                snowflake(source.guildId()),
+                productUserId,
+                source.stationSlug(),
+                source.label(),
+                source.description(),
+                source.available(),
+                source.daily(),
+                tracks(source.seedPreview()));
     }
 
     public ProductApiResponse.Player player(ProductPlaybackSnapshot source) {

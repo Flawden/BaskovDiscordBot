@@ -5,6 +5,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import ru.flawden.BascovDiscordBot.product.MusicProductService;
@@ -56,6 +57,15 @@ public class ProductApiController {
             @RequestParam long guildId) {
         var principal = access.requireGuild(authorization, guildId);
         return mapper.mixes(product.mixes(guildId, principal.discordUserId()), principal.userId());
+    }
+
+    @GetMapping("/mixes/{stationSlug}")
+    public ProductApiResponse.MixDetail mix(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @PathVariable String stationSlug,
+            @RequestParam long guildId) {
+        var principal = access.requireGuild(authorization, guildId);
+        return mapper.mix(product.mix(guildId, principal.discordUserId(), stationSlug), principal.userId());
     }
 
     @GetMapping("/player")

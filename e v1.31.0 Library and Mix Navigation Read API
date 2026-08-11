@@ -1,0 +1,37 @@
+warning: in the working copy of 'CHANGELOG.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Readme.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/PRODUCT-API.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/openapi/baskov-product-api-v1.yaml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'pom.xml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main/java/ru/flawden/BascovDiscordBot/lavaplayer/PlayerManager.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main/java/ru/flawden/BascovDiscordBot/product/MusicProductReadPort.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main/java/ru/flawden/BascovDiscordBot/product/MusicProductService.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main/java/ru/flawden/BascovDiscordBot/product/ProductLibrarySnapshot.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main/java/ru/flawden/BascovDiscordBot/product/RuntimeMusicProductReadAdapter.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main/java/ru/flawden/BascovDiscordBot/product/api/ProductApiController.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main/java/ru/flawden/BascovDiscordBot/product/api/ProductApiMapper.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main/java/ru/flawden/BascovDiscordBot/product/api/ProductApiResponse.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main/java/ru/flawden/BascovDiscordBot/recommendation/LastFmRecommendationProvider.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main/java/ru/flawden/BascovDiscordBot/recommendation/ListenBrainzCollaborativeProvider.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/ru/flawden/BascovDiscordBot/architecture/ProductApiBoundaryContractTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/ru/flawden/BascovDiscordBot/product/MusicProductServiceTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/ru/flawden/BascovDiscordBot/product/ProductApiMapperTest.java', LF will be replaced by CRLF the next time Git touches it
+ CHANGELOG.md                                       |  9 [32m++++[m
+ Readme.md                                          |  2 [32m+[m[31m-[m
+ docs/PRODUCT-API.md                                |  6 [32m++[m[31m-[m
+ docs/openapi/baskov-product-api-v1.yaml            | 59 [32m+++++++++++++++++++++[m[31m-[m
+ pom.xml                                            |  2 [32m+[m[31m-[m
+ .../BascovDiscordBot/lavaplayer/PlayerManager.java | 14 [32m+++++[m
+ .../product/MusicProductReadPort.java              | 18 [32m+++++++[m
+ .../product/MusicProductService.java               | 49 [32m++++++++++++++++[m[31m--[m
+ .../product/ProductLibrarySnapshot.java            |  8 [32m++[m[31m-[m
+ .../product/RuntimeMusicProductReadAdapter.java    | 22 [32m+++++++[m[31m-[m
+ .../product/api/ProductApiController.java          | 10 [32m++++[m
+ .../product/api/ProductApiMapper.java              | 21 [32m+++++++[m[31m-[m
+ .../product/api/ProductApiResponse.java            | 15 [32m+++++[m[31m-[m
+ .../LastFmRecommendationProvider.java              |  4 [32m+[m[31m-[m
+ .../ListenBrainzCollaborativeProvider.java         |  2 [32m+[m[31m-[m
+ .../ProductApiBoundaryContractTest.java            |  5 [32m+[m[31m-[m
+ .../product/MusicProductServiceTest.java           | 10 [32m++++[m
+ .../product/ProductApiMapperTest.java              | 20 [32m++++++++[m
+ 18 files changed, 258 insertions(+), 18 deletions(-)

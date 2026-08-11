@@ -6,6 +6,15 @@
 
 ## [Unreleased]
 
+## [1.31.0] — 2026-08-11
+
+### Android Library & Mix Navigation Read API
+
+- `/api/v1/library` remains backward-compatible and now also returns `favoriteTracks` and `historyTracks`, so external clients can render the real personal library instead of only counters and the three-item Home preview.
+- Added authenticated `GET /api/v1/mixes/{stationSlug}?guildId=...` for curated-station details and a read-only `seedPreview`. The preview is explicitly not a playback queue and does not mutate radio/player state.
+- Product/API boundaries remain provider-neutral and read-only; `mutationsEnabled=false` is unchanged.
+- No persistence format changes or new stores.
+
 ## [1.30.0] — 2026-08-10
 
 ### Android Gateway Foundation
