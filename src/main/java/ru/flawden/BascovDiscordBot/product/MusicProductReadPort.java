@@ -1,5 +1,6 @@
 package ru.flawden.BascovDiscordBot.product;
 
+import ru.flawden.BascovDiscordBot.home.HomeSnapshot;
 import ru.flawden.BascovDiscordBot.library.StoredTrack;
 import ru.flawden.BascovDiscordBot.recommendation.PersonalizedStation;
 
@@ -20,6 +21,10 @@ public interface MusicProductReadPort {
     }
 
     default List<StoredTrack> stationSeeds(long guildId, long userId, PersonalizedStation station) {
+        return List.of();
+    }
+
+    default List<HomeSnapshot.TrackPreview> search(long guildId, String query, int maxResults) {
         return List.of();
     }
 }

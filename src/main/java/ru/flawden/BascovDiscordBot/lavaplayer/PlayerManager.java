@@ -711,11 +711,23 @@ public class PlayerManager {
             String identifier,
             int maxResults,
             Consumer<MusicSearchResult> resultConsumer) {
+        Objects.requireNonNull(guild, "guild");
+        search(guild.getIdLong(), identifier, maxResults, resultConsumer);
+    }
+
+    public void search(
+            long guildId,
+            String identifier,
+            int maxResults,
+            Consumer<MusicSearchResult> resultConsumer) {
+        if (guildId <= 0L) {
+            throw new IllegalArgumentException("guildId must be positive");
+        }
         if (maxResults < 1) {
             throw new IllegalArgumentException("maxResults must be positive");
         }
-        log.info("Searching media for guild {}: {}", guild.getId(), identifier);
-        String orderingKey = "search:" + guild.getIdLong();
+        log.info("Searching media for guild {}: {}", guildId, identifier);
+        String orderingKey = "search:" + guildId;
         audioPlayerManager.loadItemOrdered(orderingKey, identifier, new AudioLoadResultHandler() {
             @Override
             public void trackLoaded(AudioTrack track) {
@@ -737,7 +749,7 @@ public class PlayerManager {
 
             @Override
             public void noMatches() {
-                voiceDiagnostics.sourceFailure(guild.getIdLong(), identifier, "search: no matches");
+                voiceDiagnostics.sourceFailure(guildId, identifier, "search: no matches");
                 resultConsumer.accept(MusicSearchResult.empty(
                         MusicSearchResult.Status.NO_MATCHES, identifier));
             }
@@ -745,8 +757,8 @@ public class PlayerManager {
             @Override
             public void loadFailed(FriendlyException exception) {
                 String reason = SourceFailureFormatter.describe(identifier, exception);
-                voiceDiagnostics.sourceFailure(guild.getIdLong(), identifier, "search: " + reason);
-                log.warn("Media search failed in guild {}: {}", guild.getId(), reason);
+                voiceDiagnostics.sourceFailure(guildId, identifier, "search: " + reason);
+                log.warn("Media search failed in guild {}: {}", guildId, reason);
                 resultConsumer.accept(MusicSearchResult.empty(
                         MusicSearchResult.Status.LOAD_FAILED, identifier));
             }

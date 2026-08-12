@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.32.0**.
+Текущая версия релизной ветки: **v1.35.0**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -99,6 +99,8 @@ Discord /device pair
 Plaintext access/refresh tokens не сохраняются: `baskov-auth.tsv` содержит только SHA-256 hashes. По умолчанию pairing code живёт 5 минут, access token — 30 минут, refresh token — 30 дней, максимум 8 активных устройств. Base Docker Compose не публикует API-порт наружу; отдельный opt-in profile может публиковать его только на host `127.0.0.1` для TLS reverse proxy.
 
 Music mutation endpoints (`start/skip/favorite/...`) всё ещё выключены. `v1.32` отдельно добавляет authenticated foreground local stream `/api/v1/playback/stream`: Android передаёт только provider-neutral artist/title, backend выбирает playback provider и отдаёт Ogg/Opus, не меняя Discord queue/voice state.
+
+`v1.35` добавляет authenticated read-only `/api/v1/search`: Android может передать текстовый запрос, получить до пяти provider-neutral кандидатов и затем запустить выбранный трек через тот же `/playback/stream` transport. Discord `/search` и Product API используют один LavaPlayer search pipeline.
 
 ### Настройки музыкальной сессии
 

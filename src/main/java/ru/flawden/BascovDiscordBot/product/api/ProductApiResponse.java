@@ -72,6 +72,14 @@ public final class ProductApiResponse {
             List<Track> historyTracks) {
     }
 
+    public record Search(
+            String guildId,
+            String userId,
+            String query,
+            List<Track> tracks) {
+        public Search { tracks = List.copyOf(tracks == null ? List.of() : tracks); }
+    }
+
     public record MixDetail(
             String guildId,
             String userId,

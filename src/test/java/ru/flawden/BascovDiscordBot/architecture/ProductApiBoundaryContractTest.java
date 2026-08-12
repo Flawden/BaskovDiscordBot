@@ -42,6 +42,7 @@ class ProductApiBoundaryContractTest {
         assertTrue(controller.contains("@GetMapping(\"/home\")"));
         assertTrue(controller.contains("@GetMapping(\"/mixes\")"));
         assertTrue(controller.contains("@GetMapping(\"/mixes/{stationSlug}\")"));
+        assertTrue(controller.contains("@GetMapping(\"/search\")"));
         assertTrue(controller.contains("@GetMapping(\"/player\")"));
         assertTrue(controller.contains("@GetMapping(\"/library\")"));
         assertTrue(controller.contains("/playback/stream"));

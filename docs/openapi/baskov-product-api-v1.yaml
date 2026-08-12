@@ -93,6 +93,44 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+  /api/v1/search:
+    get:
+      operationId: searchTracks
+      description: Authenticated text search using the same backend-owned YouTube search pipeline as Discord.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GuildId'
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+            default: 5
+      responses:
+        '200':
+          description: Search candidates that can be handed to the existing playback stream endpoint.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Search'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/SearchUnavailable'
   /api/v1/player:
     get:
       operationId: getPlayer
@@ -314,6 +352,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+    SearchUnavailable:
+      description: Search source temporarily unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
     PlaybackUnavailable:
       description: No healthy provider/track source can prepare a mobile foreground stream
       content:
@@ -474,6 +518,21 @@ components:
           items:
             $ref: '#/components/schemas/Track'
         historyTracks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Track'
+    Search:
+      type: object
+      required: [guildId, userId, query, tracks]
+      properties:
+        guildId:
+          type: string # Discord snowflake
+        userId:
+          type: string
+          format: uuid
+        query:
+          type: string
+        tracks:
           type: array
           items:
             $ref: '#/components/schemas/Track'

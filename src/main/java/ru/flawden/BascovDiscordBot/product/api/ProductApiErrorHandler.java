@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import ru.flawden.BascovDiscordBot.auth.DeviceAuthService;
 import ru.flawden.BascovDiscordBot.product.ProductPlaybackUnavailableException;
+import ru.flawden.BascovDiscordBot.product.ProductSearchUnavailableException;
 
 /** Stable v1 error shape for validation and authentication failures. */
 @RestControllerAdvice(basePackages = "ru.flawden.BascovDiscordBot.product.api")
@@ -22,6 +23,12 @@ public class ProductApiErrorHandler {
     public ResponseEntity<ProductApiResponse.Error> playbackUnavailable(ProductPlaybackUnavailableException exception) {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(new ProductApiResponse.Error("PLAYBACK_UNAVAILABLE", exception.getMessage()));
+    }
+
+    @ExceptionHandler(ProductSearchUnavailableException.class)
+    public ResponseEntity<ProductApiResponse.Error> searchUnavailable(ProductSearchUnavailableException exception) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ProductApiResponse.Error("SEARCH_UNAVAILABLE", exception.getMessage()));
     }
 
     @ExceptionHandler(DeviceAuthService.AuthException.class)

@@ -78,6 +78,18 @@ public class ProductApiController {
         return mapper.mix(product.mix(guildId, principal.discordUserId(), stationSlug), principal.userId());
     }
 
+    @GetMapping("/search")
+    public ProductApiResponse.Search search(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @RequestParam long guildId,
+            @RequestParam String query,
+            @RequestParam(defaultValue = "5") int limit) {
+        var principal = access.requireGuild(authorization, guildId);
+        return mapper.search(
+                product.search(guildId, principal.discordUserId(), query, limit),
+                principal.userId());
+    }
+
     @GetMapping("/player")
     public ProductApiResponse.Player player(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,

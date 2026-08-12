@@ -7,6 +7,7 @@ import ru.flawden.BascovDiscordBot.product.ProductLibrarySnapshot;
 import ru.flawden.BascovDiscordBot.product.ProductMixesSnapshot;
 import ru.flawden.BascovDiscordBot.product.ProductMixDetailSnapshot;
 import ru.flawden.BascovDiscordBot.product.ProductPlaybackSnapshot;
+import ru.flawden.BascovDiscordBot.product.ProductSearchSnapshot;
 
 import java.util.List;
 
@@ -88,6 +89,14 @@ public class ProductApiMapper {
                 source.available(),
                 source.daily(),
                 tracks(source.seedPreview()));
+    }
+
+    public ProductApiResponse.Search search(ProductSearchSnapshot source, String productUserId) {
+        return new ProductApiResponse.Search(
+                snowflake(source.guildId()),
+                productUserId,
+                source.query(),
+                tracks(source.tracks()));
     }
 
     public ProductApiResponse.Player player(ProductPlaybackSnapshot source) {

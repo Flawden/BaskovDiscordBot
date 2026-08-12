@@ -6,6 +6,15 @@
 
 ## [Unreleased]
 
+## [1.35.0] — 2026-08-12
+
+### Mobile Search API
+
+- Added authenticated read-only `GET /api/v1/search?guildId=...&query=...&limit=...` for Android/Web clients.
+- Search reuses the existing LavaPlayer/YouTube search pipeline and returns provider-neutral `stableKey/title/artist` candidates; playback still goes through the existing authenticated `/playback/stream` endpoint.
+- Search is scoped by the existing device bearer identity and guild membership guard, limited to 1–10 candidates and 200 query characters.
+- Product API remains read-only: no Discord queue, voice or library mutation endpoints are introduced.
+
 ## [1.32.0] — 2026-08-11
 
 ### Mobile Playback Stream API

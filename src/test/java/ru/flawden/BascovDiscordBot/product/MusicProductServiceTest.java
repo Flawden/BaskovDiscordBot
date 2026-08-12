@@ -75,6 +75,32 @@ class MusicProductServiceTest {
     }
 
     @Test
+    void searchValidatesInputAndDelegatesToProductReadPort() {
+        MusicProductReadPort port = new MusicProductReadPort() {
+            @Override
+            public ProductPlaybackSnapshot playback(long guildId) {
+                return ProductPlaybackSnapshot.idle(guildId);
+            }
+
+            @Override
+            public List<HomeSnapshot.TrackPreview> search(long guildId, String query, int maxResults) {
+                return List.of(new HomeSnapshot.TrackPreview("Holiday", "Green Day"));
+            }
+        };
+        MusicProductService service = new MusicProductService(
+                new MusicHomeService(new FakeHomePort()),
+                port);
+
+        ProductSearchSnapshot result = service.search(10L, 20L, "  Green Day Holiday  ", 5);
+
+        assertEquals("Green Day Holiday", result.query());
+        assertEquals(1, result.tracks().size());
+        assertEquals("Holiday", result.tracks().get(0).title());
+        assertThrows(IllegalArgumentException.class, () -> service.search(10L, 20L, "   ", 5));
+        assertThrows(IllegalArgumentException.class, () -> service.search(10L, 20L, "query", 11));
+    }
+
+    @Test
     void capabilitiesRequireAuthForV132Reads() {
         ProductCapabilities capabilities = service().capabilities();
 
@@ -83,7 +109,7 @@ class MusicProductServiceTest {
         assertTrue(capabilities.authenticationRequiredForReads());
         assertFalse(capabilities.mutationsEnabled());
         assertTrue(capabilities.authenticationRequiredForMutations());
-        assertEquals(List.of("auth", "me", "devices", "guilds", "home", "mixes", "player", "library", "playback", "capabilities"), capabilities.resources());
+        assertEquals(List.of("auth", "me", "devices", "guilds", "home", "mixes", "search", "player", "library", "playback", "capabilities"), capabilities.resources());
     }
 
     private static MusicProductService service() {

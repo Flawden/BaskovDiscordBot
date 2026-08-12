@@ -79,6 +79,30 @@ public class MusicProductService {
         return readPort.playback(guildId);
     }
 
+    public ProductSearchSnapshot search(long guildId, long userId, String query, int maxResults) {
+        if (guildId <= 0L) {
+            throw new IllegalArgumentException("guildId must be positive");
+        }
+        if (userId <= 0L) {
+            throw new IllegalArgumentException("userId must be positive");
+        }
+        String normalized = query == null ? "" : query.trim();
+        if (normalized.isBlank()) {
+            throw new IllegalArgumentException("query cannot be blank");
+        }
+        if (normalized.length() > 200) {
+            throw new IllegalArgumentException("query is too long");
+        }
+        if (maxResults < 1 || maxResults > 10) {
+            throw new IllegalArgumentException("limit must be between 1 and 10");
+        }
+        return new ProductSearchSnapshot(
+                guildId,
+                userId,
+                normalized,
+                readPort.search(guildId, normalized, maxResults));
+    }
+
     public ProductCapabilities capabilities() {
         return ProductCapabilities.authenticatedRead();
     }

@@ -42,6 +42,7 @@ class AndroidGatewayFoundationContractTest {
                 "/api/v1/guilds:",
                 "/api/v1/home:",
                 "/api/v1/mixes:",
+                "/api/v1/search:",
                 "/api/v1/player:",
                 "/api/v1/library:",
                 "/api/v1/auth/device/pair:",
