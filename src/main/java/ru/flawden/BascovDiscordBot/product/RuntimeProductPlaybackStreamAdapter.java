@@ -30,7 +30,11 @@ public class RuntimeProductPlaybackStreamAdapter implements ProductPlaybackStrea
     }
 
     @Override
-    public ProductPlaybackStreamSession open(long guildId, long userId, TrackIdentity track) {
+    public ProductPlaybackStreamSession open(
+            long guildId,
+            long userId,
+            TrackIdentity track,
+            long startPositionMillis) {
         if (!permits.tryAcquire()) {
             throw new ProductPlaybackUnavailableException("Too many concurrent mobile playback streams");
         }
@@ -41,7 +45,15 @@ public class RuntimeProductPlaybackStreamAdapter implements ProductPlaybackStrea
                                     MediaProvider.YOUTUBE,
                                     MediaProvider.SOUNDCLOUD)))
                     .join();
-            return new Session(stream, permits);
+            try {
+                if (startPositionMillis > 0L) {
+                    stream.seekTo(startPositionMillis);
+                }
+                return new Session(stream, permits);
+            } catch (RuntimeException exception) {
+                stream.close();
+                throw exception;
+            }
         } catch (CompletionException exception) {
             permits.release();
             Throwable cause = exception.getCause() == null ? exception : exception.getCause();

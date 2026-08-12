@@ -6,5 +6,9 @@ import ru.flawden.BascovDiscordBot.catalog.TrackIdentity;
 @FunctionalInterface
 public interface ProductPlaybackStreamPort {
 
-    ProductPlaybackStreamSession open(long guildId, long userId, TrackIdentity track);
+    ProductPlaybackStreamSession open(
+            long guildId,
+            long userId,
+            TrackIdentity track,
+            long startPositionMillis);
 }

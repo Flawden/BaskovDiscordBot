@@ -100,15 +100,25 @@ public class ProductApiController {
             @RequestParam long guildId,
             @RequestParam String artist,
             @RequestParam String title,
+            @RequestParam(defaultValue = "0") long startMillis,
             HttpServletResponse response) throws IOException {
         var principal = access.requireGuild(authorization, guildId);
-        try (var session = playbackStreams.open(guildId, principal.discordUserId(), artist, title)) {
+        try (var session = playbackStreams.open(
+                guildId,
+                principal.discordUserId(),
+                artist,
+                title,
+                startMillis)) {
+            long effectiveStartMillis = Math.min(
+                    startMillis,
+                    Math.max(0L, session.durationMillis() - 1L));
             response.setStatus(HttpServletResponse.SC_OK);
             response.setContentType("audio/ogg");
             response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
             response.setHeader("Accept-Ranges", "none");
             response.setHeader("X-Accel-Buffering", "no");
             response.setHeader("X-Baskov-Playback-Duration-Millis", Long.toString(session.durationMillis()));
+            response.setHeader("X-Baskov-Playback-Start-Millis", Long.toString(effectiveStartMillis));
             session.writeOgg(response.getOutputStream());
         }
     }

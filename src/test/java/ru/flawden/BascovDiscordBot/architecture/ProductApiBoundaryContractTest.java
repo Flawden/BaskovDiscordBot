@@ -63,6 +63,11 @@ class ProductApiBoundaryContractTest {
         assertFalse(service.contains("soundcloud"));
         assertTrue(adapter.contains("PlaybackClientCapabilities.android"));
         assertTrue(adapter.contains("OggOpusWriter"));
+        assertTrue(controller.contains("long startMillis"));
+        assertTrue(controller.contains("X-Baskov-Playback-Start-Millis"));
+        assertTrue(controller.contains("Accept-Ranges"));
+        assertTrue(controller.contains("\"none\""));
+        assertTrue(adapter.contains("stream.seekTo(startPositionMillis)"));
     }
 
     @Test
