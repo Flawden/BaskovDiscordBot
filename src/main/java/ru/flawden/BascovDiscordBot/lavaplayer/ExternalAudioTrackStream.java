@@ -27,6 +27,20 @@ public final class ExternalAudioTrackStream implements AutoCloseable {
         return durationMillis;
     }
 
+    public long seekTo(long positionMillis) {
+        if (positionMillis < 0L) {
+            throw new IllegalArgumentException("positionMillis must not be negative");
+        }
+        AudioTrack current = player.getPlayingTrack();
+        if (closed.get() || current == null) {
+            throw new IllegalStateException("External playback stream is not active");
+        }
+        long maximum = Math.max(0L, durationMillis - 1L);
+        long effectivePosition = Math.min(positionMillis, maximum);
+        current.setPosition(effectivePosition);
+        return effectivePosition;
+    }
+
     public boolean active() {
         return !closed.get() && player.getPlayingTrack() != null;
     }

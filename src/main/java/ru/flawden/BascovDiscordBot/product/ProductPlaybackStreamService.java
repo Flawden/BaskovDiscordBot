@@ -16,12 +16,28 @@ public class ProductPlaybackStreamService {
     }
 
     public ProductPlaybackStreamSession open(long guildId, long userId, String artist, String title) {
+        return open(guildId, userId, artist, title, 0L);
+    }
+
+    public ProductPlaybackStreamSession open(
+            long guildId,
+            long userId,
+            String artist,
+            String title,
+            long startPositionMillis) {
         if (guildId <= 0L) {
             throw new IllegalArgumentException("guildId must be positive");
         }
         if (userId <= 0L) {
             throw new IllegalArgumentException("userId must be positive");
         }
-        return streamPort.open(guildId, userId, TrackIdentity.of(artist, title));
+        if (startPositionMillis < 0L) {
+            throw new IllegalArgumentException("startPositionMillis must not be negative");
+        }
+        return streamPort.open(
+                guildId,
+                userId,
+                TrackIdentity.of(artist, title),
+                startPositionMillis);
     }
 }
