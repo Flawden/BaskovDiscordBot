@@ -3,6 +3,8 @@ package ru.flawden.BascovDiscordBot.lavaplayer;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 
+import java.net.URI;
+
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -15,16 +17,43 @@ public final class ExternalAudioTrackStream implements AutoCloseable {
 
     private final AudioPlayer player;
     private final long durationMillis;
+    private final String artworkUrl;
     private final AtomicBoolean closed = new AtomicBoolean();
 
     ExternalAudioTrackStream(AudioPlayer player, AudioTrack track) {
         this.player = Objects.requireNonNull(player, "player");
         AudioTrack safeTrack = Objects.requireNonNull(track, "track");
         this.durationMillis = Math.max(0L, safeTrack.getDuration());
+        var info = safeTrack.getInfo();
+        this.artworkUrl = normalizeArtworkUrl(info == null ? null : info.artworkUrl);
     }
 
     public long durationMillis() {
         return durationMillis;
+    }
+
+
+    public String artworkUrl() {
+        return artworkUrl;
+    }
+
+    static String normalizeArtworkUrl(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        try {
+            URI uri = URI.create(value.trim());
+            String scheme = uri.getScheme();
+            if (scheme == null
+                    || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))
+                    || uri.getHost() == null
+                    || uri.getHost().isBlank()) {
+                return "";
+            }
+            return uri.toASCIIString();
+        } catch (IllegalArgumentException ignored) {
+            return "";
+        }
     }
 
     public long seekTo(long positionMillis) {

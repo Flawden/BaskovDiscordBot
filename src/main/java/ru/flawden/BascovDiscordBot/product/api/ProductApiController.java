@@ -112,6 +112,7 @@ public class ProductApiController {
             long effectiveStartMillis = Math.min(
                     startMillis,
                     Math.max(0L, session.durationMillis() - 1L));
+            String artworkUrl = session.artworkUrl();
             response.setStatus(HttpServletResponse.SC_OK);
             response.setContentType("audio/ogg");
             response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
@@ -119,6 +120,9 @@ public class ProductApiController {
             response.setHeader("X-Accel-Buffering", "no");
             response.setHeader("X-Baskov-Playback-Duration-Millis", Long.toString(session.durationMillis()));
             response.setHeader("X-Baskov-Playback-Start-Millis", Long.toString(effectiveStartMillis));
+            if (!artworkUrl.isBlank()) {
+                response.setHeader("X-Baskov-Playback-Artwork-Url", artworkUrl);
+            }
             session.writeOgg(response.getOutputStream());
         }
     }

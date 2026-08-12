@@ -8,6 +8,10 @@ public interface ProductPlaybackStreamSession extends AutoCloseable {
 
     long durationMillis();
 
+    default String artworkUrl() {
+        return "";
+    }
+
     void writeOgg(OutputStream output) throws IOException;
 
     @Override

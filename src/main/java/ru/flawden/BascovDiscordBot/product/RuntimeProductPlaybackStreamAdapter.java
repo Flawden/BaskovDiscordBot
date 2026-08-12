@@ -86,6 +86,10 @@ public class RuntimeProductPlaybackStreamAdapter implements ProductPlaybackStrea
         }
 
         @Override
+        public String artworkUrl() {
+            return stream.artworkUrl();
+        }
+        @Override
         public void writeOgg(OutputStream output) throws IOException {
             Objects.requireNonNull(output, "output");
             OggOpusWriter writer = new OggOpusWriter(output);

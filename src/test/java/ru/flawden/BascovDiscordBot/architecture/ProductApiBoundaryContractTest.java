@@ -65,9 +65,11 @@ class ProductApiBoundaryContractTest {
         assertTrue(adapter.contains("OggOpusWriter"));
         assertTrue(controller.contains("long startMillis"));
         assertTrue(controller.contains("X-Baskov-Playback-Start-Millis"));
+        assertTrue(controller.contains("X-Baskov-Playback-Artwork-Url"));
         assertTrue(controller.contains("Accept-Ranges"));
         assertTrue(controller.contains("\"none\""));
         assertTrue(adapter.contains("stream.seekTo(startPositionMillis)"));
+        assertTrue(adapter.contains("stream.artworkUrl()"));
     }
 
     @Test
