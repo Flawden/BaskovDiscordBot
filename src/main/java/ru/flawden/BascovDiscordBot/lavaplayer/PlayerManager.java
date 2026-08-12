@@ -147,7 +147,14 @@ public class PlayerManager {
         this.audioPlayerManager = new DefaultAudioPlayerManager();
         this.audioPlayerManager.getConfiguration().setOutputFormat(StandardAudioDataFormats.DISCORD_OPUS);
 
-        YoutubeAudioSourceManager youtubeSourceManager = new YoutubeAudioSourceManager();
+        YoutubeAudioSourceManager youtubeSourceManager = new YoutubeAudioSourceManager(
+                true,
+                new dev.lavalink.youtube.clients.skeleton.Client[] {
+                    new dev.lavalink.youtube.clients.MusicWithThumbnail(),
+                    new dev.lavalink.youtube.clients.AndroidVrWithThumbnail(),
+                    new dev.lavalink.youtube.clients.WebWithThumbnail(),
+                    new dev.lavalink.youtube.clients.WebEmbeddedWithThumbnail()
+                });
         this.audioPlayerManager.registerSourceManager(youtubeSourceManager);
         AudioSourceManagers.registerRemoteSources(
                 this.audioPlayerManager,

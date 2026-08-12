@@ -33,7 +33,7 @@ class ModernYoutubeSourceContractTest {
         int remainingSources = manager.indexOf("AudioSourceManagers.registerRemoteSources(");
 
         assertTrue(manager.contains("import dev.lavalink.youtube.YoutubeAudioSourceManager;"));
-        assertTrue(manager.contains("new YoutubeAudioSourceManager()"));
+        assertTrue(manager.contains("new YoutubeAudioSourceManager("));
         assertTrue(modernRegistration >= 0);
         assertTrue(remainingSources > modernRegistration,
                 "Modern YouTube source must be registered before the remaining remote sources");
