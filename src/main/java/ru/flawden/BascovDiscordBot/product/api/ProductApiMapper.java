@@ -8,6 +8,8 @@ import ru.flawden.BascovDiscordBot.product.ProductMixesSnapshot;
 import ru.flawden.BascovDiscordBot.product.ProductMixDetailSnapshot;
 import ru.flawden.BascovDiscordBot.product.ProductPlaybackSnapshot;
 import ru.flawden.BascovDiscordBot.product.ProductSearchSnapshot;
+import ru.flawden.BascovDiscordBot.library.StoredPlaylist;
+import ru.flawden.BascovDiscordBot.library.StoredTrack;
 
 import java.util.List;
 
@@ -97,6 +99,48 @@ public class ProductApiMapper {
                 productUserId,
                 source.query(),
                 tracks(source.tracks()));
+    }
+
+    public ProductApiResponse.Playlists playlists(
+            long guildId,
+            String productUserId,
+            long actorUserId,
+            List<StoredPlaylist> source) {
+        return new ProductApiResponse.Playlists(
+                snowflake(guildId),
+                productUserId,
+                source.stream().map(playlist -> playlistSummary(playlist, actorUserId)).toList());
+    }
+
+    public ProductApiResponse.PlaylistDetail playlist(
+            long guildId,
+            String productUserId,
+            long actorUserId,
+            StoredPlaylist source) {
+        return new ProductApiResponse.PlaylistDetail(
+                snowflake(guildId),
+                productUserId,
+                source.name(),
+                snowflake(source.ownerUserId()),
+                source.ownerUserId() == actorUserId,
+                source.createdAtEpochMillis(),
+                source.tracks().stream().map(ProductApiMapper::track).toList());
+    }
+
+    private static ProductApiResponse.PlaylistSummary playlistSummary(
+            StoredPlaylist source,
+            long actorUserId) {
+        return new ProductApiResponse.PlaylistSummary(
+                source.name(),
+                snowflake(source.ownerUserId()),
+                source.ownerUserId() == actorUserId,
+                source.tracks().size(),
+                source.createdAtEpochMillis());
+    }
+
+    private static ProductApiResponse.Track track(StoredTrack source) {
+        var identity = source.trackIdentity();
+        return new ProductApiResponse.Track(identity.stableKey(), source.title(), source.author());
     }
 
     public ProductApiResponse.Player player(ProductPlaybackSnapshot source) {

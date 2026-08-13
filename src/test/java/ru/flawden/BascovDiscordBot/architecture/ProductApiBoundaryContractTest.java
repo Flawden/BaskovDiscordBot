@@ -28,6 +28,7 @@ class ProductApiBoundaryContractTest {
 
         assertTrue(controller.contains("@RequestMapping(\"/api/v1\")"));
         assertTrue(controller.contains("MusicProductService product"));
+        assertTrue(controller.contains("ProductPlaylistService playlists"));
         assertFalse(controller.contains("PlayerManager"));
         assertFalse(controller.contains("MusicLibraryRepository"));
         assertFalse(controller.contains("JDA"));

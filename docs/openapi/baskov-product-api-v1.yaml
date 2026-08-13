@@ -3,8 +3,8 @@ info:
   title: Baskov Music Product API
   version: 1.0.0
   description: >-
-    Authenticated read API and device-session lifecycle used by external Baskov Music clients.
-    Music mutations are intentionally not part of v1. Discord remains the source of pairing proof.
+    Authenticated product API and device-session lifecycle used by external Baskov Music clients.
+    v1.36 enables owner-scoped shared-playlist mutations; Discord remains the source of pairing proof.
 servers:
   - url: /
 paths:
@@ -167,6 +167,85 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+  /api/v1/playlists:
+    get:
+      operationId: getPlaylists
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/GuildId' }]
+      responses:
+        '200':
+          description: Guild shared playlists visible to the linked Discord identity
+    post:
+      operationId: createPlaylist
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/GuildId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+      responses:
+        '200': { description: Created shared playlist }
+        '409': { description: Playlist already exists or guild limit reached }
+  /api/v1/playlists/{name}:
+    get:
+      operationId: getPlaylist
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/GuildId'
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Shared playlist detail }
+    delete:
+      operationId: deletePlaylist
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/GuildId'
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Deleted playlist snapshot }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/playlists/{name}/tracks:
+    post:
+      operationId: addPlaylistTrack
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/GuildId'
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Updated playlist detail }
+  /api/v1/playlists/{name}/tracks/{position}:
+    delete:
+      operationId: removePlaylistTrack
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/GuildId'
+        - { name: name, in: path, required: true, schema: { type: string } }
+        - { name: position, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Updated playlist detail }
+  /api/v1/playlists/{name}/move:
+    post:
+      operationId: movePlaylistTrack
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/GuildId'
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Updated playlist detail }
+  /api/v1/playlists/{name}/rename:
+    post:
+      operationId: renamePlaylist
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/GuildId'
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Renamed playlist detail }
   /api/v1/playback/stream:
     get:
       operationId: streamMobilePlayback

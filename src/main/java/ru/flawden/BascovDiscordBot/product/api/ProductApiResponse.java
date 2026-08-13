@@ -80,6 +80,32 @@ public final class ProductApiResponse {
         public Search { tracks = List.copyOf(tracks == null ? List.of() : tracks); }
     }
 
+    public record Playlists(
+            String guildId,
+            String userId,
+            List<PlaylistSummary> playlists) {
+        public Playlists { playlists = List.copyOf(playlists == null ? List.of() : playlists); }
+    }
+
+    public record PlaylistSummary(
+            String name,
+            String ownerUserId,
+            boolean ownedByMe,
+            int trackCount,
+            long createdAtEpochMillis) {
+    }
+
+    public record PlaylistDetail(
+            String guildId,
+            String userId,
+            String name,
+            String ownerUserId,
+            boolean ownedByMe,
+            long createdAtEpochMillis,
+            List<Track> tracks) {
+        public PlaylistDetail { tracks = List.copyOf(tracks == null ? List.of() : tracks); }
+    }
+
     public record MixDetail(
             String guildId,
             String userId,

@@ -66,11 +66,26 @@ public record StoredTrack(
     }
 
     public static Optional<StoredTrack> from(TrackRequest request) {
-        if (request == null || request.track() == null || request.track().getInfo() == null) {
+        if (request == null || request.track() == null) {
             return Optional.empty();
         }
+        TrackRequester requester = request.requester() == null
+                ? TrackRequester.unknown()
+                : request.requester();
+        return from(
+                request.track(),
+                Math.max(0L, requester.userId()),
+                requester.displayName());
+    }
 
-        AudioTrack track = request.track();
+    /** Builds the same durable replay descriptor for non-Discord clients such as BaskovAndroid. */
+    public static Optional<StoredTrack> from(
+            AudioTrack track,
+            long requesterUserId,
+            String requesterDisplayName) {
+        if (track == null || track.getInfo() == null) {
+            return Optional.empty();
+        }
         AudioTrackInfo info = track.getInfo();
         String playbackIdentifier = firstReplayableIdentifier(info.uri, info.identifier);
         if (playbackIdentifier == null || track.getDuration() <= 0L) {
@@ -85,9 +100,6 @@ public record StoredTrack(
             return Optional.empty();
         }
 
-        TrackRequester requester = request.requester() == null
-                ? TrackRequester.unknown()
-                : request.requester();
         return Optional.of(new StoredTrack(
                 info.title,
                 info.author,
@@ -95,8 +107,8 @@ public record StoredTrack(
                 info.identifier,
                 provider,
                 track.getDuration(),
-                Math.max(0L, requester.userId()),
-                requester.displayName(),
+                Math.max(0L, requesterUserId),
+                requesterDisplayName,
                 System.currentTimeMillis()));
     }
 

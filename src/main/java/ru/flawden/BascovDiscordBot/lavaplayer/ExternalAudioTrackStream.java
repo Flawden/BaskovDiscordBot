@@ -2,11 +2,13 @@ package ru.flawden.BascovDiscordBot.lavaplayer;
 
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
+import ru.flawden.BascovDiscordBot.library.StoredTrack;
 
 import java.net.URI;
 
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -16,6 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class ExternalAudioTrackStream implements AutoCloseable {
 
     private final AudioPlayer player;
+    private final AudioTrack sourceTrack;
     private final long durationMillis;
     private final String artworkUrl;
     private final AtomicBoolean closed = new AtomicBoolean();
@@ -23,6 +26,7 @@ public final class ExternalAudioTrackStream implements AutoCloseable {
     ExternalAudioTrackStream(AudioPlayer player, AudioTrack track) {
         this.player = Objects.requireNonNull(player, "player");
         AudioTrack safeTrack = Objects.requireNonNull(track, "track");
+        this.sourceTrack = safeTrack;
         this.durationMillis = Math.max(0L, safeTrack.getDuration());
         var info = safeTrack.getInfo();
         this.artworkUrl = normalizeArtworkUrl(info == null ? null : info.artworkUrl);
@@ -35,6 +39,11 @@ public final class ExternalAudioTrackStream implements AutoCloseable {
 
     public String artworkUrl() {
         return artworkUrl;
+    }
+
+    /** Durable provider-backed descriptor used when a mobile-selected track is saved to a shared playlist. */
+    public Optional<StoredTrack> storedTrack(long requesterUserId, String requesterDisplayName) {
+        return StoredTrack.from(sourceTrack, requesterUserId, requesterDisplayName);
     }
 
     static String normalizeArtworkUrl(String value) {

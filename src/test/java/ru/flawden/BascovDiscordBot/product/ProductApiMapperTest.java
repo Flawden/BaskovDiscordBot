@@ -88,10 +88,10 @@ class ProductApiMapperTest {
     }
 
     @Test
-    void capabilitiesAdvertiseAuthenticatedReadsWithoutMusicMutations() {
+    void capabilitiesAdvertiseAuthenticatedReadsWithOwnerScopedPlaylistMutations() {
         var result = mapper.capabilities(ProductCapabilities.authenticatedRead());
         assertTrue(result.authenticationRequiredForReads());
-        assertFalse(result.mutationsEnabled());
+        assertTrue(result.mutationsEnabled());
         assertTrue(result.authenticationRequiredForMutations());
     }
 

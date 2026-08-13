@@ -105,11 +105,11 @@ class MusicProductServiceTest {
         ProductCapabilities capabilities = service().capabilities();
 
         assertEquals("v1", capabilities.apiVersion());
-        assertEquals("AUTHENTICATED_READ", capabilities.mode());
+        assertEquals("AUTHENTICATED_READ_PLAYLIST_WRITE", capabilities.mode());
         assertTrue(capabilities.authenticationRequiredForReads());
-        assertFalse(capabilities.mutationsEnabled());
+        assertTrue(capabilities.mutationsEnabled());
         assertTrue(capabilities.authenticationRequiredForMutations());
-        assertEquals(List.of("auth", "me", "devices", "guilds", "home", "mixes", "search", "player", "library", "playback", "capabilities"), capabilities.resources());
+        assertEquals(List.of("auth", "me", "devices", "guilds", "home", "mixes", "search", "player", "library", "playlists", "playback", "capabilities"), capabilities.resources());
     }
 
     private static MusicProductService service() {

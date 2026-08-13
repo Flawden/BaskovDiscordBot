@@ -134,3 +134,9 @@ This is **not** a direct public API configuration. The raw Spring port must stay
 Foreground local audio streaming does not mutate Discord guild playback state: it opens an isolated server-side transport for the authenticated mobile client. Remote Discord playback changes still require a separate client-neutral permission/session ownership model. `ProductCapabilities.mutationsEnabled=false` therefore still means no remote music mutation endpoints.
 
 Auth lifecycle (`pair/refresh/logout/revoke`) continues to mutate auth state by design.
+
+## v1.36 — Shared playlists
+
+`/api/v1/playlists` is the first bounded authenticated mutation surface. It reuses the existing guild `MusicLibraryRepository`, so Discord `/playlist` and Android see the same `StoredPlaylist` objects. Pairing proves Discord identity but does not imply Baskov administrator rights: mobile edits are owner-only. Discord voice queue/player mutations remain absent from Product API.
+
+Remote tracks are added by provider-neutral `artist/title`; the backend resolves a durable provider-backed `StoredTrack` before persistence. Phone-local `content://` tracks are not accepted by shared playlists until a future upload/handoff transport exists.

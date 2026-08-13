@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+## [1.36.0] — 2026-08-12
+
+### Shared Playlists API
+
+- Added authenticated guild-scoped shared-playlist list/detail/create/add/remove/move/rename/delete endpoints for Baskov clients.
+- Android and Discord now mutate the same existing `MusicLibraryRepository` playlist persistence; no second playlist store or migration was introduced.
+- Mobile writes are owner-scoped: the linked Discord user may edit playlists they own, while administrator elevation is deliberately not inferred from device pairing.
+- Adding a mobile search result resolves the provider-backed source on the server before persisting the same durable `StoredTrack` shape used by Discord.
+- Product capabilities now advertise bounded authenticated playlist writes while Discord voice/playback mutations remain unavailable through Product API.
+
 ## [1.35.0] — 2026-08-12
 
 ### Mobile Search API

@@ -14,8 +14,8 @@ import java.util.Objects;
  * Client-neutral product application boundary.
  *
  * <p>Discord and the external HTTP adapter must call these use cases instead of
- * reaching into runtime/repositories independently. Mutating use cases are
- * intentionally deferred until a dedicated authenticated mutation/permission release.</p>
+ * reaching into runtime/repositories independently. v1.36 adds playlist mutations through
+ * a separate owner-scoped ProductPlaylistService; voice/player mutations remain outside this read service.</p>
  */
 @Component
 public class MusicProductService {

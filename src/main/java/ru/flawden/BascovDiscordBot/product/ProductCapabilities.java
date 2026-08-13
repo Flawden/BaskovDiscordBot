@@ -18,12 +18,17 @@ public record ProductCapabilities(
     }
 
     public static ProductCapabilities authenticatedRead() {
+        return authenticatedPlaylistWrite();
+    }
+
+    /** v1.36 keeps playback/guild control read-only while enabling owner-scoped shared-playlist writes. */
+    public static ProductCapabilities authenticatedPlaylistWrite() {
         return new ProductCapabilities(
                 "v1",
-                "AUTHENTICATED_READ",
+                "AUTHENTICATED_READ_PLAYLIST_WRITE",
                 true,
-                false,
                 true,
-                List.of("auth", "me", "devices", "guilds", "home", "mixes", "search", "player", "library", "playback", "capabilities"));
+                true,
+                List.of("auth", "me", "devices", "guilds", "home", "mixes", "search", "player", "library", "playlists", "playback", "capabilities"));
     }
 }
