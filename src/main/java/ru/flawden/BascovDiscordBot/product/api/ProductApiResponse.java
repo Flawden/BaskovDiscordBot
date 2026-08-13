@@ -80,6 +80,14 @@ public final class ProductApiResponse {
         public Search { tracks = List.copyOf(tracks == null ? List.of() : tracks); }
     }
 
+    public record Favorites(
+            String guildId,
+            String userId,
+            int limit,
+            List<Track> tracks) {
+        public Favorites { tracks = List.copyOf(tracks == null ? List.of() : tracks); }
+    }
+
     public record Playlists(
             String guildId,
             String userId,

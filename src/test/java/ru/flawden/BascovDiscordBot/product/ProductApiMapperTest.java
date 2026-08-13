@@ -88,7 +88,7 @@ class ProductApiMapperTest {
     }
 
     @Test
-    void capabilitiesAdvertiseAuthenticatedReadsWithOwnerScopedPlaylistMutations() {
+    void capabilitiesAdvertiseAuthenticatedReadsWithBoundedLibraryMutations() {
         var result = mapper.capabilities(ProductCapabilities.authenticatedRead());
         assertTrue(result.authenticationRequiredForReads());
         assertTrue(result.mutationsEnabled());

@@ -101,6 +101,17 @@ public class ProductApiMapper {
                 tracks(source.tracks()));
     }
 
+    public ProductApiResponse.Favorites favorites(
+            long guildId,
+            String productUserId,
+            List<StoredTrack> source) {
+        return new ProductApiResponse.Favorites(
+                snowflake(guildId),
+                productUserId,
+                ru.flawden.BascovDiscordBot.library.MusicLibraryRepository.MAX_FAVORITES_PER_USER,
+                source.stream().map(ProductApiMapper::track).toList());
+    }
+
     public ProductApiResponse.Playlists playlists(
             long guildId,
             String productUserId,

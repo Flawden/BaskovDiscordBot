@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+## [1.37.0] — 2026-08-13
+
+### Favorites Mobile API
+
+- Added authenticated guild-scoped `GET/POST/DELETE /api/v1/favorites` endpoints for Baskov clients.
+- Mobile favorites reuse the existing per-guild/per-Discord-user `MusicLibraryRepository`; Android and Discord `/favorites` now mutate the same durable list.
+- Adding a remote favorite resolves the backend-owned provider source before persistence and is idempotent when the track is already present.
+- Favorite removal remains position-based to preserve the existing ordered Discord favorite list, while clear removes only the linked Discord user’s favorites in the selected guild.
+- Product capabilities now advertise bounded library writes; Discord voice/player mutations remain unavailable through Product API.
+
 ## [1.36.0] — 2026-08-12
 
 ### Shared Playlists API

@@ -18,17 +18,17 @@ public record ProductCapabilities(
     }
 
     public static ProductCapabilities authenticatedRead() {
-        return authenticatedPlaylistWrite();
+        return authenticatedLibraryWrite();
     }
 
-    /** v1.36 keeps playback/guild control read-only while enabling owner-scoped shared-playlist writes. */
-    public static ProductCapabilities authenticatedPlaylistWrite() {
+    /** v1.37 keeps playback/guild control read-only while enabling bounded personal-library writes. */
+    public static ProductCapabilities authenticatedLibraryWrite() {
         return new ProductCapabilities(
                 "v1",
-                "AUTHENTICATED_READ_PLAYLIST_WRITE",
+                "AUTHENTICATED_READ_LIBRARY_WRITE",
                 true,
                 true,
                 true,
-                List.of("auth", "me", "devices", "guilds", "home", "mixes", "search", "player", "library", "playlists", "playback", "capabilities"));
+                List.of("auth", "me", "devices", "guilds", "home", "mixes", "search", "player", "library", "favorites", "playlists", "playback", "capabilities"));
     }
 }

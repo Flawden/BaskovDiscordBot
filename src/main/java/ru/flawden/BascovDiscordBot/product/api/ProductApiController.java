@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import ru.flawden.BascovDiscordBot.product.MusicProductService;
 import ru.flawden.BascovDiscordBot.product.ProductPlaylistService;
+import ru.flawden.BascovDiscordBot.product.ProductFavoriteService;
+import ru.flawden.BascovDiscordBot.library.FavoriteOperationResult;
 import ru.flawden.BascovDiscordBot.library.PlaylistOperationResult;
 import org.springframework.http.HttpStatus;
 import ru.flawden.BascovDiscordBot.product.ProductPlaybackStreamService;
@@ -24,7 +26,7 @@ import java.util.Objects;
 
 /**
  * Authenticated v1 product API. Disabled by default; the optional remote profile is
- * host-loopback-published for a TLS reverse proxy. v1.36 enables owner-scoped playlist
+ * host-loopback-published for a TLS reverse proxy. v1.37 enables bounded personal-library
  * mutations only; Discord voice/player mutations remain unavailable.
  */
 @RestController
@@ -37,18 +39,21 @@ public class ProductApiController {
     private final ProductApiAccessGuard access;
     private final ProductPlaybackStreamService playbackStreams;
     private final ProductPlaylistService playlists;
+    private final ProductFavoriteService favorites;
 
     public ProductApiController(
             MusicProductService product,
             ProductApiMapper mapper,
             ProductApiAccessGuard access,
             ProductPlaybackStreamService playbackStreams,
-            ProductPlaylistService playlists) {
+            ProductPlaylistService playlists,
+            ProductFavoriteService favorites) {
         this.product = Objects.requireNonNull(product, "product");
         this.mapper = Objects.requireNonNull(mapper, "mapper");
         this.access = Objects.requireNonNull(access, "access");
         this.playbackStreams = Objects.requireNonNull(playbackStreams, "playbackStreams");
         this.playlists = Objects.requireNonNull(playlists, "playlists");
+        this.favorites = Objects.requireNonNull(favorites, "favorites");
     }
 
     @GetMapping("/capabilities")
@@ -114,6 +119,67 @@ public class ProductApiController {
             @RequestParam long guildId) {
         var principal = access.requireGuild(authorization, guildId);
         return mapper.library(product.library(guildId, principal.discordUserId()), principal.userId());
+    }
+
+    @GetMapping("/favorites")
+    public ProductApiResponse.Favorites favorites(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @RequestParam long guildId) {
+        var principal = access.requireGuild(authorization, guildId);
+        return mapper.favorites(
+                guildId,
+                principal.userId(),
+                favorites.favorites(guildId, principal.discordUserId()));
+    }
+
+    @PostMapping("/favorites")
+    public ProductApiResponse.Favorites addFavorite(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @RequestParam long guildId,
+            @RequestBody ProductFavoriteApiRequest.AddTrack request) {
+        var principal = access.requireGuild(authorization, guildId);
+        if (request == null) {
+            throw new IllegalArgumentException("favorite request cannot be null");
+        }
+        requireFavoriteMutation(favorites.add(
+                guildId,
+                principal.discordUserId(),
+                principal.displayName(),
+                request.artist(),
+                request.title()),
+                FavoriteOperationResult.Status.ADDED,
+                FavoriteOperationResult.Status.ALREADY_EXISTS);
+        return mapper.favorites(
+                guildId,
+                principal.userId(),
+                favorites.favorites(guildId, principal.discordUserId()));
+    }
+
+    @DeleteMapping("/favorites/{position}")
+    public ProductApiResponse.Favorites removeFavorite(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @PathVariable int position,
+            @RequestParam long guildId) {
+        var principal = access.requireGuild(authorization, guildId);
+        requireFavoriteMutation(
+                favorites.remove(guildId, principal.discordUserId(), position),
+                FavoriteOperationResult.Status.REMOVED);
+        return mapper.favorites(
+                guildId,
+                principal.userId(),
+                favorites.favorites(guildId, principal.discordUserId()));
+    }
+
+    @DeleteMapping("/favorites")
+    public ProductApiResponse.Favorites clearFavorites(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @RequestParam long guildId) {
+        var principal = access.requireGuild(authorization, guildId);
+        var result = favorites.clear(guildId, principal.discordUserId());
+        if (result.status() != FavoriteOperationResult.Status.NOT_FOUND) {
+            requireFavoriteMutation(result, FavoriteOperationResult.Status.CLEARED);
+        }
+        return mapper.favorites(guildId, principal.userId(), java.util.List.of());
     }
 
     @GetMapping("/playlists")
@@ -265,6 +331,34 @@ public class ProductApiController {
             session.writeOgg(response.getOutputStream());
         }
     }
+    private static FavoriteOperationResult requireFavoriteMutation(
+            FavoriteOperationResult result,
+            FavoriteOperationResult.Status... accepted) {
+        if (result == null) {
+            throw new IllegalStateException("Favorite mutation returned no result");
+        }
+        for (FavoriteOperationResult.Status status : accepted) {
+            if (result.status() == status) {
+                return result;
+            }
+        }
+        throw favoriteMutationError(result.status());
+    }
+
+    private static ProductFavoriteMutationException favoriteMutationError(
+            FavoriteOperationResult.Status status) {
+        return switch (status) {
+            case NOT_FOUND -> new ProductFavoriteMutationException(
+                    "FAVORITE_NOT_FOUND", HttpStatus.NOT_FOUND, "Favorite not found");
+            case LIMIT_REACHED -> new ProductFavoriteMutationException(
+                    "FAVORITE_LIMIT_REACHED", HttpStatus.CONFLICT, "Favorite limit reached");
+            case UNREPLAYABLE_TRACK -> new ProductFavoriteMutationException(
+                    "FAVORITE_TRACK_UNREPLAYABLE", HttpStatus.BAD_REQUEST, "Track cannot be persisted as a favorite");
+            default -> new ProductFavoriteMutationException(
+                    "FAVORITE_MUTATION_FAILED", HttpStatus.BAD_REQUEST, "Favorite mutation failed: " + status);
+        };
+    }
+
     private static PlaylistOperationResult requireMutation(PlaylistOperationResult result) {
         if (result == null) {
             throw new IllegalStateException("Playlist mutation returned no result");

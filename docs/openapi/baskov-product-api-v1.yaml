@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: >-
     Authenticated product API and device-session lifecycle used by external Baskov Music clients.
-    v1.36 enables owner-scoped shared-playlist mutations; Discord remains the source of pairing proof.
+    v1.37 enables bounded personal-library mutations for favorites and shared playlists; Discord remains the source of pairing proof.
 servers:
   - url: /
 paths:
@@ -167,6 +167,46 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+  /api/v1/favorites:
+    get:
+      operationId: getFavorites
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/GuildId' }]
+      responses:
+        '200': { description: Personal ordered favorites for the linked Discord identity }
+    post:
+      operationId: addFavorite
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/GuildId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                artist: { type: string }
+                title: { type: string }
+      responses:
+        '200': { description: Updated favorites; adding an existing favorite is idempotent }
+        '409': { description: Favorite limit reached }
+    delete:
+      operationId: clearFavorites
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/GuildId' }]
+      responses:
+        '200': { description: Empty favorites snapshot }
+  /api/v1/favorites/{position}:
+    delete:
+      operationId: removeFavorite
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/GuildId'
+        - { name: position, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Updated favorites }
+        '404': { description: Favorite position not found }
   /api/v1/playlists:
     get:
       operationId: getPlaylists

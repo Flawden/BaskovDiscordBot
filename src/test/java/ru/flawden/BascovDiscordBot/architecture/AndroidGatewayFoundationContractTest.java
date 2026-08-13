@@ -45,6 +45,7 @@ class AndroidGatewayFoundationContractTest {
                 "/api/v1/search:",
                 "/api/v1/player:",
                 "/api/v1/library:",
+                "/api/v1/favorites:",
                 "/api/v1/auth/device/pair:",
                 "/api/v1/auth/refresh:",
                 "/api/v1/auth/logout:",
@@ -83,13 +84,17 @@ class AndroidGatewayFoundationContractTest {
     }
 
     @Test
-    void gatewayReleaseExposesOnlyOwnerScopedPlaylistMutations() throws Exception {
+    void gatewayReleaseExposesOnlyBoundedPersonalLibraryMutations() throws Exception {
         String capabilities = read("product/ProductCapabilities.java");
         String controller = read("product/api/ProductApiController.java");
 
-        assertTrue(capabilities.contains("\"AUTHENTICATED_READ_PLAYLIST_WRITE\""));
+        assertTrue(capabilities.contains("\"AUTHENTICATED_READ_LIBRARY_WRITE\""));
         assertTrue(capabilities.contains("\"playlists\""));
+        assertTrue(capabilities.contains("\"favorites\""));
 
+        assertTrue(controller.contains("@PostMapping(\"/favorites\")"));
+        assertTrue(controller.contains("@DeleteMapping(\"/favorites/{position}\")"));
+        assertTrue(controller.contains("@DeleteMapping(\"/favorites\")"));
         assertTrue(controller.contains("@PostMapping(\"/playlists\")"));
         assertTrue(controller.contains("@PostMapping(\"/playlists/{name}/tracks\")"));
         assertTrue(controller.contains("@DeleteMapping(\"/playlists/{name}/tracks/{position}\")"));

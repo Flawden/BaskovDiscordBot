@@ -9,6 +9,7 @@ import ru.flawden.BascovDiscordBot.auth.DeviceAuthService;
 import ru.flawden.BascovDiscordBot.product.ProductPlaybackUnavailableException;
 import ru.flawden.BascovDiscordBot.product.ProductSearchUnavailableException;
 import ru.flawden.BascovDiscordBot.product.ProductPlaylistTrackUnavailableException;
+import ru.flawden.BascovDiscordBot.product.ProductFavoriteTrackUnavailableException;
 
 /** Stable v1 error shape for validation and authentication failures. */
 @RestControllerAdvice(basePackages = "ru.flawden.BascovDiscordBot.product.api")
@@ -40,6 +41,18 @@ public class ProductApiErrorHandler {
 
     @ExceptionHandler(ProductPlaylistMutationException.class)
     public ResponseEntity<ProductApiResponse.Error> playlistMutation(ProductPlaylistMutationException exception) {
+        return ResponseEntity.status(exception.status())
+                .body(new ProductApiResponse.Error(exception.code(), exception.getMessage()));
+    }
+
+    @ExceptionHandler(ProductFavoriteTrackUnavailableException.class)
+    public ResponseEntity<ProductApiResponse.Error> favoriteTrackUnavailable(ProductFavoriteTrackUnavailableException exception) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ProductApiResponse.Error("FAVORITE_TRACK_UNAVAILABLE", exception.getMessage()));
+    }
+
+    @ExceptionHandler(ProductFavoriteMutationException.class)
+    public ResponseEntity<ProductApiResponse.Error> favoriteMutation(ProductFavoriteMutationException exception) {
         return ResponseEntity.status(exception.status())
                 .body(new ProductApiResponse.Error(exception.code(), exception.getMessage()));
     }

@@ -105,7 +105,7 @@ class MusicProductServiceTest {
         ProductCapabilities capabilities = service().capabilities();
 
         assertEquals("v1", capabilities.apiVersion());
-        assertEquals("AUTHENTICATED_READ_PLAYLIST_WRITE", capabilities.mode());
+        assertEquals("AUTHENTICATED_READ_LIBRARY_WRITE", capabilities.mode());
         assertTrue(capabilities.authenticationRequiredForReads());
         assertTrue(capabilities.mutationsEnabled());
         assertTrue(capabilities.authenticationRequiredForMutations());
