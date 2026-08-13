@@ -49,6 +49,7 @@ class AndroidGatewayFoundationContractTest {
                 "/api/v1/favorites/keys:",
                 "/api/v1/favorites/status:",
                 "/api/v1/favorites/by-key:",
+                "/api/v1/taste/events:",
                 "/api/v1/auth/device/pair:",
                 "/api/v1/auth/refresh:",
                 "/api/v1/auth/logout:",
@@ -94,6 +95,11 @@ class AndroidGatewayFoundationContractTest {
         assertTrue(capabilities.contains("\"AUTHENTICATED_READ_LIBRARY_WRITE\""));
         assertTrue(capabilities.contains("\"playlists\""));
         assertTrue(capabilities.contains("\"favorites\""));
+        assertTrue(capabilities.contains("\"taste\""));
+        String tasteController = read("product/api/ProductTasteSignalApiController.java");
+        assertTrue(tasteController.contains("@PostMapping(\"/events\")"));
+        assertTrue(tasteController.contains("access.requireGuild"));
+        assertFalse(tasteController.contains("@RequestParam long userId"));
 
         assertTrue(controller.contains("@PostMapping(\"/favorites\")"));
         assertTrue(controller.contains("@DeleteMapping(\"/favorites/{position}\")"));

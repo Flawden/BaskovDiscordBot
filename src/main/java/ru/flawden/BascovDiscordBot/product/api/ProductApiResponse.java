@@ -169,6 +169,16 @@ public final class ProductApiResponse {
     public record Taste(int evidenceSignals, double confidence, int recommendations) {
     }
 
+    public record TasteSignalReceipt(
+            String guildId,
+            String userId,
+            int accepted,
+            int evidenceSignals,
+            double confidence,
+            int positiveSignals,
+            int negativeSignals) {
+    }
+
     public record Radio(
             boolean enabled,
             String stationSlug,

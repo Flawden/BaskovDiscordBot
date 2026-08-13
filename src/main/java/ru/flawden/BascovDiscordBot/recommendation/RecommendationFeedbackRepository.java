@@ -22,5 +22,25 @@ public interface RecommendationFeedbackRepository {
             RecommendationOutcome outcome,
             double completionRatio);
 
+    /**
+     * Records behavior for a track even when it was never emitted by Smart Radio.
+     * Implementations may override this to make lookup/create/update atomic.
+     */
+    default RecommendationFeedbackEntry recordObservedOutcome(
+            RecommendationFeedbackEntry observed,
+            RecommendationOutcome outcome,
+            double completionRatio) {
+        if (observed == null) {
+            throw new IllegalArgumentException("observed entry cannot be null");
+        }
+        return recordUserOutcome(
+                observed.guildId(),
+                observed.userId(),
+                observed.trackIdentity(),
+                outcome,
+                completionRatio).orElseGet(() -> recordRecommendation(
+                        observed.withOutcome(outcome, System.currentTimeMillis(), completionRatio)));
+    }
+
     List<RecommendationFeedbackEntry> history(long guildId, long userId, int limit);
 }

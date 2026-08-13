@@ -91,6 +91,30 @@ class FileRecommendationFeedbackRepositoryTest {
         assertEquals(RecommendationOutcome.COMPLETED, updated.lastOutcome());
     }
     @Test
+    void observedOutcomeCreatesEvidenceWithoutPriorRecommendationAndReusesSameTrack() {
+        RecommendationFeedbackProperties properties = new RecommendationFeedbackProperties();
+        properties.setFile(tempDirectory.resolve("observed.tsv"));
+        FileRecommendationFeedbackRepository repository = new FileRecommendationFeedbackRepository(properties);
+        repository.load();
+
+        RecommendationFeedbackEntry observed = FileRecommendationFeedbackRepository.pending(
+                42L, 7L, "Skillet", "Monster", "Skillet", "Monster",
+                RecommendationIdentity.of("Skillet", "Monster"),
+                RadioStrategy.FAMILIAR, "android-local", 1.0d);
+
+        RecommendationFeedbackEntry played = repository.recordObservedOutcome(
+                observed, RecommendationOutcome.PLAYED, 0.0d);
+        RecommendationFeedbackEntry completed = repository.recordObservedOutcome(
+                observed, RecommendationOutcome.COMPLETED, 1.0d);
+
+        assertEquals(1, repository.history(42L, 7L, 10).size());
+        assertEquals(RecommendationOutcome.COMPLETED, completed.lastOutcome());
+        assertEquals(2, completed.positiveSignals());
+        assertEquals(1.25d, completed.signalScore(), 0.001d);
+        assertEquals(played.id(), completed.id());
+    }
+
+    @Test
     void keepsOnlyTwoHundredNewestEntriesPerUser() {
         RecommendationFeedbackProperties properties = new RecommendationFeedbackProperties();
         properties.setFile(tempDirectory.resolve("bounded.tsv"));

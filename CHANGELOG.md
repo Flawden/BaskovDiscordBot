@@ -1,3 +1,10 @@
+## 1.38.0 — Taste Signals Foundation
+- Unified ordinary Discord playback and authenticated Android listening/favorite events with the existing durable recommendation-feedback model instead of introducing a second taste database.
+- Added `POST /api/v1/taste/events?guildId=...` for bounded batches of LOCAL/REMOTE `PLAY`, completion, replay, quick-skip/early-stop and favorite add/remove signals. Linked Discord identity is always derived from the bearer session.
+- Manual Discord completion/quick-skip/stop and library favorite/replay signals can now create taste evidence even when the track was never emitted by Smart Radio.
+- Added weak `PLAYED` evidence (+0.25) while preserving the established stronger weights for completion, replay, favorites and negative quick-skip/unfavorite feedback.
+- `BASKOV_RECOMMENDATION_FEEDBACK_V2` remains unchanged and bounded; existing recommendation history continues to load without migration.
+
 ## 1.37.1 — Favorites UX & Scale
 - Removed the legacy 100-track favorites cap; Product API now supports paged reads, stable-key membership and stable-key removal.
 - Added lightweight favorite keys/status endpoints for synchronized mobile and system-media heart controls.

@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Read-only personal preference model derived exclusively from bounded recommendation feedback.
+ * Read-only personal preference model derived from bounded recommendation and listening feedback.
  */
 public record PersonalTasteProfile(
         int recommendations,

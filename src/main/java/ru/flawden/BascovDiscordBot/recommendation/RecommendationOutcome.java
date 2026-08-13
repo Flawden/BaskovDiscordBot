@@ -6,6 +6,7 @@ package ru.flawden.BascovDiscordBot.recommendation;
  */
 public enum RecommendationOutcome {
     PENDING(0.0d),
+    PLAYED(0.25d),
     COMPLETED(1.0d),
     FAVORITED(3.0d),
     REPLAYED(2.0d),

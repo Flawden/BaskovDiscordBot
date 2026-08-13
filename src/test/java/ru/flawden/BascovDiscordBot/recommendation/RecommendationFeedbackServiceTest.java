@@ -52,19 +52,38 @@ class RecommendationFeedbackServiceTest {
     }
 
     @Test
-    void manualTrackDoesNotPolluteRecommendationFeedback() {
+    void manualTrackNowFeedsPersonalTaste() {
         CapturingRepository repository = new CapturingRepository();
         RecommendationFeedbackService service = new RecommendationFeedbackService(repository);
         AudioTrack track = track("Artist", "Manual", 180_000L);
         TrackRequest request = TrackRequest.create(track, new TrackRequester(77L, "Human"));
-
         service.recordPlayback(42L, new PlaybackFeedbackEvent(
                 PlaybackFeedbackEvent.Type.SKIPPED,
                 request,
                 5_000L,
                 180_000L));
 
-        assertEquals(null, repository.lastOutcome);
+        assertEquals(RecommendationOutcome.QUICK_SKIPPED, repository.lastOutcome);
+        assertEquals(5_000d / 180_000d, repository.lastRatio, 0.001d);
+    }
+
+    @Test
+    void externalPlaySignalCanCreateTasteEvidenceWithoutSmartRadio() {
+        CapturingRepository repository = new CapturingRepository();
+        RecommendationFeedbackService service = new RecommendationFeedbackService(repository);
+
+        RecommendationFeedbackEntry entry = service.recordExternalSignal(
+                42L,
+                77L,
+                "Skillet",
+                "Monster",
+                "local:v1:skillet-monster",
+                "android-local",
+                RecommendationOutcome.PLAYED,
+                0.0d);
+
+        assertEquals(RecommendationOutcome.PLAYED, repository.lastOutcome);
+        assertEquals("local:v1:skillet-monster", entry.trackIdentity());
     }
 
     @Test

@@ -21,7 +21,7 @@ public record ProductCapabilities(
         return authenticatedLibraryWrite();
     }
 
-    /** v1.37 keeps playback/guild control read-only while enabling bounded personal-library writes. */
+    /** v1.38 keeps playback/guild control read-only while enabling personal-library and taste writes. */
     public static ProductCapabilities authenticatedLibraryWrite() {
         return new ProductCapabilities(
                 "v1",
@@ -29,6 +29,6 @@ public record ProductCapabilities(
                 true,
                 true,
                 true,
-                List.of("auth", "me", "devices", "guilds", "home", "mixes", "search", "player", "library", "favorites", "playlists", "playback", "capabilities"));
+                List.of("auth", "me", "devices", "guilds", "home", "mixes", "search", "player", "library", "favorites", "playlists", "taste", "playback", "capabilities"));
     }
 }

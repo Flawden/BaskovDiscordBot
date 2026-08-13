@@ -166,6 +166,45 @@ public class FileRecommendationFeedbackRepository implements RecommendationFeedb
     }
 
     @Override
+    public RecommendationFeedbackEntry recordObservedOutcome(
+            RecommendationFeedbackEntry observed,
+            RecommendationOutcome outcome,
+            double completionRatio) {
+        if (observed == null) {
+            throw new IllegalArgumentException("observed entry cannot be null");
+        }
+        validateGuild(observed.guildId());
+        validateUser(observed.userId());
+        String identity = normalizeIdentity(observed.trackIdentity());
+        synchronized (mutationLock) {
+            Map<Long, List<RecommendationFeedbackEntry>> guild = entries.computeIfAbsent(
+                    observed.guildId(), ignored -> new LinkedHashMap<>());
+            List<RecommendationFeedbackEntry> history = guild.getOrDefault(observed.userId(), List.of());
+            for (int index = 0; index < history.size(); index++) {
+                if (history.get(index).trackIdentity().equals(identity)) {
+                    return updateOutcome(
+                            guild,
+                            observed.userId(),
+                            index,
+                            outcome,
+                            completionRatio).orElseThrow();
+                }
+            }
+
+            RecommendationFeedbackEntry normalized = normalizeRecommendedAt(guild, observed)
+                    .withOutcome(outcome, System.currentTimeMillis(), completionRatio);
+            ArrayList<RecommendationFeedbackEntry> mutable = new ArrayList<>(history);
+            mutable.add(0, normalized);
+            while (mutable.size() > MAX_ENTRIES_PER_USER) {
+                mutable.remove(mutable.size() - 1);
+            }
+            guild.put(observed.userId(), List.copyOf(mutable));
+            persistLocked();
+            return normalized;
+        }
+    }
+
+    @Override
     public List<RecommendationFeedbackEntry> history(long guildId, long userId, int limit) {
         validateGuild(guildId);
         validateUser(userId);

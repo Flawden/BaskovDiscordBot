@@ -91,27 +91,50 @@ public class RecommendationFeedbackService {
     }
 
     public void recordPlayback(long guildId, PlaybackFeedbackEvent event) {
-        if (guildId <= 0L || event == null || !isRadioTrack(event.request())) {
+        if (guildId <= 0L || event == null || event.request() == null) {
             return;
         }
         String identity = trackIdentity(event.request());
-        if (event.type() == PlaybackFeedbackEvent.Type.COMPLETED) {
-            safely("completed", () -> repository.recordLatestOutcome(
-                    guildId, identity, RecommendationOutcome.COMPLETED, 1.0d));
+        if (isRadioTrack(event.request())) {
+            if (event.type() == PlaybackFeedbackEvent.Type.COMPLETED) {
+                safely("completed", () -> repository.recordLatestOutcome(
+                        guildId, identity, RecommendationOutcome.COMPLETED, 1.0d));
+                return;
+            }
+            double ratio = event.completionRatio();
+            boolean quick = event.elapsedMillis() <= QUICK_NEGATIVE_MAX_MILLIS
+                    || ratio <= QUICK_NEGATIVE_MAX_RATIO;
+            safely("skip", () -> repository.recordLatestOutcome(
+                    guildId,
+                    identity,
+                    quick ? RecommendationOutcome.QUICK_SKIPPED : RecommendationOutcome.SKIPPED,
+                    ratio));
             return;
         }
-        double ratio = event.completionRatio();
-        boolean quick = event.elapsedMillis() <= QUICK_NEGATIVE_MAX_MILLIS
-                || ratio <= QUICK_NEGATIVE_MAX_RATIO;
-        safely("skip", () -> repository.recordLatestOutcome(
-                guildId,
-                identity,
-                quick ? RecommendationOutcome.QUICK_SKIPPED : RecommendationOutcome.SKIPPED,
-                ratio));
-    }
 
+        long userId = requesterUserId(event.request());
+        if (userId <= 0L) {
+            return;
+        }
+        RecommendationOutcome outcome;
+        double ratio = event.completionRatio();
+        if (event.type() == PlaybackFeedbackEvent.Type.COMPLETED) {
+            outcome = RecommendationOutcome.COMPLETED;
+            ratio = 1.0d;
+        } else {
+            boolean quick = event.elapsedMillis() <= QUICK_NEGATIVE_MAX_MILLIS
+                    || ratio <= QUICK_NEGATIVE_MAX_RATIO;
+            outcome = quick ? RecommendationOutcome.QUICK_SKIPPED : RecommendationOutcome.SKIPPED;
+        }
+        double finalRatio = ratio;
+        RecommendationOutcome finalOutcome = outcome;
+        safely("manual-playback:" + finalOutcome.name(), () -> repository.recordObservedOutcome(
+                observedEntry(guildId, userId, event.request(), "discord"),
+                finalOutcome,
+                finalRatio));
+    }
     public void recordStop(long guildId, TrackRequest request) {
-        if (guildId <= 0L || request == null || !isRadioTrack(request)) {
+        if (guildId <= 0L || request == null || request.track() == null) {
             return;
         }
         AudioTrack track = request.track();
@@ -119,13 +142,27 @@ public class RecommendationFeedbackService {
         long elapsed = Math.max(0L, track.getPosition());
         double ratio = Math.max(0.0d, Math.min(1.0d, elapsed / (double) duration));
         boolean quick = elapsed <= QUICK_NEGATIVE_MAX_MILLIS || ratio <= QUICK_NEGATIVE_MAX_RATIO;
-        safely("stop", () -> repository.recordLatestOutcome(
-                guildId,
-                trackIdentity(request),
-                quick ? RecommendationOutcome.QUICK_STOPPED : RecommendationOutcome.STOPPED,
-                ratio));
-    }
+        RecommendationOutcome outcome = quick
+                ? RecommendationOutcome.QUICK_STOPPED
+                : RecommendationOutcome.STOPPED;
 
+        if (isRadioTrack(request)) {
+            safely("stop", () -> repository.recordLatestOutcome(
+                    guildId,
+                    trackIdentity(request),
+                    outcome,
+                    ratio));
+            return;
+        }
+
+        long userId = requesterUserId(request);
+        if (userId > 0L) {
+            safely("manual-stop:" + outcome.name(), () -> repository.recordObservedOutcome(
+                    observedEntry(guildId, userId, request, "discord"),
+                    outcome,
+                    ratio));
+        }
+    }
     public void recordFavorite(long guildId, long userId, StoredTrack track) {
         recordUserSignal(guildId, userId, track, RecommendationOutcome.FAVORITED);
     }
@@ -156,6 +193,47 @@ public class RecommendationFeedbackService {
         return new FeedbackSummary(history.size(), positive, negative, pending, score);
     }
 
+    /**
+     * Client-neutral ingestion boundary for authenticated Product API clients.
+     * Authentication and guild authorization remain at the HTTP adapter.
+     */
+    public RecommendationFeedbackEntry recordExternalSignal(
+            long guildId,
+            long userId,
+            String artist,
+            String title,
+            String stableKey,
+            String source,
+            RecommendationOutcome outcome,
+            double completionRatio) {
+        if (guildId <= 0L || userId <= 0L) {
+            throw new IllegalArgumentException("guildId and userId must be positive");
+        }
+        if (title == null || title.isBlank()) {
+            throw new IllegalArgumentException("title cannot be blank");
+        }
+        RecommendationOutcome safeOutcome = Objects.requireNonNull(outcome, "outcome");
+        String identity = stableKey == null || stableKey.isBlank()
+                ? TrackIdentity.of(artist, title).stableKey()
+                : stableKey.trim().toLowerCase(java.util.Locale.ROOT);
+        String safeSource = source == null || source.isBlank()
+                ? "external"
+                : source.trim().toLowerCase(java.util.Locale.ROOT);
+        RecommendationFeedbackEntry observed = FileRecommendationFeedbackRepository.pending(
+                guildId,
+                userId,
+                artist,
+                title,
+                artist,
+                title,
+                identity,
+                Set.of(),
+                RadioStrategy.FAMILIAR,
+                safeSource,
+                1.0d);
+        return repository.recordObservedOutcome(observed, safeOutcome, completionRatio);
+    }
+
     private void recordUserSignal(
             long guildId,
             long userId,
@@ -164,14 +242,48 @@ public class RecommendationFeedbackService {
         if (guildId <= 0L || userId <= 0L || track == null) {
             return;
         }
-        safely("user-signal:" + outcome.name(), () -> repository.recordUserOutcome(
-                guildId,
-                userId,
-                track.trackIdentity().stableKey(),
+        safely("user-signal:" + outcome.name(), () -> repository.recordObservedOutcome(
+                FileRecommendationFeedbackRepository.pending(
+                        guildId,
+                        userId,
+                        track.author(),
+                        track.title(),
+                        track.author(),
+                        track.title(),
+                        track.trackIdentity().stableKey(),
+                        Set.of(),
+                        RadioStrategy.FAMILIAR,
+                        "library",
+                        1.0d),
                 outcome,
                 1.0d));
     }
 
+    private static RecommendationFeedbackEntry observedEntry(
+            long guildId,
+            long userId,
+            TrackRequest request,
+            String source) {
+        AudioTrack track = request == null ? null : request.track();
+        String artist = track == null || track.getInfo() == null ? null : track.getInfo().author;
+        String title = track == null || track.getInfo() == null ? null : track.getInfo().title;
+        return FileRecommendationFeedbackRepository.pending(
+                guildId,
+                userId,
+                artist,
+                title,
+                artist,
+                title,
+                trackIdentity(request),
+                Set.of(),
+                RadioStrategy.FAMILIAR,
+                source,
+                1.0d);
+    }
+
+    private static long requesterUserId(TrackRequest request) {
+        return request == null || request.requester() == null ? 0L : request.requester().userId();
+    }
 
     private static void safely(String operation, Runnable action) {
         try {
