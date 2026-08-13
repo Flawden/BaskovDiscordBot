@@ -1,3 +1,7 @@
+## 1.37.1 — Favorites UX & Scale
+- Removed the legacy 100-track favorites cap; Product API now supports paged reads, stable-key membership and stable-key removal.
+- Added lightweight favorite keys/status endpoints for synchronized mobile and system-media heart controls.
+
 # Changelog
 
 Все заметные изменения Baskov Discord Bot фиксируются в этом файле.

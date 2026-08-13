@@ -30,7 +30,7 @@ class FavoritesPersonalLibraryContractTest {
         String interactions = source("interactions/ModernInteractions.java");
 
         assertTrue(repository.contains("case \"F\" -> loadFavorite"));
-        assertTrue(repository.contains("MAX_FAVORITES_PER_USER"));
+        assertTrue(repository.contains("removeFavoriteByStableKey"));
         assertTrue(repository.contains("Map<Long, List<StoredTrack>> favorites"));
         assertTrue(interactions.contains("musicLibraryRepository.favorites("));
         assertTrue(interactions.contains("queueStoredTracks(event, favorites"));

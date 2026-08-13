@@ -2190,9 +2190,8 @@ public class ModernInteractions extends ListenerAdapter {
                     "⭐ Позиция не найдена",
                     "Проверь номер через `/favorites list`.");
             case LIMIT_REACHED -> MusicEmbeds.error(
-                    "🚧 Избранное заполнено",
-                    "На одном сервере можно хранить до `"
-                            + MusicLibraryRepository.MAX_FAVORITES_PER_USER + "` избранных треков на пользователя.");
+                    "🚧 Избранное временно недоступно",
+                    "Хранилище отклонило изменение избранного.");
             case UNREPLAYABLE_TRACK -> MusicEmbeds.error(
                     "💾 Текущий трек нельзя сохранить",
                     "Сейчас ничего не играет либо источник не содержит повторно загружаемую YouTube/SoundCloud-ссылку.");

@@ -171,9 +171,12 @@ paths:
     get:
       operationId: getFavorites
       security: [{ bearerAuth: [] }]
-      parameters: [{ $ref: '#/components/parameters/GuildId' }]
+      parameters:
+        - $ref: '#/components/parameters/GuildId'
+        - { name: offset, in: query, required: false, schema: { type: integer, minimum: 0 } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100 } }
       responses:
-        '200': { description: Personal ordered favorites for the linked Discord identity }
+        '200': { description: Personal ordered favorites page with total count; omitting pagination keeps legacy full-list behavior }
     post:
       operationId: addFavorite
       security: [{ bearerAuth: [] }]
@@ -190,13 +193,38 @@ paths:
                 title: { type: string }
       responses:
         '200': { description: Updated favorites; adding an existing favorite is idempotent }
-        '409': { description: Favorite limit reached }
     delete:
       operationId: clearFavorites
       security: [{ bearerAuth: [] }]
       parameters: [{ $ref: '#/components/parameters/GuildId' }]
       responses:
         '200': { description: Empty favorites snapshot }
+  /api/v1/favorites/keys:
+    get:
+      operationId: getFavoriteKeys
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/GuildId' }]
+      responses:
+        '200': { description: Lightweight stable-key membership snapshot for UI synchronization }
+  /api/v1/favorites/status:
+    get:
+      operationId: getFavoriteStatus
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/GuildId'
+        - { name: stableKey, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Membership state for one logical track }
+  /api/v1/favorites/by-key:
+    delete:
+      operationId: removeFavoriteByStableKey
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/GuildId'
+        - { name: stableKey, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Favorite removed by stable logical track identity }
+        '404': { description: Favorite stable key not found }
   /api/v1/favorites/{position}:
     delete:
       operationId: removeFavorite

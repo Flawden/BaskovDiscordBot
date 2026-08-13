@@ -11,7 +11,6 @@ public interface MusicLibraryRepository {
     int MAX_PLAYLISTS_PER_GUILD = 20;
     int MAX_TRACKS_PER_PLAYLIST = 50;
     int MAX_HISTORY_PER_GUILD = 50;
-    int MAX_FAVORITES_PER_USER = 100;
     int MAX_PERSONAL_HISTORY_PER_USER = 200;
 
     List<StoredPlaylist> playlists(long guildId);
@@ -87,6 +86,10 @@ public interface MusicLibraryRepository {
     FavoriteOperationResult addFavorite(long guildId, long userId, StoredTrack track);
 
     FavoriteOperationResult removeFavorite(long guildId, long userId, int oneBasedPosition);
+
+    Optional<StoredTrack> favoriteByStableKey(long guildId, long userId, String stableKey);
+
+    FavoriteOperationResult removeFavoriteByStableKey(long guildId, long userId, String stableKey);
 
     FavoriteOperationResult clearFavorites(long guildId, long userId);
 

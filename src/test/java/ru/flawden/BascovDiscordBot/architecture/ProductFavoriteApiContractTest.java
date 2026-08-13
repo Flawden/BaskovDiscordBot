@@ -21,6 +21,7 @@ class ProductFavoriteApiContractTest {
         assertTrue(service.contains("library.favorites"));
         assertTrue(service.contains("library.addFavorite"));
         assertTrue(service.contains("library.removeFavorite"));
+        assertTrue(service.contains("library.removeFavoriteByStableKey"));
         assertTrue(service.contains("library.clearFavorites"));
         assertTrue(controller.contains("principal.discordUserId()"));
         assertFalse(controller.contains("MusicLibraryRepository"));
@@ -38,6 +39,9 @@ class ProductFavoriteApiContractTest {
         assertTrue(controller.contains("@GetMapping(\"/favorites\")"));
         assertTrue(controller.contains("@PostMapping(\"/favorites\")"));
         assertTrue(controller.contains("@DeleteMapping(\"/favorites/{position}\")"));
+        assertTrue(controller.contains("@DeleteMapping(\"/favorites/by-key\")"));
+        assertTrue(controller.contains("@GetMapping(\"/favorites/keys\")"));
+        assertTrue(controller.contains("@GetMapping(\"/favorites/status\")"));
         assertTrue(controller.contains("@DeleteMapping(\"/favorites\")"));
     }
 }

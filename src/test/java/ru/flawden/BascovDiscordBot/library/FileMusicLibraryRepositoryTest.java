@@ -190,17 +190,19 @@ class FileMusicLibraryRepositoryTest {
     }
 
     @Test
-    void boundsFavoritesPerUserWithoutPartialOverflow() {
-        FileMusicLibraryRepository repository = repository(tempDir.resolve("favorite-limit.tsv"));
-        for (int index = 1; index <= MusicLibraryRepository.MAX_FAVORITES_PER_USER; index++) {
+    void favoritesAreNotHardCappedAtTheLegacyHundredTrackBoundary() {
+        FileMusicLibraryRepository repository = repository(tempDir.resolve("favorite-scale.tsv"));
+        for (int index = 1; index <= 125; index++) {
             assertEquals(FavoriteOperationResult.Status.ADDED,
                     repository.addFavorite(10L, 20L, track("Track " + index, index)).status());
         }
 
-        assertEquals(FavoriteOperationResult.Status.LIMIT_REACHED,
-                repository.addFavorite(10L, 20L, track("Overflow", 999L)).status());
-        assertEquals(MusicLibraryRepository.MAX_FAVORITES_PER_USER,
-                repository.favorites(10L, 20L).size());
+        assertEquals(125, repository.favorites(10L, 20L).size());
+        String stableKey = repository.favorites(10L, 20L).get(0).trackIdentity().stableKey();
+        assertTrue(repository.favoriteByStableKey(10L, 20L, stableKey).isPresent());
+        assertEquals(FavoriteOperationResult.Status.REMOVED,
+                repository.removeFavoriteByStableKey(10L, 20L, stableKey).status());
+        assertEquals(124, repository.favorites(10L, 20L).size());
     }
 
     @Test

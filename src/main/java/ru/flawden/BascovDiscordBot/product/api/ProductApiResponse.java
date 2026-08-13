@@ -83,9 +83,27 @@ public final class ProductApiResponse {
     public record Favorites(
             String guildId,
             String userId,
+            int total,
+            int offset,
             int limit,
+            boolean hasMore,
             List<Track> tracks) {
         public Favorites { tracks = List.copyOf(tracks == null ? List.of() : tracks); }
+    }
+
+    public record FavoriteKeys(
+            String guildId,
+            String userId,
+            int total,
+            List<String> stableKeys) {
+        public FavoriteKeys { stableKeys = List.copyOf(stableKeys == null ? List.of() : stableKeys); }
+    }
+
+    public record FavoriteStatus(
+            String guildId,
+            String userId,
+            String stableKey,
+            boolean favorite) {
     }
 
     public record Playlists(

@@ -124,12 +124,38 @@ public class ProductApiController {
     @GetMapping("/favorites")
     public ProductApiResponse.Favorites favorites(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
-            @RequestParam long guildId) {
+            @RequestParam long guildId,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
         var principal = access.requireGuild(authorization, guildId);
         return mapper.favorites(
                 guildId,
                 principal.userId(),
-                favorites.favorites(guildId, principal.discordUserId()));
+                favorites.page(guildId, principal.discordUserId(), offset, limit));
+    }
+
+    @GetMapping("/favorites/keys")
+    public ProductApiResponse.FavoriteKeys favoriteKeys(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @RequestParam long guildId) {
+        var principal = access.requireGuild(authorization, guildId);
+        return mapper.favoriteKeys(
+                guildId,
+                principal.userId(),
+                favorites.stableKeys(guildId, principal.discordUserId()));
+    }
+
+    @GetMapping("/favorites/status")
+    public ProductApiResponse.FavoriteStatus favoriteStatus(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @RequestParam long guildId,
+            @RequestParam String stableKey) {
+        var principal = access.requireGuild(authorization, guildId);
+        return mapper.favoriteStatus(
+                guildId,
+                principal.userId(),
+                stableKey,
+                favorites.contains(guildId, principal.discordUserId(), stableKey));
     }
 
     @PostMapping("/favorites")
@@ -152,7 +178,7 @@ public class ProductApiController {
         return mapper.favorites(
                 guildId,
                 principal.userId(),
-                favorites.favorites(guildId, principal.discordUserId()));
+                favorites.page(guildId, principal.discordUserId(), null, null));
     }
 
     @DeleteMapping("/favorites/{position}")
@@ -167,7 +193,19 @@ public class ProductApiController {
         return mapper.favorites(
                 guildId,
                 principal.userId(),
-                favorites.favorites(guildId, principal.discordUserId()));
+                favorites.page(guildId, principal.discordUserId(), null, null));
+    }
+
+    @DeleteMapping("/favorites/by-key")
+    public ProductApiResponse.FavoriteStatus removeFavoriteByKey(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @RequestParam long guildId,
+            @RequestParam String stableKey) {
+        var principal = access.requireGuild(authorization, guildId);
+        requireFavoriteMutation(
+                favorites.removeByStableKey(guildId, principal.discordUserId(), stableKey),
+                FavoriteOperationResult.Status.REMOVED);
+        return mapper.favoriteStatus(guildId, principal.userId(), stableKey, false);
     }
 
     @DeleteMapping("/favorites")
@@ -179,7 +217,7 @@ public class ProductApiController {
         if (result.status() != FavoriteOperationResult.Status.NOT_FOUND) {
             requireFavoriteMutation(result, FavoriteOperationResult.Status.CLEARED);
         }
-        return mapper.favorites(guildId, principal.userId(), java.util.List.of());
+        return mapper.favorites(guildId, principal.userId(), new ru.flawden.BascovDiscordBot.product.ProductFavoriteService.Page(0, 0, 0, false, java.util.List.of()));
     }
 
     @GetMapping("/playlists")

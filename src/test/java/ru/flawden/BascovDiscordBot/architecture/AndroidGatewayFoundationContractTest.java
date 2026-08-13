@@ -46,6 +46,9 @@ class AndroidGatewayFoundationContractTest {
                 "/api/v1/player:",
                 "/api/v1/library:",
                 "/api/v1/favorites:",
+                "/api/v1/favorites/keys:",
+                "/api/v1/favorites/status:",
+                "/api/v1/favorites/by-key:",
                 "/api/v1/auth/device/pair:",
                 "/api/v1/auth/refresh:",
                 "/api/v1/auth/logout:",
@@ -94,6 +97,7 @@ class AndroidGatewayFoundationContractTest {
 
         assertTrue(controller.contains("@PostMapping(\"/favorites\")"));
         assertTrue(controller.contains("@DeleteMapping(\"/favorites/{position}\")"));
+        assertTrue(controller.contains("@DeleteMapping(\"/favorites/by-key\")"));
         assertTrue(controller.contains("@DeleteMapping(\"/favorites\")"));
         assertTrue(controller.contains("@PostMapping(\"/playlists\")"));
         assertTrue(controller.contains("@PostMapping(\"/playlists/{name}/tracks\")"));

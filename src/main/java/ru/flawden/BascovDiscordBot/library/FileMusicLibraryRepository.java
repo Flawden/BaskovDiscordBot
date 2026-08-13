@@ -578,16 +578,14 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
         synchronized (mutationLock) {
             GuildLibrary previous = libraries.getOrDefault(guildId, GuildLibrary.empty());
             List<StoredTrack> current = previous.favorites().getOrDefault(userId, List.of());
-            String identity = trackIdentity(track);
+            String playbackIdentity = trackIdentity(track);
+            String stableKey = track.trackIdentity().stableKey();
             for (StoredTrack existing : current) {
-                if (trackIdentity(existing).equals(identity)) {
+                if (trackIdentity(existing).equals(playbackIdentity)
+                        || existing.trackIdentity().stableKey().equals(stableKey)) {
                     return FavoriteOperationResult.of(FavoriteOperationResult.Status.ALREADY_EXISTS, existing);
                 }
             }
-            if (current.size() >= MAX_FAVORITES_PER_USER) {
-                return FavoriteOperationResult.of(FavoriteOperationResult.Status.LIMIT_REACHED, null);
-            }
-
             ArrayList<StoredTrack> updatedFavorites = new ArrayList<>(current.size() + 1);
             updatedFavorites.add(track);
             updatedFavorites.addAll(current);
@@ -608,6 +606,49 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
             List<StoredTrack> current = previous.favorites().getOrDefault(userId, List.of());
             int index = oneBasedPosition - 1;
             if (index < 0 || index >= current.size()) {
+                return FavoriteOperationResult.of(FavoriteOperationResult.Status.NOT_FOUND, null);
+            }
+            StoredTrack removed = current.get(index);
+            ArrayList<StoredTrack> updatedFavorites = new ArrayList<>(current);
+            updatedFavorites.remove(index);
+            LinkedHashMap<Long, List<StoredTrack>> favorites = new LinkedHashMap<>(previous.favorites());
+            if (updatedFavorites.isEmpty()) {
+                favorites.remove(userId);
+            } else {
+                favorites.put(userId, List.copyOf(updatedFavorites));
+            }
+            replaceAndPersist(guildId, previous,
+                    new GuildLibrary(previous.playlists(), previous.history(), favorites, previous.personalHistory()));
+            return FavoriteOperationResult.of(FavoriteOperationResult.Status.REMOVED, removed);
+        }
+    }
+
+    @Override
+    public Optional<StoredTrack> favoriteByStableKey(long guildId, long userId, String stableKey) {
+        validateGuildId(guildId);
+        validateActor(userId);
+        String normalizedKey = requireStableKey(stableKey);
+        return favorites(guildId, userId).stream()
+                .filter(track -> track.trackIdentity().stableKey().equals(normalizedKey))
+                .findFirst();
+    }
+
+    @Override
+    public FavoriteOperationResult removeFavoriteByStableKey(long guildId, long userId, String stableKey) {
+        validateGuildId(guildId);
+        validateActor(userId);
+        String normalizedKey = requireStableKey(stableKey);
+        synchronized (mutationLock) {
+            GuildLibrary previous = libraries.getOrDefault(guildId, GuildLibrary.empty());
+            List<StoredTrack> current = previous.favorites().getOrDefault(userId, List.of());
+            int index = -1;
+            for (int candidate = 0; candidate < current.size(); candidate++) {
+                if (current.get(candidate).trackIdentity().stableKey().equals(normalizedKey)) {
+                    index = candidate;
+                    break;
+                }
+            }
+            if (index < 0) {
                 return FavoriteOperationResult.of(FavoriteOperationResult.Status.NOT_FOUND, null);
             }
             StoredTrack removed = current.get(index);
@@ -672,6 +713,13 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
     private static String trackIdentity(StoredTrack track) {
         return track.provider().name() + "|"
                 + track.playbackIdentifier().trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static String requireStableKey(String stableKey) {
+        if (stableKey == null || stableKey.isBlank()) {
+            throw new IllegalArgumentException("stableKey cannot be blank");
+        }
+        return stableKey.trim();
     }
 
     private void replaceAndPersist(long guildId, GuildLibrary previous, GuildLibrary updated) {
@@ -752,7 +800,7 @@ public class FileMusicLibraryRepository implements MusicLibraryRepository {
 
         MutableGuildLibrary library = loaded.computeIfAbsent(guildId, ignored -> new MutableGuildLibrary());
         ArrayList<StoredTrack> favorites = library.favorites.computeIfAbsent(userId, ignored -> new ArrayList<>());
-        if (position == favorites.size() && favorites.size() < MAX_FAVORITES_PER_USER) {
+        if (position == favorites.size()) {
             favorites.add(track);
         }
     }

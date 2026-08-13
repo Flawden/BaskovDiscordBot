@@ -7,6 +7,7 @@ import ru.flawden.BascovDiscordBot.product.ProductLibrarySnapshot;
 import ru.flawden.BascovDiscordBot.product.ProductMixesSnapshot;
 import ru.flawden.BascovDiscordBot.product.ProductMixDetailSnapshot;
 import ru.flawden.BascovDiscordBot.product.ProductPlaybackSnapshot;
+import ru.flawden.BascovDiscordBot.product.ProductFavoriteService;
 import ru.flawden.BascovDiscordBot.product.ProductSearchSnapshot;
 import ru.flawden.BascovDiscordBot.library.StoredPlaylist;
 import ru.flawden.BascovDiscordBot.library.StoredTrack;
@@ -104,12 +105,38 @@ public class ProductApiMapper {
     public ProductApiResponse.Favorites favorites(
             long guildId,
             String productUserId,
-            List<StoredTrack> source) {
+            ProductFavoriteService.Page source) {
         return new ProductApiResponse.Favorites(
                 snowflake(guildId),
                 productUserId,
-                ru.flawden.BascovDiscordBot.library.MusicLibraryRepository.MAX_FAVORITES_PER_USER,
-                source.stream().map(ProductApiMapper::track).toList());
+                source.total(),
+                source.offset(),
+                source.limit(),
+                source.hasMore(),
+                source.tracks().stream().map(ProductApiMapper::track).toList());
+    }
+
+    public ProductApiResponse.FavoriteKeys favoriteKeys(
+            long guildId,
+            String productUserId,
+            List<String> stableKeys) {
+        return new ProductApiResponse.FavoriteKeys(
+                snowflake(guildId),
+                productUserId,
+                stableKeys.size(),
+                stableKeys);
+    }
+
+    public ProductApiResponse.FavoriteStatus favoriteStatus(
+            long guildId,
+            String productUserId,
+            String stableKey,
+            boolean favorite) {
+        return new ProductApiResponse.FavoriteStatus(
+                snowflake(guildId),
+                productUserId,
+                stableKey,
+                favorite);
     }
 
     public ProductApiResponse.Playlists playlists(

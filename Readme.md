@@ -1,6 +1,6 @@
 # 🎤 Baskov Discord Bot
 
-Текущая версия релизной ветки: **v1.37.0**.
+Текущая версия релизной ветки: **v1.37.1**.
 
 Музыкальный Discord-бот на Java 17, Spring Boot, JDA, LavaPlayer и native libDAVE.
 
@@ -18,7 +18,7 @@
 - Product API Boundary + Android Gateway: `MusicProductService` остаётся общей client-neutral application-границей; `BaskovUser`, Discord pairing proof и hashed device sessions дают authenticated reads, а `v1.30` добавляет `/api/v1/guilds`, JSON-safe string snowflakes, committed OpenAPI v1 и opt-in host-loopback deployment profile для TLS reverse proxy. playlist mutations в v1.36 и personal favorite mutations в v1.37 используют существующий Discord store и linked Discord identity, а voice/player mutations остаются выключены;
 - Playback Source Abstraction & Provider Resilience: system-selected recommendation сначала превращается в provider-neutral `TrackIdentity`, затем `PlaybackResolver` строит client-aware YouTube/SoundCloud candidates; runtime health registry считает technical failures/misses/fallbacks, после 3 подряд технических ошибок открывает 90-секундный cooldown, автоматически переводит Smart Radio/Mix на следующий provider и после cooldown делает probe. Прямые `/play`/URL остаются explicit-source path без автоматической подмены; health process-local и не создаёт новый persistence;
 - `/search` с пятью результатами YouTube, одноразовыми кнопками выбора и пятиминутной owner-bound сессией; autocomplete последних запросов работает в `/play` и `/search`;
-- личное persistent избранное до 100 треков на пользователя и сервер через `/favorites list|add|play|play-all|remove|search|clear`; favorites участвуют в локальном autocomplete и используют существующий ordered batch playback;
+- личное persistent избранное без искусственного product-cap на пользователя и сервер через `/favorites list|add|play|play-all|remove|search|clear`; Product API v1.37.1 добавляет пагинацию и stable-key membership/removal для мобильного UX; favorites участвуют в локальном autocomplete и используют существующий ordered batch playback;
 - постоянная история до 50 треков на сервер плюс personal history до 200 заказанных и реально дошедших до истории треков на пользователя; `/history scope:server|mine`, `/replay scope:server|mine`, `/discover profile|for-me` и серверные плейлисты с owner/admin-управлением, autocomplete, lifecycle-операциями, поиском, capture queue и ordered batch playback;
 - legacy `!`-команды как compatibility layer;
 - воспроизведение музыки, пауза, остановка, пропуск и возврат к предыдущим трекам;
