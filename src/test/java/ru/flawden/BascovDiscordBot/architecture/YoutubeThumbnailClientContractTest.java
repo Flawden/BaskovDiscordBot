@@ -19,6 +19,10 @@ class YoutubeThumbnailClientContractTest {
         assertTrue(source.contains("AndroidVrWithThumbnail()"));
         assertTrue(source.contains("WebWithThumbnail()"));
         assertTrue(source.contains("WebEmbeddedWithThumbnail()"));
+        assertTrue(source.contains("YoutubeSourceOptions"));
+        assertTrue(source.contains(".setRemoteCipher("));
+        assertTrue(source.contains("BASKOV_YOUTUBE_CIPHER_URL"));
+        assertTrue(source.contains("BASKOV_YOUTUBE_CIPHER_PASSWORD"));
         assertFalse(source.contains(
                 "YoutubeAudioSourceManager youtubeSourceManager = new YoutubeAudioSourceManager();"));
     }

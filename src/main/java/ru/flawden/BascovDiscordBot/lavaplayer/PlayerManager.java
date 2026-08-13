@@ -9,6 +9,7 @@ import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import dev.lavalink.youtube.YoutubeAudioSourceManager;
+import dev.lavalink.youtube.YoutubeSourceOptions;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.JDA;
@@ -147,8 +148,19 @@ public class PlayerManager {
         this.audioPlayerManager = new DefaultAudioPlayerManager();
         this.audioPlayerManager.getConfiguration().setOutputFormat(StandardAudioDataFormats.DISCORD_OPUS);
 
+        String youtubeCipherUrl = Optional.ofNullable(System.getenv("BASKOV_YOUTUBE_CIPHER_URL"))
+                .filter(value -> !value.isBlank())
+                .orElse("https://cipher.kikkia.dev/");
+        String youtubeCipherPassword = Optional.ofNullable(System.getenv("BASKOV_YOUTUBE_CIPHER_PASSWORD"))
+                .filter(value -> !value.isBlank())
+                .orElse(null);
+        YoutubeSourceOptions youtubeSourceOptions = new YoutubeSourceOptions()
+                .setRemoteCipher(
+                        youtubeCipherUrl,
+                        youtubeCipherPassword,
+                        "BaskovDiscordBot/" + YoutubeSourceRuntimeInfo.VERSION);
         YoutubeAudioSourceManager youtubeSourceManager = new YoutubeAudioSourceManager(
-                true,
+                youtubeSourceOptions,
                 new dev.lavalink.youtube.clients.skeleton.Client[] {
                     new dev.lavalink.youtube.clients.MusicWithThumbnail(),
                     new dev.lavalink.youtube.clients.AndroidVrWithThumbnail(),
