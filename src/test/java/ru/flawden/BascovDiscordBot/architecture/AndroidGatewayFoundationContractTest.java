@@ -83,15 +83,26 @@ class AndroidGatewayFoundationContractTest {
     }
 
     @Test
-    void gatewayReleaseStillDoesNotExposeMusicMutations() throws Exception {
+    void gatewayReleaseExposesOnlyOwnerScopedPlaylistMutations() throws Exception {
         String capabilities = read("product/ProductCapabilities.java");
         String controller = read("product/api/ProductApiController.java");
 
-        assertTrue(capabilities.contains("false,\n                true,"));
-        assertTrue(capabilities.contains("\"guilds\""));
-        assertFalse(controller.contains("@PostMapping"));
-        assertFalse(controller.contains("@PutMapping"));
-        assertFalse(controller.contains("@DeleteMapping"));
+        assertTrue(capabilities.contains("\"AUTHENTICATED_READ_PLAYLIST_WRITE\""));
+        assertTrue(capabilities.contains("\"playlists\""));
+
+        assertTrue(controller.contains("@PostMapping(\"/playlists\")"));
+        assertTrue(controller.contains("@PostMapping(\"/playlists/{name}/tracks\")"));
+        assertTrue(controller.contains("@DeleteMapping(\"/playlists/{name}/tracks/{position}\")"));
+        assertTrue(controller.contains("@PostMapping(\"/playlists/{name}/move\")"));
+        assertTrue(controller.contains("@PostMapping(\"/playlists/{name}/rename\")"));
+        assertTrue(controller.contains("@DeleteMapping(\"/playlists/{name}\")"));
+
+        assertFalse(controller.contains("@PostMapping(\"/player"));
+        assertFalse(controller.contains("@PutMapping(\"/player"));
+        assertFalse(controller.contains("@DeleteMapping(\"/player"));
+        assertFalse(controller.contains("@PostMapping(\"/playback"));
+        assertFalse(controller.contains("@PutMapping(\"/playback"));
+        assertFalse(controller.contains("@DeleteMapping(\"/playback"));
     }
 
     private static String read(String relative) throws Exception {
