@@ -1,3 +1,10 @@
+## 1.39.0 — Smart Autoplay Product API
+- Added authenticated read-only `GET /api/v1/autoplay/next?guildId=...&artist=...&title=...` for Android/Web Search Continuation.
+- The endpoint returns exactly one provider-neutral logical candidate and never mutates Discord voice, queue or player state; Android continues playback through the existing `/api/v1/playback/stream` transport.
+- Reused the existing `SmartDiscoveryEngine` with `SIMILAR` strategy, long-term `PersonalTasteProfile`, contextual-bandit profile, known library/history and recent feedback instead of introducing a second recommender.
+- Provider fallback or a candidate resolving back to the current seed is returned as `available=false`, preventing autoplay self-loops.
+- Product capabilities/OpenAPI now advertise `autoplay`; no persistence format or new storage file is introduced.
+
 ## 1.38.0 — Taste Signals Foundation
 - Unified ordinary Discord playback and authenticated Android listening/favorite events with the existing durable recommendation-feedback model instead of introducing a second taste database.
 - Added `POST /api/v1/taste/events?guildId=...` for bounded batches of LOCAL/REMOTE `PLAY`, completion, replay, quick-skip/early-stop and favorite add/remove signals. Linked Discord identity is always derived from the bearer session.

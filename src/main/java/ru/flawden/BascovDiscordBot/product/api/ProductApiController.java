@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import ru.flawden.BascovDiscordBot.product.MusicProductService;
+import ru.flawden.BascovDiscordBot.product.ProductAutoplayService;
 import ru.flawden.BascovDiscordBot.product.ProductPlaylistService;
 import ru.flawden.BascovDiscordBot.product.ProductFavoriteService;
 import ru.flawden.BascovDiscordBot.library.FavoriteOperationResult;
@@ -23,6 +24,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Authenticated v1 product API. Disabled by default; the optional remote profile is
@@ -40,6 +42,7 @@ public class ProductApiController {
     private final ProductPlaybackStreamService playbackStreams;
     private final ProductPlaylistService playlists;
     private final ProductFavoriteService favorites;
+    private final ProductAutoplayService autoplay;
 
     public ProductApiController(
             MusicProductService product,
@@ -47,13 +50,15 @@ public class ProductApiController {
             ProductApiAccessGuard access,
             ProductPlaybackStreamService playbackStreams,
             ProductPlaylistService playlists,
-            ProductFavoriteService favorites) {
+            ProductFavoriteService favorites,
+            ProductAutoplayService autoplay) {
         this.product = Objects.requireNonNull(product, "product");
         this.mapper = Objects.requireNonNull(mapper, "mapper");
         this.access = Objects.requireNonNull(access, "access");
         this.playbackStreams = Objects.requireNonNull(playbackStreams, "playbackStreams");
         this.playlists = Objects.requireNonNull(playlists, "playlists");
         this.favorites = Objects.requireNonNull(favorites, "favorites");
+        this.autoplay = Objects.requireNonNull(autoplay, "autoplay");
     }
 
     @GetMapping("/capabilities")
@@ -103,6 +108,17 @@ public class ProductApiController {
         return mapper.search(
                 product.search(guildId, principal.discordUserId(), query, limit),
                 principal.userId());
+    }
+
+    @GetMapping("/autoplay/next")
+    public CompletableFuture<ProductApiResponse.Autoplay> autoplayNext(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @RequestParam long guildId,
+            @RequestParam String artist,
+            @RequestParam String title) {
+        var principal = access.requireGuild(authorization, guildId);
+        return autoplay.next(guildId, principal.discordUserId(), artist, title)
+                .thenApply(snapshot -> mapper.autoplay(snapshot, principal.userId()));
     }
 
     @GetMapping("/player")

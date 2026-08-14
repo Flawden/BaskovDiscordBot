@@ -2,6 +2,7 @@ package ru.flawden.BascovDiscordBot.product.api;
 
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.home.HomeSnapshot;
+import ru.flawden.BascovDiscordBot.product.ProductAutoplaySnapshot;
 import ru.flawden.BascovDiscordBot.product.ProductCapabilities;
 import ru.flawden.BascovDiscordBot.product.ProductLibrarySnapshot;
 import ru.flawden.BascovDiscordBot.product.ProductMixesSnapshot;
@@ -100,6 +101,23 @@ public class ProductApiMapper {
                 productUserId,
                 source.query(),
                 tracks(source.tracks()));
+    }
+    public ProductApiResponse.Autoplay autoplay(ProductAutoplaySnapshot source, String productUserId) {
+        var seed = source.seed();
+        var candidate = source.next();
+        return new ProductApiResponse.Autoplay(
+                snowflake(source.guildId()),
+                productUserId,
+                new ProductApiResponse.Track(seed.stableKey(), seed.title(), seed.artist()),
+                candidate == null ? null : new ProductApiResponse.Track(
+                        candidate.trackIdentity().stableKey(),
+                        candidate.title(),
+                        candidate.artist()),
+                source.available(),
+                source.fallback(),
+                source.provider(),
+                candidate == null ? 0.0d : candidate.similarity(),
+                source.reason());
     }
 
     public ProductApiResponse.Favorites favorites(

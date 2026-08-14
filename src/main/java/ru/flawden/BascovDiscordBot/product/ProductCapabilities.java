@@ -21,7 +21,7 @@ public record ProductCapabilities(
         return authenticatedLibraryWrite();
     }
 
-    /** v1.38 keeps playback/guild control read-only while enabling personal-library and taste writes. */
+    /** v1.39 adds read-only Smart Autoplay continuation while keeping Discord player/voice mutations unavailable. */
     public static ProductCapabilities authenticatedLibraryWrite() {
         return new ProductCapabilities(
                 "v1",
@@ -29,6 +29,6 @@ public record ProductCapabilities(
                 true,
                 true,
                 true,
-                List.of("auth", "me", "devices", "guilds", "home", "mixes", "search", "player", "library", "favorites", "playlists", "taste", "playback", "capabilities"));
+                List.of("auth", "me", "devices", "guilds", "home", "mixes", "search", "autoplay", "player", "library", "favorites", "playlists", "taste", "playback", "capabilities"));
     }
 }

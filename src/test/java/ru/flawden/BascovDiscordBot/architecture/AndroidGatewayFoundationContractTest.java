@@ -43,6 +43,7 @@ class AndroidGatewayFoundationContractTest {
                 "/api/v1/home:",
                 "/api/v1/mixes:",
                 "/api/v1/search:",
+                "/api/v1/autoplay/next:",
                 "/api/v1/player:",
                 "/api/v1/library:",
                 "/api/v1/favorites:",
@@ -96,6 +97,9 @@ class AndroidGatewayFoundationContractTest {
         assertTrue(capabilities.contains("\"playlists\""));
         assertTrue(capabilities.contains("\"favorites\""));
         assertTrue(capabilities.contains("\"taste\""));
+        assertTrue(capabilities.contains("\"autoplay\""));
+        assertTrue(controller.contains("@GetMapping(\"/autoplay/next\")"));
+        assertTrue(controller.contains("autoplay.next(guildId, principal.discordUserId()"));
         String tasteController = read("product/api/ProductTasteSignalApiController.java");
         assertTrue(tasteController.contains("@PostMapping(\"/events\")"));
         assertTrue(tasteController.contains("access.requireGuild"));

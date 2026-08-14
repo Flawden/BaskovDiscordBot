@@ -79,6 +79,18 @@ public final class ProductApiResponse {
             List<Track> tracks) {
         public Search { tracks = List.copyOf(tracks == null ? List.of() : tracks); }
     }
+    public record Autoplay(
+            String guildId,
+            String userId,
+            Track seed,
+            Track next,
+            boolean available,
+            boolean fallback,
+            String provider,
+            double similarity,
+            String reason) {
+    }
+
 
     public record Favorites(
             String guildId,

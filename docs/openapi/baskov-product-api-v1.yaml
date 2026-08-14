@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: >-
     Authenticated product API and device-session lifecycle used by external Baskov Music clients.
-    v1.38 adds bounded authenticated listening/taste-signal ingestion on top of personal-library mutations; Discord remains the source of pairing proof.
+    v1.39 adds authenticated read-only Smart Autoplay continuation on top of taste signals; Discord remains the source of pairing proof.
 servers:
   - url: /
 paths:
@@ -131,6 +131,38 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '503':
           $ref: '#/components/responses/SearchUnavailable'
+  /api/v1/autoplay/next:
+    get:
+      operationId: getSmartAutoplayNext
+      description: >-
+        Chooses exactly one provider-neutral continuation candidate from the existing Smart Discovery
+        engine using the linked user's taste/history. This endpoint never mutates Discord voice/player
+        state and does not resolve playback transport.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GuildId'
+        - name: artist
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 180 }
+        - name: title
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 180 }
+      responses:
+        '200':
+          description: One continuation decision; available=false means the client should stop autoplay cleanly.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Autoplay'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /api/v1/player:
     get:
       operationId: getPlayer
@@ -818,6 +850,22 @@ components:
         confidence: { type: number, format: double }
         positiveSignals: { type: integer }
         negativeSignals: { type: integer }
+    Autoplay:
+      type: object
+      required: [guildId, userId, seed, available, fallback, provider, similarity, reason]
+      properties:
+        guildId: { type: string }
+        userId: { type: string }
+        seed: { $ref: '#/components/schemas/Track' }
+        next:
+          allOf:
+            - $ref: '#/components/schemas/Track'
+          nullable: true
+        available: { type: boolean }
+        fallback: { type: boolean }
+        provider: { type: string }
+        similarity: { type: number, format: double, minimum: 0, maximum: 1 }
+        reason: { type: string }
     Track:
       type: object
       properties:
