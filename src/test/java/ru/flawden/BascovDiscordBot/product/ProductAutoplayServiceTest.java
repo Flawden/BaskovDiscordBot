@@ -97,6 +97,33 @@ class ProductAutoplayServiceTest {
     }
 
     @Test
+    void distinctFallbackCandidateRemainsAvailableForAutoplay() {
+        SmartDiscoveryEngine discovery = mock(SmartDiscoveryEngine.class);
+        MusicLibraryRepository library = emptyLibrary();
+        RecommendationFeedbackService feedback = emptyFeedback();
+
+        when(discovery.recommend(any(), eq(RadioStrategy.SIMILAR), any()))
+                .thenReturn(CompletableFuture.completedFuture(new RecommendationPlan(
+                        new RecommendationCandidate(
+                                "The Offspring",
+                                "The Kids Aren't Alright",
+                                0.42d,
+                                "local-fallback",
+                                "fallback candidate"),
+                        true,
+                        true)));
+
+        ProductAutoplaySnapshot result = new ProductAutoplayService(discovery, library, feedback)
+                .next(42L, 7L, "Green Day", "Holiday")
+                .join();
+
+        assertTrue(result.available());
+        assertTrue(result.fallback());
+        assertEquals("The Kids Aren't Alright", result.next().title());
+        assertEquals("local-fallback", result.provider());
+    }
+
+    @Test
     void rejectsBlankOrOverlongSeedBeforeCallingProvider() {
         ProductAutoplayService service = new ProductAutoplayService(
                 mock(SmartDiscoveryEngine.class),

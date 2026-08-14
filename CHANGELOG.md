@@ -2,7 +2,8 @@
 - Added authenticated read-only `GET /api/v1/autoplay/next?guildId=...&artist=...&title=...` for Android/Web Search Continuation.
 - The endpoint returns exactly one provider-neutral logical candidate and never mutates Discord voice, queue or player state; Android continues playback through the existing `/api/v1/playback/stream` transport.
 - Reused the existing `SmartDiscoveryEngine` with `SIMILAR` strategy, long-term `PersonalTasteProfile`, contextual-bandit profile, known library/history and recent feedback instead of introducing a second recommender.
-- Provider fallback or a candidate resolving back to the current seed is returned as `available=false`, preventing autoplay self-loops.
+- Distinct fallback candidates remain eligible for autoplay while fallback metadata is preserved; only a candidate resolving back to the current seed is returned as `available=false`, preventing self-loops.
+- Added a compact runtime decision log for Smart Autoplay (`available`, `fallback`, provider and logical seed/next identity) to make real-device continuation smoke diagnosable without extracting Android bearer tokens.
 - Product capabilities/OpenAPI now advertise `autoplay`; no persistence format or new storage file is introduced.
 
 ## 1.38.0 — Taste Signals Foundation

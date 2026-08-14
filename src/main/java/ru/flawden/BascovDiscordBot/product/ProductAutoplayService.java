@@ -1,5 +1,7 @@
 package ru.flawden.BascovDiscordBot.product;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import ru.flawden.BascovDiscordBot.catalog.TrackIdentity;
 import ru.flawden.BascovDiscordBot.commands.music.MediaProvider;
@@ -31,6 +33,7 @@ import java.util.concurrent.CompletableFuture;
 @Component
 public class ProductAutoplayService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(ProductAutoplayService.class);
     private static final int RECENT_FEEDBACK_LIMIT = 20;
 
     private final SmartDiscoveryEngine discovery;
@@ -57,7 +60,20 @@ public class ProductAutoplayService {
         RecommendationContext context = context(guildId, userId, seedIdentity);
 
         return discovery.recommend(seed, RadioStrategy.SIMILAR, context)
-                .thenApply(plan -> snapshot(guildId, userId, seedIdentity, plan));
+                .thenApply(plan -> {
+                    ProductAutoplaySnapshot result = snapshot(guildId, userId, seedIdentity, plan);
+                    LOGGER.info(
+                            "Product autoplay decision guild={} user={} seed={} available={} fallback={} provider={} next={} reason={}",
+                            guildId,
+                            userId,
+                            seedIdentity.stableKey(),
+                            result.available(),
+                            result.fallback(),
+                            result.provider(),
+                            result.next() == null ? "none" : result.next().trackIdentity().stableKey(),
+                            result.reason());
+                    return result;
+                });
     }
 
     private RecommendationContext context(long guildId, long userId, TrackIdentity seed) {
@@ -107,7 +123,7 @@ public class ProductAutoplayService {
         }
         var candidate = plan.candidate();
         boolean sameAsSeed = candidate.trackIdentity().stableKey().equals(seed.stableKey());
-        if (plan.fallback() || sameAsSeed) {
+        if (sameAsSeed) {
             return unavailable(
                     guildId,
                     userId,
@@ -122,7 +138,7 @@ public class ProductAutoplayService {
                 seed,
                 candidate,
                 true,
-                false,
+                plan.fallback(),
                 candidate.source(),
                 candidate.reason());
     }
