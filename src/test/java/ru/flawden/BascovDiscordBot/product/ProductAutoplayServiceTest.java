@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -45,7 +46,7 @@ class ProductAutoplayServiceTest {
         when(feedback.history(42L, 7L, 20)).thenReturn(List.of());
         when(feedback.tasteProfile(42L, 7L)).thenReturn(taste);
         when(feedback.banditProfile(42L, 7L)).thenReturn(ContextualBanditProfile.empty());
-        when(discovery.recommend(any(), eq(RadioStrategy.SIMILAR), any()))
+        when(discovery.recommend(any(), eq(RadioStrategy.SIMILAR), any(), anyList()))
                 .thenReturn(CompletableFuture.completedFuture(new RecommendationPlan(
                         new RecommendationCandidate(
                                 "The Offspring",
@@ -66,7 +67,7 @@ class ProductAutoplayServiceTest {
         assertEquals("Last.fm", result.provider());
 
         ArgumentCaptor<RecommendationContext> context = ArgumentCaptor.forClass(RecommendationContext.class);
-        verify(discovery).recommend(any(), eq(RadioStrategy.SIMILAR), context.capture());
+        verify(discovery).recommend(any(), eq(RadioStrategy.SIMILAR), context.capture(), anyList());
         assertEquals(taste, context.getValue().personalTaste());
         assertTrue(context.getValue().knownTrackIdentities().contains(
                 track("Basket Case", "Green Day").trackIdentity().stableKey()));
@@ -80,7 +81,7 @@ class ProductAutoplayServiceTest {
         MusicLibraryRepository library = emptyLibrary();
         RecommendationFeedbackService feedback = emptyFeedback();
 
-        when(discovery.recommend(any(), eq(RadioStrategy.SIMILAR), any()))
+        when(discovery.recommend(any(), eq(RadioStrategy.SIMILAR), any(), anyList()))
                 .thenAnswer(invocation -> {
                     StoredTrack seed = invocation.getArgument(0);
                     return CompletableFuture.completedFuture(
@@ -102,7 +103,7 @@ class ProductAutoplayServiceTest {
         MusicLibraryRepository library = emptyLibrary();
         RecommendationFeedbackService feedback = emptyFeedback();
 
-        when(discovery.recommend(any(), eq(RadioStrategy.SIMILAR), any()))
+        when(discovery.recommend(any(), eq(RadioStrategy.SIMILAR), any(), anyList()))
                 .thenReturn(CompletableFuture.completedFuture(new RecommendationPlan(
                         new RecommendationCandidate(
                                 "The Offspring",

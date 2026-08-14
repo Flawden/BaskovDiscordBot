@@ -10,6 +10,7 @@ import ru.flawden.BascovDiscordBot.library.StoredTrack;
 import ru.flawden.BascovDiscordBot.recommendation.CollaborativeArtistSignals;
 import ru.flawden.BascovDiscordBot.recommendation.ContextualBanditProfile;
 import ru.flawden.BascovDiscordBot.recommendation.MixDiversityProfile;
+import ru.flawden.BascovDiscordBot.recommendation.RecommendationCandidate;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationContext;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationFeedbackRepository;
 import ru.flawden.BascovDiscordBot.recommendation.RecommendationFeedbackService;
@@ -19,7 +20,10 @@ import ru.flawden.BascovDiscordBot.recommendation.RadioStrategy;
 import ru.flawden.BascovDiscordBot.recommendation.SessionTasteProfile;
 import ru.flawden.BascovDiscordBot.recommendation.SmartDiscoveryEngine;
 
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -58,8 +62,8 @@ public class ProductAutoplayService {
         TrackIdentity seedIdentity = TrackIdentity.of(artist, title);
         StoredTrack seed = logicalSeed(seedIdentity, userId);
         RecommendationContext context = context(guildId, userId, seedIdentity);
-
-        return discovery.recommend(seed, RadioStrategy.SIMILAR, context)
+        List<RecommendationCandidate> localCandidates = localCandidates(guildId, userId, seedIdentity);
+        return discovery.recommend(seed, RadioStrategy.SIMILAR, context, localCandidates)
                 .thenApply(plan -> {
                     ProductAutoplaySnapshot result = snapshot(guildId, userId, seedIdentity, plan);
                     LOGGER.info(
@@ -75,6 +79,53 @@ public class ProductAutoplayService {
                     return result;
                 });
     }
+    private List<RecommendationCandidate> localCandidates(
+            long guildId,
+            long userId,
+            TrackIdentity seed) {
+        Map<String, RecommendationCandidate> candidates = new LinkedHashMap<>();
+
+        library.favorites(guildId, userId).forEach(track ->
+                addLocalCandidate(candidates, seed, track.author(), track.title(), 0.92d, "избранное"));
+
+        library.personalHistory(guildId, userId).forEach(track ->
+                addLocalCandidate(candidates, seed, track.author(), track.title(), 0.72d, "личная история"));
+
+        library.history(guildId).forEach(track ->
+                addLocalCandidate(candidates, seed, track.author(), track.title(), 0.58d, "история сервера"));
+
+        return List.copyOf(candidates.values());
+    }
+
+    private static void addLocalCandidate(
+            Map<String, RecommendationCandidate> candidates,
+            TrackIdentity seed,
+            String artist,
+            String title,
+            double similarity,
+            String reason) {
+        if (artist == null || artist.isBlank() || title == null || title.isBlank()) {
+            return;
+        }
+
+        TrackIdentity identity = TrackIdentity.of(artist, title);
+        if (identity.stableKey().equals(seed.stableKey())) {
+            return;
+        }
+
+        RecommendationCandidate candidate = new RecommendationCandidate(
+                identity.artist(),
+                identity.title(),
+                similarity,
+                "local-taste",
+                "Локальный кандидат: " + reason);
+
+        candidates.merge(
+                identity.stableKey(),
+                candidate,
+                (left, right) -> right.similarity() > left.similarity() ? right : left);
+    }
+
 
     private RecommendationContext context(long guildId, long userId, TrackIdentity seed) {
         Set<String> known = new LinkedHashSet<>();

@@ -4,6 +4,8 @@
 - Reused the existing `SmartDiscoveryEngine` with `SIMILAR` strategy, long-term `PersonalTasteProfile`, contextual-bandit profile, known library/history and recent feedback instead of introducing a second recommender.
 - Distinct fallback candidates remain eligible for autoplay while fallback metadata is preserved; only a candidate resolving back to the current seed is returned as `available=false`, preventing self-loops.
 - Added a compact runtime decision log for Smart Autoplay (`available`, `fallback`, provider and logical seed/next identity) to make real-device continuation smoke diagnosable without extracting Android bearer tokens.
+- Smart Autoplay can continue without Last.fm: when the external similarity provider is unavailable, the existing `SmartDiscoveryEngine` ranks a provider-neutral local pool from favorites and personal/server history through the same taste, recent-track/artist, vector and contextual-bandit policies.
+- Last.fm remains optional discovery input rather than a runtime dependency; an empty local pool still falls back to the seed and is blocked by the Product API self-loop guard.
 - Product capabilities/OpenAPI now advertise `autoplay`; no persistence format or new storage file is introduced.
 
 ## 1.38.0 — Taste Signals Foundation

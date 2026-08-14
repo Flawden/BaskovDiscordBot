@@ -69,14 +69,29 @@ public class SmartDiscoveryEngine {
             StoredTrack seed,
             RadioStrategy strategy,
             RecommendationContext context) {
+        return recommend(seed, strategy, context, List.of());
+    }
+
+    public CompletableFuture<RecommendationPlan> recommend(
+            StoredTrack seed,
+            RadioStrategy strategy,
+            RecommendationContext context,
+            List<RecommendationCandidate> localCandidates) {
         RadioStrategy mode = strategy == null ? RadioStrategy.FAMILIAR : strategy;
+        RecommendationContext safeContext =
+                context == null ? RecommendationContext.empty() : context;
+        List<RecommendationCandidate> safeLocal =
+                localCandidates == null ? List.of() : List.copyOf(localCandidates);
         if (mode == RadioStrategy.FAMILIAR) {
             return CompletableFuture.completedFuture(RecommendationPlan.familiar(seed));
         }
         if (!provider.available()) {
-            return CompletableFuture.completedFuture(RecommendationPlan.fallback(
+            return CompletableFuture.completedFuture(selectLocal(
                     seed,
-                    "Внешний similarity-provider не настроен; локальный fallback из seed"));
+                    mode,
+                    safeContext,
+                    safeLocal,
+                    "Внешний similarity-provider не настроен"));
         }
 
         CompletableFuture<List<RecommendationCandidate>> candidatesFuture =
@@ -90,8 +105,7 @@ public class SmartDiscoveryEngine {
                         (candidates, signals) -> select(
                                 seed,
                                 mode,
-                                (context == null ? RecommendationContext.empty() : context)
-                                        .withCollaborativeSignals(signals),
+                                safeContext.withCollaborativeSignals(signals),
                                 candidates))
                 .thenCompose(this::enrichSelected);
     }
@@ -106,6 +120,30 @@ public class SmartDiscoveryEngine {
                         : new RecommendationPlan(enriched, plan.external(), plan.fallback()))
                 .exceptionally(exception -> plan);
     }
+    private RecommendationPlan selectLocal(
+            StoredTrack seed,
+            RadioStrategy strategy,
+            RecommendationContext context,
+            List<RecommendationCandidate> candidates,
+            String fallbackReason) {
+        return RecommendationRanker.best(candidates, strategy, context, embeddingProvider)
+                .map(scored -> {
+                    RecommendationCandidate candidate = scored.candidate();
+                    String reason = buildReason(candidate, strategy, scored);
+                    return new RecommendationPlan(new RecommendationCandidate(
+                            candidate.artist(),
+                            candidate.title(),
+                            candidate.similarity(),
+                            candidate.source(),
+                            reason,
+                            candidate.tags(),
+                            candidate.externalIds()), false, true);
+                })
+                .orElseGet(() -> RecommendationPlan.fallback(
+                        seed,
+                        fallbackReason + "; локальный taste pool не дал пригодного кандидата"));
+    }
+
 
     RecommendationPlan select(
             StoredTrack seed,
