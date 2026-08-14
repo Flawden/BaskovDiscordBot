@@ -167,6 +167,19 @@ public class PlayerManager {
                     new dev.lavalink.youtube.clients.WebWithThumbnail(),
                     new dev.lavalink.youtube.clients.WebEmbeddedWithThumbnail()
                 });
+
+        String youtubeOauthRefreshToken = Optional.ofNullable(
+                        System.getenv("BASKOV_YOUTUBE_OAUTH_REFRESH_TOKEN"))
+                .filter(value -> !value.isBlank())
+                .orElse(null);
+
+        if (youtubeOauthRefreshToken != null) {
+            youtubeSourceManager.useOauth2(youtubeOauthRefreshToken, true);
+            log.info("YouTube OAuth enabled from refresh token");
+        } else {
+            log.info("YouTube OAuth disabled: BASKOV_YOUTUBE_OAUTH_REFRESH_TOKEN is not configured");
+        }
+
         this.audioPlayerManager.registerSourceManager(youtubeSourceManager);
         AudioSourceManagers.registerRemoteSources(
                 this.audioPlayerManager,
